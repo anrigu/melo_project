@@ -1,11 +1,9 @@
 from collections import defaultdict
-from marketsim.fourheap import constants
-from marketsim.fourheap.order import Order
-from marketsim.fourheap.order_queue import OrderQueue
-
+from fourheap import constants
+from fourheap.order import Order
+from fourheap.order_queue import OrderQueue
 import math
 import numpy as np
-
 
 class FourHeap:
     """
@@ -22,6 +20,7 @@ class FourHeap:
 
         self.heaps = [self.buy_matched, self.buy_unmatched, self.sell_matched, self.sell_unmatched]
         self.agent_id_map = defaultdict(list)
+        self.midprices = []
 
         self.midprices = []
 
@@ -166,7 +165,6 @@ class FourHeap:
                 self.midprices.append(np.mean(self.midprices[-lookback:]))
         else:
             self.midprices.append((best_ask + best_bid) / 2)
-
 
 
     def observe(self) -> str:

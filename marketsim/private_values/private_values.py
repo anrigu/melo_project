@@ -1,5 +1,5 @@
 import torch
-from marketsim.fourheap.constants import BUY, SELL
+from fourheap.constants import BUY, SELL
 
 
 class PrivateValues:
@@ -11,7 +11,6 @@ class PrivateValues:
     The class provides methods to retrieve the value for a specific position and order type,
     as well as calculate the cumulative value up to a given position.
     """
-
     def __init__(self, q_max: int, val_var=5e6):
         """
         Initialize the PrivateValues object.

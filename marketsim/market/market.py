@@ -1,7 +1,6 @@
-from marketsim.event.event_queue import EventQueue
-from marketsim.fourheap.fourheap import FourHeap
-from marketsim.fundamental.fundamental_abc import Fundamental
-from marketsim.fourheap import constants
+from event.event_queue import EventQueue
+from fourheap.fourheap import FourHeap
+from fundamental.fundamental_abc import Fundamental
 
 
 class Market:
@@ -48,15 +47,15 @@ class Market:
             self.order_book.insert(order)
         new_orders = self.clear_market()
 
-        # Compute midprices.
         self.order_book.update_midprice()
         return new_orders
 
     def get_midprices(self):
         return self.order_book.midprices
 
-    def reset(self, fundamental):
+    def reset(self, fundamental=None):
         self.order_book = FourHeap()
         self.matched_orders = []
         self.event_queue = EventQueue()
-        self.fundamental = fundamental
+        if self.fundamental:
+            self.fundamental = fundamental

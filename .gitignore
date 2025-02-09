@@ -1,6 +1,9 @@
-*.pyc
+*.csv
+*.png
+*.jpg
+*.zip
+*.npz
+*.json
 *.txt
 *.pkl
-*.jpg
-*.png
-*.zip
+.DS_Store

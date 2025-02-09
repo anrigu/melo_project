@@ -1,9 +1,10 @@
 import random
+from agent.agent import Agent 
+from agent.hbl_agent import HBLAgent
 from fourheap.constants import BUY, SELL
 from market.market import Market
 from fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
 from agent.zero_intelligence_agent import ZIAgent
-from agent.hbl_agent import HBLAgent
 import torch.distributions as dist
 import torch
 from collections import defaultdict
@@ -51,7 +52,6 @@ class SimulatorSampledArrival:
             self.markets.append(Market(fundamental=fundamental, time_steps=sim_time))
 
         self.agents = {}
-        # TEMP FOR HBL TESTING
         if not self.hbl_agent:
             for agent_id in range(num_background_agents + 1):
                 self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
@@ -65,32 +65,32 @@ class SimulatorSampledArrival:
                         pv_var=pv_var,
                         eta=eta
                     ))
-        #  expanded_zi
-        # else:
-        #     for agent_id in range(24):
-        #         self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
-        #         self.arrival_index += 1
-        #         self.agents[agent_id] = (
-        #             ZIAgent(
-        #                 agent_id=agent_id,
-        #                 market=self.markets[0],
-        #                 q_max=q_max,
-        #                 shade=shade,
-        #                 pv_var=pv_var,
-        #                 eta=eta
-        #             ))
-        #     for agent_id in range(24,25):
-        #         self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
-        #         self.arrival_index += 1
-        #         self.agents[agent_id] = (HBLAgent(
-        #             agent_id = agent_id,
-        #             market = self.markets[0],
-        #             pv_var = pv_var,
-        #             q_max= q_max,
-        #             shade = shade,
-        #             L = 4,
-        #             arrival_rate = self.lam
-        #         ))
+        else:
+            for agent_id in range(12):
+                self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+                self.arrival_index += 1
+                self.agents[agent_id] = (
+                    ZIAgent(
+                        agent_id=agent_id,
+                        market=self.markets[0],
+                        q_max=q_max,
+                        shade=shade,
+                        pv_var=pv_var,
+                        pv=-1
+                    ))
+            for agent_id in range(12,self.num_agents):
+                self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+                self.arrival_index += 1
+                self.agents[agent_id] = (HBLAgent(
+                    agent_id = agent_id,
+                    market = self.markets[0],
+                    pv_var = pv_var,
+                    q_max= q_max,
+                    shade = shade,
+                    L = 4,
+                    arrival_rate = self.lam,
+                    pv=-1
+                ))
 
     def step(self):
         agents = self.arrivals[self.time]
@@ -115,7 +115,6 @@ class SimulatorSampledArrival:
                     quantity = matched_order.order.order_type*matched_order.order.quantity
                     cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
                     self.agents[agent_id].update_position(quantity, cash)
-                    # self.agents[agent_id].order_history = None
         else:
             self.end_sim()
 
@@ -125,7 +124,7 @@ class SimulatorSampledArrival:
         for agent_id in self.agents:
             agent = self.agents[agent_id]
             values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
-        # print(f'At the end of the simulation we get {values}')
+        #print(f'At the end of the simulation we get {values}')
         return values
 
     def run(self):

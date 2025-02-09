@@ -1,45 +1,49 @@
 from tqdm import tqdm
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+from agent.spoofer import SpoofingAgent
 from simulator.sampled_arrival_simulator import SimulatorSampledArrival
 
-surpluses = []
-valueAgents = []
+SIM_TIME = 10000
 
-for i in tqdm(range(10000)):
-    sim = SimulatorSampledArrival(num_background_agents=25, 
-                                  sim_time=10000, 
-                                  lam=5e-3, 
+valueAgentsNon = []
+
+# random.seed(10)
+for i in tqdm(range(8000)):
+    sim = SimulatorSampledArrival(num_background_agents=24, 
+                                  sim_time=SIM_TIME, 
+                                  lam=2e-3, 
                                   mean=1e5, 
                                   r=0.05, 
-                                  shock_var=1e5, 
+                                  shock_var=1e4, 
                                   q_max=10,
                                   pv_var=5e6,
                                   shade=[250,500],
-                                  hbl_agent=True)
+                                  hbl_agent=True,
+                                  )
     sim.run()
-    fundamental_val = sim.markets[0].get_final_fundamental()
     values = []
+    fundamental_val = sim.markets[0].get_final_fundamental()
     for agent_id in sim.agents:
         agent = sim.agents[agent_id]
         value = agent.get_pos_value() + agent.position * fundamental_val + agent.cash
-        # print(agent.cash, agent.position, agent.get_pos_value(), value)
+        # print(agent.cash, fundamental_val, agent.position, agent.get_pos_value(), value)
+        # input()
         values.append(value)
-    valueAgents.append(values)
-    if i % 500 == 0:
-        print(np.mean(valueAgents, axis = 0))
-    surpluses.append(sum(values)/len(values))
+    valueAgentsNon.append(values)
 
-valueAgents = np.mean(valueAgents, axis = 0)
-num_agents = 26
-
-input(valueAgents)
-fig, ax = plt.subplots()
-plt.scatter([0]*num_agents, valueAgents)  # Placing all points along the same x-axis position (0)
-if num_agents == 26:
-    plt.scatter([0], valueAgents[-1], color='red')
-plt.xlabel('Ignore')
-plt.show()
-
-print(sum(surpluses)/len(surpluses)*num_agents)
+    if i % 100 == 0:
+        valueAgents = np.mean(valueAgentsNon, axis = 0)
+        print(valueAgents)
+        plt.figure()
+        # num_agents = [j for j in range(15)]
+        # plotNon = np.mean(valueAgentsNon, axis = 0)
+        # barsNon = plt.bar(num_agents, plotNon, color='g', edgecolor='grey', label='Nonspoof')
+        # plt.legend()
+        # plt.title('Surpluses')
+        # plt.xlabel('Agent')
+        # plt.ylabel('Values')
+        # plt.savefig('spoofer_exps/hbl_prelim/15_3_v2/{}.png'.format(i))
+        plt.close()
