@@ -7,11 +7,11 @@ from marketsim.fourheap.constants import BUY, SELL
 from typing import List
 
 
-class ZI_nbbo(Agent):
-    def __init__(self, agent_id: int, market: Market, q_max: int, offset: float, eta: float, shade: List):
+class ZIAgent(Agent):
+    def __init__(self, agent_id: int, market: Market, q_max: int, eta: float, shade: List, offset: float = 0, pv_var: float = 5e6):
         self.agent_id = agent_id
         self.market = market
-        self.pv = PrivateValues(q_max)
+        self.pv = PrivateValues(q_max, pv_var)
         self.position = 0
         self.offset = offset
         self.eta = eta
@@ -30,7 +30,8 @@ class ZI_nbbo(Agent):
         t = self.market.get_time()
         val = self.market.get_fundamental_value()
         midpoints = self.market.get_midprices()
-        midpoint = midpoints[-1]
+        
+        midpoint = midpoints[-1] if len(midpoints) > 0 else 0
         rho = (1-r)**(T-t)
         estimate_fundemental = (1-rho)*mean + rho*val
         estimate = self.bbo_weight*estimate_fundemental + (1-self.bbo_weight)*midpoint
@@ -65,3 +66,5 @@ class ZI_nbbo(Agent):
     def reset(self):
         self.position = 0
         self.cash = 0
+
+
