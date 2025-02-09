@@ -144,7 +144,7 @@ class MMSPEnv(gym.Env):
 
         self.agents = {}
         self.backgroundAgentConfig = {"q_max":q_max, "pv_var": pv_var, "shade": shade, "L": 4, "spoof_size": spoofing_size, "reg_size": order_size}
-        for agent_id in range(12):
+        for agent_id in range(14):
             self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
             self.arrival_index += 1
             self.agents[agent_id] = (
@@ -154,10 +154,10 @@ class MMSPEnv(gym.Env):
                     q_max=q_max,
                     shade=shade,
                     pv_var=pv_var,
-                    pv=self.pvalues[agent_id]
+                    # pv=self.pvalues[agent_id]
                 ))
 
-        for agent_id in range(12, self.num_agents - 1):
+        for agent_id in range(14, self.num_agents - 1):
                 self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
                 self.arrival_index += 1
                 self.agents[agent_id] = (HBLAgent(
@@ -168,7 +168,7 @@ class MMSPEnv(gym.Env):
                     shade = shade,
                     L = 4,
                     arrival_rate = self.lam,
-                    pv=self.pvalues[agent_id]
+                    # pv=self.pvalues[agent_id]
                 ))
 
         # Set up for market makers.
@@ -342,8 +342,8 @@ class MMSPEnv(gym.Env):
             #When learning, want to change fundamental and PVs so RL learns from the distribution
             # and not a specific instance.
             for market in self.markets:
-                market.fundamental._generate()
-                market.reset()
+                fundamental = GaussianMeanReverting(mean=self.mean, final_time=self.sim_time + 1, r=self.r, shock_var=self.shock_var)
+                market.reset(fundamental = fundamental)
             
             self.final_fundamental = self.markets[0].get_final_fundamental()
             self.random_seed = [random.randint(0,100000) for _ in range(10000)]
@@ -359,7 +359,8 @@ class MMSPEnv(gym.Env):
         else:
             # Reset the markets
             for market in self.markets:
-                market.reset()
+                fundamental = GaussianMeanReverting(mean=self.mean, final_time=self.sim_time + 1, r=self.r, shock_var=self.shock_var)
+                market.reset(fundamental)
 
             self.final_fundamental = self.markets[0].get_final_fundamental()
 

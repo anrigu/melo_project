@@ -18,8 +18,8 @@ from custom_callback import SaveOnBestTrainingRewardCallback
 import torch
 
 SIM_TIME = 10000
-TOTAL_ITERS = 8000
-NUM_AGENTS = 25
+TOTAL_ITERS = 100
+NUM_AGENTS = 15
 LEARNING = False
 LEARNING_ACTIONS = False
 PAIRED = True
