@@ -600,7 +600,7 @@ class MMSPEnv(gym.Env):
         # print(current_value)
         # self.test = []
         global COUNT
-        print(COUNT)
+        # print(COUNT)
         if COUNT % 500 == 0 and self.learning:
             self.aggregate_behavior.append(list(self.most_recent_trade.values()))
             above_ask_pad = np.full(400, np.nan)
