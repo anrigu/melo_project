@@ -30,11 +30,13 @@ class ZIAgent(Agent):
         t = self.market.get_time()
         val = self.market.get_fundamental_value()
         midpoints = self.market.get_midprices()
-        
-        midpoint = midpoints[-1] if len(midpoints) > 0 else 0
         rho = (1-r)**(T-t)
         estimate_fundemental = (1-rho)*mean + rho*val
-        estimate = self.bbo_weight*estimate_fundemental + (1-self.bbo_weight)*midpoint
+        if len(midpoints) == 0:
+            estimate = estimate_fundemental
+        else:
+            midpoint = midpoints[-1]
+            estimate = (1-self.bbo_weight)*estimate_fundemental + self.bbo_weight*midpoint
         return estimate
 
     def take_action(self, side):
