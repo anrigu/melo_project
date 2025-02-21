@@ -35,14 +35,20 @@ def process_game_data(raw_data): #generates game object for symmetric games
         for _, strategy, payoff in profile:
             profile_dict[strat_count]["payoffs"][strategy].append(payoff)
 
+    #check for repeats in profile_dict
+    print(list(profile_dict.keys())[0])
+    for strat_count, data in profile_dict.items():
+        if data["count"] > 1:
+            print(f"Repeat profile: {strat_count}")
+
     profiles = []
     payoffs = []
-
     for strat_count, data in profile_dict.items(): #here we get expected payoffs for each strategy profile
         profiles.append([count for _, count in strat_count])  
 
         expected_payoffs = [np.mean(data["payoffs"][strat]) if data["payoffs"][strat] else 0 
                             for strat, _ in strat_count]
+        
         payoffs.append(expected_payoffs)
 
     return Game(strategy_names, profiles, payoffs)
@@ -76,7 +82,6 @@ raw_data_single = [[ #2, 4
     ['agent_4', 'LIT_ORDERBOOK + ZI STRAT', 2],
     ['agent_5', 'MELO + ZI STRAT', 90],
     ['agent_6', 'MELO + ZI STRAT', 10],
-    ['agent_7', 'MELO + ZI STRAT NEW', 100],
 ],
 [ #3, 3
     ['agent_1', 'MELO + ZI STRAT', 50],
@@ -124,5 +129,37 @@ game_single = process_game_data(raw_data_single)
 for row in game_single.get_payoff_matrix():
     print(row)
 
+new_raw_data = [
+[ #5, 1
+    ['agent_1', 'MELO + ZI STRAT', 11],
+    ['agent_2', 'LIT_ORDERBOOK + ZI STRAT', 11],
+    ['agent_3', 'LIT_ORDERBOOK + ZI STRAT', 11],
+    ['agent_4', 'LIT_ORDERBOOK + ZI STRAT', 11],
+    ['agent_5', 'LIT_ORDERBOOK + ZI STRAT', 11],
+    ['agent_6', 'LIT_ORDERBOOK + ZI STRAT', 3]
+],
+[ #3, 3
+    ['agent_1', 'MELO + ZI STRAT', 9],
+    ['agent_2', 'LIT_ORDERBOOK + ZI STRAT', 9],
+    ['agent_3', 'MELO + ZI STRAT', 9],
+    ['agent_4', 'LIT_ORDERBOOK + ZI STRAT', 9],
+    ['agent_5', 'LIT_ORDERBOOK + ZI STRAT', 9],
+    ['agent_6', 'MELO + ZI STRAT', 9]
+]
 
+
+]
+#update payoffs for game_single
+new_payoffs = [[100, 100], [100, 100]]
+new_profiles = [[2, 4], [2, 4]]
+
+prior_payoff_matrix, new_payoff_matrix = game_single.update_payoffs(new_raw_data)  
+print("Prior payoff matrix")
+for row in prior_payoff_matrix:
+    print(row)
+print("New payoff matrix")
+for row in new_payoff_matrix:
+    print(row)
+
+    
 
