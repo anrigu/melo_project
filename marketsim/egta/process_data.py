@@ -9,7 +9,6 @@ import gambit
 
 def process_game_data(raw_data):
     """
-    convert raw payoff data into a structured game matrix.
 
     Parameters:
         raw_data : list of lists
@@ -19,27 +18,31 @@ def process_game_data(raw_data):
         Game object with correctly computed expected payoffs.
     """
     strategy_names = set()
-    
+
     for profile in raw_data:
         for _, strategy, _ in profile:
             strategy_names.add(strategy)
     
-    strategy_names = sorted(list(strategy_names))  #ensure consistent ordering
+    strategy_names = sorted(list(strategy_names))  # Ensure consistent ordering
+
+    profile_dict = defaultdict(lambda: {"count": 0, "payoffs": defaultdict(list)})
+
+    for profile in raw_data:
+        strat_count = tuple(sorted([(strategy, 
+                                     sum(1 for _, s, _ in profile if s == strategy)) 
+                                     for strategy in strategy_names]))
+        
+        profile_dict[strat_count]["count"] += 1
+        for _, strategy, payoff in profile:
+            profile_dict[strat_count]["payoffs"][strategy].append(payoff)
 
     profiles = []
     payoffs = []
 
-    for profile in raw_data:
-        #track strategy counts and payoffs per profile
-        strat_count = {strat: 0 for strat in strategy_names}
-        strat_payoffs = {strat: [] for strat in strategy_names}
+    for strat_count, data in profile_dict.items():
+        profiles.append([count for _, count in strat_count])  
 
-        for _, strategy, payoff in profile:
-            strat_count[strategy] += 1
-            strat_payoffs[strategy].append(payoff)
-
-        profiles.append([strat_count[strat] for strat in strategy_names])
-        expected_payoffs = [np.mean(strat_payoffs[strat]) if strat_payoffs[strat] else 0 for strat in strategy_names]
+        expected_payoffs = [np.mean(data["payoffs"][strat]) if data["payoffs"][strat] else 0 for strat, _ in strat_count]
         payoffs.append(expected_payoffs)
 
     return Game(strategy_names, profiles, payoffs)
@@ -65,6 +68,14 @@ raw_data_single = [[ #2, 4
     ['agent_4', 'LIT_ORDERBOOK + ZI STRAT', 20],
     ['agent_5', 'MELO + ZI STRAT', 60],
     ['agent_6', 'MELO + ZI STRAT', 45]
+],
+[ #2, 4
+    ['agent_1', 'MELO + ZI STRAT', 45],
+    ['agent_2', 'LIT_ORDERBOOK + ZI STRAT', 20],
+    ['agent_3', 'MELO + ZI STRAT', 13],
+    ['agent_4', 'LIT_ORDERBOOK + ZI STRAT', 2],
+    ['agent_5', 'MELO + ZI STRAT', 90],
+    ['agent_6', 'MELO + ZI STRAT', 10]
 ],
 [ #3, 3
     ['agent_1', 'MELO + ZI STRAT', 50],
@@ -105,14 +116,6 @@ raw_data_single = [[ #2, 4
     ['agent_4', 'MELO + ZI STRAT', 20],
     ['agent_5', 'MELO + ZI STRAT', 60],
     ['agent_6', 'MELO + ZI STRAT', 45]
-],
-[ #6, 0
-    ['agent_1', 'LIT_ORDERBOOK + ZI STRAT', 50],
-    ['agent_2', 'LIT_ORDERBOOK + ZI STRAT', 30],
-    ['agent_3', 'LIT_ORDERBOOK + ZI STRAT', 40],
-    ['agent_4', 'LIT_ORDERBOOK + ZI STRAT', 20],
-    ['agent_5', 'LIT_ORDERBOOK + ZI STRAT', 60],
-    ['agent_6', 'LIT_ORDERBOOK + ZI STRAT', 45]
 ]]
 
 
