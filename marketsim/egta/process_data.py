@@ -117,9 +117,8 @@ raw_data_single = [[ #2, 4
 
 
 game_single = process_game_data(raw_data_single)
-payoff_matrix = game_single.get_payoff_matrix()
-for row in payoff_matrix:
+for row in game_single.get_payoff_matrix():
     print(row)
-print("game_single.get_payoff_matrix()", game_single.get_payoff_matrix())
+
 
 

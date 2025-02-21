@@ -1,10 +1,10 @@
 class Game:
     def __init__(self, strategy_names, profiles, payoffs):
         """
-        THis is the class to construct a full symmetric game, with a payoff matrix
+        this is the class to construct a full symmetric game, with a payoff matrix
         given a strategy profile and payoff data.
 
-        Parameters:
+        parameters:
         role_names : list of str
             Names of each role (e.g. ['Trader'], or ['Market Maker', 'Trader']).
         num_role_players : list or array of int
@@ -24,7 +24,7 @@ class Game:
         self._num_profiles = len(profiles)
         self._num_payoffs = len(payoffs)
 
-        self.game_matrix = self.get_game_matrix()
+        self.payoff_matrix = self.set_payoff_matrix()
 
     
     @property
@@ -44,10 +44,11 @@ class Game:
     def get_payoffs(self):
         return self.payoffs
     
-    #NOTE: THis will compute full payoff matrix, need be we can apply say random sampling, MC methods, etc. to compute payoff matrix
-    def get_payoff_matrix(self): #computes full payoff matrix
+    #NOTE: THis will compute full payoff matrix, 
+    #need be we can apply say random sampling, MC methods, etc. to compute payoff matrix
+    def set_payoff_matrix(self): #computes full payoff matrix
         """
-        Constructs and returns the payoff matrix.
+        constructs and returns the payoff matrix.
         returns:
             payoff_matrix : list of lists where each row represents a strategy profile.
         """
@@ -59,4 +60,7 @@ class Game:
             payoff_matrix.append(profile + payoff)
 
         return payoff_matrix
+    
+    def get_payoff_matrix(self):
+        return self.payoff_matrix
     
