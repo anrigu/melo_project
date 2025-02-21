@@ -44,6 +44,20 @@ class Game:
     def get_payoffs(self):
         return self.payoffs
     
+    
+    def update_payoffs(self, new_payoffs, new_profiles):
+        self.payoffs = new_payoffs
+        self.profiles = new_profiles
+        prior_payoff_matrix = self.payoff_matrix
+        new_payoff_matrix = self.set_payoff_matrix()
+        #update the payoff matrix with new payoffs and profiles
+        #take average of prior and new payoff matrix for each strategy profile
+        for i in range(len(prior_payoff_matrix)):
+            for j in range(len(prior_payoff_matrix[i])):
+                prior_payoff_matrix[i][j] = (prior_payoff_matrix[i][j] + new_payoff_matrix[i][j]) / 2
+
+        return prior_payoff_matrix, new_payoff_matrix
+    
     #NOTE: THis will compute full payoff matrix, 
     #need be we can apply say random sampling, MC methods, etc. to compute payoff matrix
     def set_payoff_matrix(self): #computes full payoff matrix
