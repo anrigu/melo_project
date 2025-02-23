@@ -22,7 +22,6 @@ class FourHeap:
         self.agent_id_map = defaultdict(list)
         self.midprices = []
 
-        self.midprices = []
 
     def handle_new_order(self, order):
         q_order = order.quantity

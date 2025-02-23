@@ -43,6 +43,11 @@ class Order:
         elif self.order_type == 1:
             return self.price > other.price
 
+@dataclass
+class CancelledOrder:
+    price: float
+    time: int
+    order: Order
 
 @dataclass
 class MatchedOrder:
