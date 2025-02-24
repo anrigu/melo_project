@@ -27,13 +27,20 @@ class MeloMarket(Market):
                 self.order_book.insert(order)
                 self.order_book.update_best_bid(best_bid)
                 self.order_book.update_best_ask(best_ask)
-                self.order_book.update_eligiblity_queue(order.order_type)
+                self.order_book.update_eligiblity_queue()
             self.order_book.update_active_queue(self.get_time())
         new_orders = self.order_book.matching_orders(self.get_time())
 
         return new_orders
 
-
+    def update_queues(self, best_bid=None, best_ask=None):
+        if best_bid or best_ask:
+            self.order_book.update_best_bid(best_bid)
+            self.order_book.update_best_ask(best_ask)
+        self.order_book.update_eligiblity_queue()
+        self.order_book.update_active_queue(self.get_time())
+        return self.order_book.matching_orders(self.get_time())
+        
     def get_midprices(self):
         return self.order_book.midprices
 

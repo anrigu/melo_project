@@ -73,6 +73,7 @@ class MELOSimulatorSampledArrival:
         agents = self.arrivals[self.time]
         if self.time < self.sim_time:
             self.market.event_queue.set_time(self.time)
+            self.meloMarket.event_queue.set_time(self.time)
             for agent_id in agents:
                 agent: Agent = self.agents[agent_id]
                 self.meloMarket.withdraw_all(agent_id)
@@ -116,7 +117,15 @@ class MELOSimulatorSampledArrival:
                     self.arrival_index = 0
                 self.arrivals[self.arrival_times[self.arrival_index].item() + 1 + self.time].append(agent_id)
                 self.arrival_index += 1
-            
+                
+            #Default return type if no matches = [[], []]
+            melo_matched_orders = self.meloMarket.update_queues(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
+            if len(melo_matched_orders[0]) > 0:
+                for matched_order in melo_matched_orders:
+                    agent_id = matched_order.order.agent_id
+                    quantity = matched_order.order.order_type*matched_order.order.quantity
+                    cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                    self.agents[agent_id].update_position(quantity, cash)
         else:
             self.end_sim()
 
@@ -131,15 +140,23 @@ class MELOSimulatorSampledArrival:
         return values
 
     def run(self):
-        counter = 0
         for t in range(self.sim_time):
+            if t >= 2500:
+                a = 1
             if self.arrivals[t]:
                 try:
                     self.step()
                 except KeyError:
                     print(self.arrivals[self.time])
-                    return self.markets
-                counter += 1
+                    return self.market, self.meloMarket
+            else:
+                melo_matched_orders = self.meloMarket.update_queues()
+                if len(melo_matched_orders[0]) > 0:
+                    for matched_order in melo_matched_orders:
+                        agent_id = matched_order.order.agent_id
+                        quantity = matched_order.order.order_type*matched_order.order.quantity
+                        cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                        self.agents[agent_id].update_position(quantity, cash)
             self.time += 1
         self.step()
 
