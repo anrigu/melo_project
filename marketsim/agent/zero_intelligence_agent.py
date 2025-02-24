@@ -6,7 +6,8 @@ from fourheap.order import Order
 from private_values.private_values import PrivateValues
 from fourheap.constants import BUY, SELL
 from typing import List
-import numpy as np
+import torch
+import math
 
 
 class ZIAgent(Agent):
@@ -16,9 +17,12 @@ class ZIAgent(Agent):
         self.q_max = q_max
         self.pv_var = pv_var
         self.pv = PrivateValues(q_max, pv_var)
+        self.meloPv = torch.rand(2 * q_max) * pv_var
         self.position = 0
+        self.meloPosition = 0
         self.shade = shade
         self.cash = 0
+        self.meloCash = 0
         self.eta = eta
 
         self.q_max = q_max
@@ -27,6 +31,9 @@ class ZIAgent(Agent):
     def generate_pv(self):
         #Generate new private values
         self.pv = PrivateValues(self.q_max, self.pv_var)
+
+    def generate_melo_pv(self):
+        self.meloPV = torch.rand(2 * self.q_max) * np.sqrt(self.pv_var)
 
     def get_id(self) -> int:
         return self.agent_id
@@ -65,6 +72,32 @@ class ZIAgent(Agent):
         # print(f'It is time {t} with final time {T} and I observed {val} and my estimate is {rho, estimate}')
         return estimate
         # return estimate + np.random.normal(0, np.sqrt(3e5))
+
+    def melo_take_action(self, side: bool, quantity:int, seed: int = None) -> List[Order]:
+        t = self.market.get_time()
+        best_bid = self.market.order_book.get_best_bid()
+        best_ask = self.market.order_book.get_best_ask()
+        if math.isinf(best_ask) or math.isinf(best_bid):
+            midpoint = self.estimate_fundamental()
+        else:
+            midpoint = (best_bid + best_ask) / 2
+        #TODO: fix later
+        if side == BUY:
+            price = midpoint
+            # price = midpoint + self.meloPv[0]
+        else:
+            price = midpoint
+            # price = midpoint - self.meloPv[0]
+        
+        order = Order(
+            price=price,
+            quantity=quantity,
+            agent_id=self.get_id(),
+            time=t,
+            order_type=side,
+            order_id=random.randint(1, 10000000)
+        )
+        return [order]
 
     def take_action(self, side, seed = 0):
         t = self.market.get_time()
@@ -110,6 +143,10 @@ class ZIAgent(Agent):
     def update_position(self, q, p):
         self.position += q
         self.cash += p
+
+    def melo_update_position(self, q, p):
+        self.meloPosition += q
+        self.meloCash += p
 
     def __str__(self):
         return f'ZI{self.agent_id}'

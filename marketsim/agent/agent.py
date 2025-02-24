@@ -13,7 +13,14 @@ class Agent(ABC):
         pass
 
     @abstractmethod
+    def melo_take_action(self, side: bool, quantity:int, seed: int = None) -> List[Order]:
+        pass
+
+    @abstractmethod
     def reset(self):
+        pass
+
+    def get_pos_value_melo(self) -> float:
         pass
 
     def get_pos_value(self) -> float:
