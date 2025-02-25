@@ -1,8 +1,8 @@
-from event.event_queue import EventQueue
-from fourheap.fourheap import FourHeap
-from fundamental.fundamental_abc import Fundamental
-from market.market import Market
-from fourheap.melo_fourheap import MELOFourHeap
+from marketsim.event.event_queue import EventQueue
+from marketsim.fourheap.fourheap import FourHeap
+from marketsim.fundamental.fundamental_abc import Fundamental
+from marketsim.market.market import Market
+from marketsim.fourheap.melo_fourheap import MELOFourHeap
 
 class MeloMarket(Market):
     def __init__(self, fundamental: Fundamental, time_steps, holding_period):

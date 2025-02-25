@@ -1,11 +1,11 @@
 import random
-from agent.agent import Agent 
-from agent.hbl_agent import HBLAgent
-from fourheap.constants import BUY, SELL, MELO, CDA
-from market.market import Market
-from market.melo_market import MeloMarket
-from fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
-from agent.zero_intelligence_agent import ZIAgent
+from marketsim.agent.agent import Agent 
+from marketsim.agent.hbl_agent import HBLAgent
+from marketsim.fourheap.constants import BUY, SELL, MELO, CDA
+from marketsim.market.market import Market
+from marketsim.market.melo_market import MeloMarket
+from marketsim.fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
+from marketsim.agent.zero_intelligence_agent import ZIAgent
 import torch.distributions as dist
 import torch
 import math
@@ -86,7 +86,7 @@ class MELOSimulatorSampledArrival:
                 if marketSelection == MELO:
                     #PLACE MELO
                     #TODO: Probably should be sampled froma distribution or something.
-                    quantity = 100
+                    quantity = 100 
                     orders = agent.melo_take_action(side, quantity) 
                     self.meloMarket.add_orders(orders)
                     new_orders = self.meloMarket.step(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
@@ -140,22 +140,34 @@ class MELOSimulatorSampledArrival:
         return values
 
     def run(self):
+        print(f"Running simulation for {self.sim_time} time steps")
         for t in range(self.sim_time):
             if t >= 2500:
+                print(f"Time: {t}")
+                print(f"Arrivals: {self.arrivals[t]}")
                 a = 1
             if self.arrivals[t]:
                 try:
+                    print(f"Stepping at time {t}")
                     self.step()
                 except KeyError:
                     print(self.arrivals[self.time])
                     return self.market, self.meloMarket
             else:
+                print(f"No arrivals at time {t}")
+                print(f"Melo matched orders: {self.meloMarket.update_queues()}")
                 melo_matched_orders = self.meloMarket.update_queues()
                 if len(melo_matched_orders[0]) > 0:
+                    print(f"Melo matched orders: {melo_matched_orders}")
                     for matched_order in melo_matched_orders:
+                        print(f"Matched order agent_id: {matched_order.order.agent_id}")
+                        print(f"Matched order quantity: {matched_order.order.quantity}")
+                        print(f"Matched order price: {matched_order.price}")
+                        print(f"Matched order order_type: {matched_order.order.order_type}")
                         agent_id = matched_order.order.agent_id
                         quantity = matched_order.order.order_type*matched_order.order.quantity
                         cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                        print(f"Updating position for agent {agent_id} with quantity {quantity} and cash {cash}")
                         self.agents[agent_id].update_position(quantity, cash)
             self.time += 1
         self.step()

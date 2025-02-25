@@ -15,6 +15,7 @@ for _ in tqdm(range(10000)):
                                   shade=[500,1000])
     sim.run()
     fundamental_val = sim.market.get_final_fundamental()
+    print(f"Fundamental value: {fundamental_val}")
     values = []
     for agent_id in sim.agents:
         agent = sim.agents[agent_id]
@@ -31,7 +32,7 @@ fundamental_val = sim.market.get_final_fundamental()
 for agent_id in sim.agents:
     agent = sim.agents[agent_id]
     value = agent.get_pos_value() + agent.position * fundamental_val + agent.cash
-    # print(agent.cash, agent.position, agent.get_pos_value(), value)
+    print(agent.cash, agent.position, agent.get_pos_value(), value)
     positions.append(agent.position)
     values.append(value)
 
@@ -47,3 +48,4 @@ sum(positions)
 
 
 
+ 
