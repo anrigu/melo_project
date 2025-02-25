@@ -163,3 +163,73 @@ class ReducedGame(Game):
             self.full_game,
             self.scaling_factor
         )
+    
+    def solve_game_cfr(self, iterations=100, epsilon=1e-6):
+        """
+        Solves the game using CFR.
+        """
+        #initial uniform distribution for mss
+        #TODO: hot start, start with supports proportional to times played in the true game
+
+        strategy_probs = np.ones(self.num_strategies) / self.num_strategies
+
+        #initalize cumulative regrets and strat sums 
+        cumulative_regrets = np.zeros(self.num_strategies)
+        strategy_sums = np.zeros(self.num_strategies)
+
+        for i in range(iterations): 
+            #now we compute expected payoffs for each strategy
+            expected_payoffs = np.zeros(self.num_strategies)
+
+            for i, profile in enumerate(self.profiles):
+                #find probability of this strategy profile occuring 
+                profile_prob = 1.0
+                for j, count in enumerate(profile):
+                    if count > 0:
+                        profile_prob *= (strategy_probs[j] ** count)
+
+                for k in range(self.num_strategies):
+                    if profile[k] > 0:
+                        expected_payoffs[k] += profile_prob * self.payoffs[i][k]
+
+            #here i calculate regret 
+            current_expected_payoff = np.dot(strategy_probs, expected_payoffs)
+            regrets = expected_payoffs - current_expected_payoff
+            #lol
+            cumulative_regrets += regrets 
+            #find new strategy with regret matching 
+            pos_cumulative_regrets = np.maximum(cumulative_regrets, 0)
+            regret_sum = np.sum(pos_cumulative_regrets)
+
+            #TODO: not sure if this is correct/what do to here?
+            if regret_sum > 0:
+                strategy_probs = pos_cumulative_regrets / regret_sum
+            else:
+                strategy_probs = np.ones(self.num_strategies) / self.num_strategies
+
+            #update strategy sums 
+            strategy_sums += strategy_probs
+            print(f"Iteration {i}: {strategy_probs}")
+            # Check for convergence
+            if i > 0 and i % 10 == 0:
+                avg_strategy = strategy_sums / (i + 1)
+                if np.max(np.abs(avg_strategy - strategy_probs)) < epsilon:
+                    break
+        
+        # Calculate average strategy (approximate Nash equilibrium)
+        avg_strategy = strategy_sums / iterations
+        print(f"Final Strategy: {avg_strategy}")
+        print(f"Regrets: {cumulative_regrets}")
+        return {strat: prob for strat, prob in zip(self.strategy_names, avg_strategy)}
+        
+
+       
+        
+
+
+
+
+
+
+       
+            

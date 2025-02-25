@@ -150,6 +150,14 @@ class DPRGame:
         return full_profile
         
 
+    def solve_reduced_game_cfr(self, iterations=1000, epsilon=1e-6):
+        """
+        Solves the reduced game using CFR.
+        """
+
+        return self.reduced_game.solve_game_cfr(iterations, epsilon)
+
+
 
         
             

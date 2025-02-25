@@ -29,6 +29,7 @@ class Game:
         # Create proper numeric payoff matrices
         self.numeric_payoff_matrix = self._create_numeric_payoff_matrix()
         self.payoff_table = self._create_payoff_table()
+        
 
     @property
     def num_strategies(self):
@@ -123,18 +124,14 @@ class Game:
         """
         profile_tuple = tuple(profile)
         
-        # Check if profile exists
         if profile_tuple not in self.profile_payoff_dict:
             return False
         
-        # Find the index of this profile
         idx = self.profiles.index(list(profile))
         
-        # Update payoffs
         self.payoffs[idx] = new_payoff
         self.profile_payoff_dict[profile_tuple] = new_payoff
         
-        # Update matrices
         self.numeric_payoff_matrix = self._create_numeric_payoff_matrix()
         self.payoff_table = self._create_payoff_table()
         
