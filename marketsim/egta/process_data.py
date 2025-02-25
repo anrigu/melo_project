@@ -24,8 +24,10 @@ def process_game_data(raw_data): #generates game object for symmetric games
             strategy_names.add(strategy)
     
     strategy_names = sorted(list(strategy_names))
+    print(strategy_names)
 
     profile_dict = defaultdict(lambda: {"count": 0, "payoffs": defaultdict(list)})
+   
 
     for profile in raw_data:
         strat_count = tuple(sorted([(strategy, 
@@ -51,7 +53,10 @@ def process_game_data(raw_data): #generates game object for symmetric games
                             for strat, _ in strat_count]
         
         payoffs.append(expected_payoffs)
-
+    
+    #print profiles and payoffs and strategy names
+    for profile, payoff, strategy in zip(profiles, payoffs, strategy_names):
+        print(profile, payoff, strategy)
 
     return Game(strategy_names, profiles, payoffs, num_players)
   

@@ -1,5 +1,6 @@
 from egta.game import Game
 import numpy as np
+from math import factorial, comb
 
 class ReducedGame(Game):
     """
@@ -164,63 +165,112 @@ class ReducedGame(Game):
             self.scaling_factor
         )
     
-    def solve_game_cfr(self, iterations=100, epsilon=1e-6):
+    def solve_game_cfr(self, iterations=1000, epsilon=1e-6):
         """
-        Solves the game using CFR.
-        """
-        #initial uniform distribution for mss
-        #TODO: hot start, start with supports proportional to times played in the true game
+        Solves the symmetric game using CFR.
 
+        implemented following: https://ai.plainenglish.io/steps-to-building-a-poker-ai-part-4-regret-matching-for-rock-paper-scissors-in-python-168411edbb13
+        """
+        print(f"Solving game with {self.num_strategies} strategies and {self.num_players} players")
+
+        # Initialize with uniform distribution
         strategy_probs = np.ones(self.num_strategies) / self.num_strategies
-
-        #initalize cumulative regrets and strat sums 
+        
+        # Initialize cumulative regrets and strategy sums
         cumulative_regrets = np.zeros(self.num_strategies)
+        cumulative_regrets_dict = {}
+        for strategy in self.strategy_names:
+            cumulative_regrets_dict[strategy] = []
+        strategy_probs_dict = {}
+        for strategy in self.strategy_names:
+            strategy_probs_dict[strategy] = []
+        
+    
         strategy_sums = np.zeros(self.num_strategies)
 
-        for i in range(iterations): 
-            #now we compute expected payoffs for each strategy
+        for i in range(iterations):
+            # Calculate expected payoff for each pure strategy
             expected_payoffs = np.zeros(self.num_strategies)
+            
+            for s in range(self.num_strategies):
+                # Calculate expected payoff when playing pure strategy s
+                for j, profile in enumerate(self.profiles):
+                    # Skip if profile doesn't use strategy s
+                    if profile[s] == 0:
+                        continue
+                        
+                    #this creates a modified profiles of other players strategies 
+                    #we remove the focal strategy s from the profile 
+                    other_players_profile = profile.copy()
+                    other_players_profile[s] -= 1  #remove its contribution
+                    
+                    #calculate probability of other players choosing this distribution
+                    profile_prob = 1.0
+                    n_others = self.num_players - 1
+                    multinomial_coef = factorial(n_others)
 
-            for i, profile in enumerate(self.profiles):
-                #find probability of this strategy profile occuring 
-                profile_prob = 1.0
-                for j, count in enumerate(profile):
-                    if count > 0:
-                        profile_prob *= (strategy_probs[j] ** count)
+                    profile_prob *= multinomial_coef
 
-                for k in range(self.num_strategies):
-                    if profile[k] > 0:
-                        expected_payoffs[k] += profile_prob * self.payoffs[i][k]
+                    for strat, count in enumerate(other_players_profile):
+                        if count > 0:
+                            profile_prob *= (strategy_probs[strat] ** count)
+                    
+                    # Add weighted payoff to expected payoff for strategy s
+                    expected_payoffs[s] += profile_prob * self.payoffs[j][s]
+            
+            # Calculate current expected value with mixed strategy
+            current_expected_value = np.sum(strategy_probs * expected_payoffs)
+            
+            # Calculate regrets
+            regrets = expected_payoffs - current_expected_value
+            
+            # Update cumulative regrets
+            cumulative_regrets += regrets        
 
-            #here i calculate regret 
-            current_expected_payoff = np.dot(strategy_probs, expected_payoffs)
-            regrets = expected_payoffs - current_expected_payoff
-            #lol
-            cumulative_regrets += regrets 
-            #find new strategy with regret matching 
-            pos_cumulative_regrets = np.maximum(cumulative_regrets, 0)
-            regret_sum = np.sum(pos_cumulative_regrets)
+            
 
-            #TODO: not sure if this is correct/what do to here?
+            
+            # Compute new strategy probabilities using regret matching
+            positive_regrets = np.maximum(0, cumulative_regrets)
+            regret_sum = np.sum(positive_regrets)
+
+            for strategy in self.strategy_names:
+                cumulative_regrets_dict[strategy].append(positive_regrets[self.strategy_names.index(strategy)])
+            
             if regret_sum > 0:
-                strategy_probs = pos_cumulative_regrets / regret_sum
+                strategy_probs = positive_regrets / regret_sum   
             else:
                 strategy_probs = np.ones(self.num_strategies) / self.num_strategies
-
-            #update strategy sums 
-            strategy_sums += strategy_probs
-            print(f"Iteration {i}: {strategy_probs}")
+                
+            
+            # Update strategy sums for averaging normalized
+            strategy_sums += strategy_probs / self.num_strategies
+            
+            for strategy in self.strategy_names:
+                strategy_probs_dict[strategy].append(strategy_probs[self.strategy_names.index(strategy)])
+            
+            if i % 100 == 0:
+                print(f"Iteration {i}: {strategy_probs}")
+            
             # Check for convergence
             if i > 0 and i % 10 == 0:
                 avg_strategy = strategy_sums / (i + 1)
                 if np.max(np.abs(avg_strategy - strategy_probs)) < epsilon:
+                    print(f"Converged after {i} iterations")
                     break
         
         # Calculate average strategy (approximate Nash equilibrium)
         avg_strategy = strategy_sums / iterations
+        
+        # Normalize to ensure probabilities sum to 1
+        avg_strategy = avg_strategy / np.sum(avg_strategy)
+        
         print(f"Final Strategy: {avg_strategy}")
+
         print(f"Regrets: {cumulative_regrets}")
-        return {strat: prob for strat, prob in zip(self.strategy_names, avg_strategy)}
+        
+        # Return as a dictionary
+        return {strat: prob for strat, prob in zip(self.strategy_names, avg_strategy)}, cumulative_regrets_dict, strategy_probs_dict
         
 
        
