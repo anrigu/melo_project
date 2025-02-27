@@ -169,14 +169,16 @@ class ReducedGame(Game):
         """
         Solves the symmetric game using CFR.
 
-        implemented following: https://ai.plainenglish.io/steps-to-building-a-poker-ai-part-4-regret-matching-for-rock-paper-scissors-in-python-168411edbb13
+        implemented following: 
+        https://ai.plainenglish.io/steps-to-building-a-poker-ai-part-4-regret-matching-for-rock-paper-scissors-in-python-168411edbb13
         """
         print(f"Solving game with {self.num_strategies} strategies and {self.num_players} players")
 
-        # Initialize with uniform distribution
+        #initalize uniform distribution
+        #TODO: hot start, maybe use previous strategy to speed convergence?
         strategy_probs = np.ones(self.num_strategies) / self.num_strategies
         
-        # Initialize cumulative regrets and strategy sums
+        #initialize cumulative regrets and strategy sums
         cumulative_regrets = np.zeros(self.num_strategies)
         cumulative_regrets_dict = {}
         for strategy in self.strategy_names:
@@ -189,13 +191,13 @@ class ReducedGame(Game):
         strategy_sums = np.zeros(self.num_strategies)
 
         for i in range(iterations):
-            # Calculate expected payoff for each pure strategy
+            #calculate expected payoff for each strategy
             expected_payoffs = np.zeros(self.num_strategies)
             
             for s in range(self.num_strategies):
-                # Calculate expected payoff when playing pure strategy s
+                #calculate expected payoff when playing strategy s
                 for j, profile in enumerate(self.profiles):
-                    # Skip if profile doesn't use strategy s
+                    #skip if profile doesn't use strategy s
                     if profile[s] == 0:
                         continue
                         
@@ -236,7 +238,6 @@ class ReducedGame(Game):
 
             for strategy in self.strategy_names:
                 cumulative_regrets_dict[strategy].append(positive_regrets[self.strategy_names.index(strategy)])
-            
             if regret_sum > 0:
                 strategy_probs = positive_regrets / regret_sum   
             else:
@@ -271,6 +272,18 @@ class ReducedGame(Game):
         
         # Return as a dictionary
         return {strat: prob for strat, prob in zip(self.strategy_names, avg_strategy)}, cumulative_regrets_dict, strategy_probs_dict
+    
+    #TODO: implement replicator dynamics
+    def solve_replicator_dynamics(self, iterations=1000, epsilon=1e-6):
+        """
+        solves the symmetric game using replicator dynamics.
+        trick have map back to 
+        
+        """
+
+        print(f"Solving game with {self.num_strategies} strategies and {self.num_players} players")
+        
+        
         
 
        

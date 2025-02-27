@@ -1,215 +1,156 @@
 import numpy as np
 from collections import defaultdict
 
-class Game:
-    def __init__(self, strategy_names, profiles, payoffs, num_players):
-        """
-        A class to construct a full symmetric game with payoff data.
-        
-        Parameters:
-        strategy_names : list of str
-            Names of each strategy (e.g. ['LIT_ORDERBOOK', 'MELO']).
-        profiles : list of list
-            A list of profiles (integer counts of how many players choose each strategy).
-        payoffs : list of list
-            Payoff data corresponding to each profile (same shape as profiles).
-        num_players : int
-            Total number of players in the game.
-        """
-        
-        self.strategy_names = strategy_names
-        self.profiles = profiles
-        self.payoffs = payoffs
-        self.num_players = num_players
-        
-        # Create a dictionary for faster profile lookup - O(1) access
-        self.profile_payoff_dict = {tuple(profile): payoff 
-                                   for profile, payoff in zip(profiles, payoffs)}
-        
-        # Create proper numeric payoff matrices
-        self.numeric_payoff_matrix = self._create_numeric_payoff_matrix()
-        self.payoff_table = self._create_payoff_table()
-        
+import numpy as np
+import torch
+from abc import ABC, abstractmethod
+from itertools import combinations_with_replacement
+from collections import Counter
+from egta.utils.simplex_operations import logmultinomial, simplex_normalize
+from torch.nn.functional import pad
 
-    @property
-    def num_strategies(self):
-        return len(self.strategy_names)
-    
-    @property
-    def num_profiles(self):
-        return len(self.profiles)
+# Constants matching Bryce's implementation 
+#NOTE: might need to change
+MAXIMUM_PAYOFF = 1e5  # all payoffs are standardized to the (MIN,MAX) range
+MINIMUM_PAYOFF = 1e-5  # for numerical stability and to simplify parameter tuning
+F32_EPSILON = np.finfo(np.float32).eps
+F64_EPSILON = np.finfo(np.float64).eps
 
-    def is_empty(self):
-        return self.num_profiles == 0
 
-    def get_profiles(self):
-        return self.profiles
+class AbstractGame(ABC):
+    """
+    abstract base class for all games.
+    """
+    @abstractmethod
+    def deviation_payoffs(self, mixture):
+        '''
+        calculates expected payoff for each strategy against a mixture
 
-    def get_payoffs(self):
-        return self.payoffs
-    
-    def get_payoff_for_profile(self, profile):
-        """Get payoffs for a specific profile - O(1) operation"""
-        profile_tuple = tuple(profile)
-        return self.profile_payoff_dict.get(profile_tuple)
-    
-    def _create_numeric_payoff_matrix(self):
+        arguments:
+            mix: strategy mixture (this is a probability distribution)
+
+        returns:
+            expected payoffs for deviating to each pure strategy
+        '''
+        pass
+
+    def deviation_gains(self, mixture):
         """
-        Creates a numpy array of the payoff data only.
-        Used for numerical computations.
-        """
-        return np.array(self.payoffs)
-    
-    def _create_payoff_table(self):
-        """
-        Creates a formatted table representation with headers for display.
-        """
-        header = ["# " + strat for strat in self.strategy_names] + \
-                ["Payoff (" + strat + ")" for strat in self.strategy_names]
+        calculate the gain from deviating to each pure strategy
         
-        table = [header]
-        for profile, payoff in zip(self.profiles, self.payoffs):
-            table.append(profile + payoff)
-            
-        return table
-    
-    def get_payoff_matrix(self):
-        """
-        Returns the formatted payoff table for display.
-        """
-        return self.payoff_table
-    
-    def get_numeric_payoff_matrix(self):
-        """
-        Returns the numeric payoff matrix for calculations.
-        """
-        return self.numeric_payoff_matrix
-    
-    def add_profile(self, profile, payoff):
-        """
-        Add a new profile and its payoffs to the game.
-        
-        Parameters:
-        profile : list
-            Strategy counts for this profile
-        payoff : list
-            Payoffs for each strategy in this profile
-        """
-        profile_tuple = tuple(profile)
-        
-        # Check if profile already exists
-        if profile_tuple in self.profile_payoff_dict:
-            return False
-        
-        # Add new profile and payoffs
-        self.profiles.append(profile)
-        self.payoffs.append(payoff)
-        self.profile_payoff_dict[profile_tuple] = payoff
-        
-        # Update matrices
-        self.numeric_payoff_matrix = self._create_numeric_payoff_matrix()
-        self.payoff_table = self._create_payoff_table()
-        
-        return True
-    
-    def update_profile_payoff(self, profile, new_payoff):
-        """
-        Update the payoff for an existing profile.
-        
-        Parameters:
-        profile : list
-            Strategy counts for the profile to update
-        new_payoff : list
-            New payoffs for each strategy in this profile
-        """
-        profile_tuple = tuple(profile)
-        
-        if profile_tuple not in self.profile_payoff_dict:
-            return False
-        
-        idx = self.profiles.index(list(profile))
-        
-        self.payoffs[idx] = new_payoff
-        self.profile_payoff_dict[profile_tuple] = new_payoff
-        
-        self.numeric_payoff_matrix = self._create_numeric_payoff_matrix()
-        self.payoff_table = self._create_payoff_table()
-        
-        return True
-        
-    def update_payoffs(self, new_raw_data):
-        """
-        Updates the game's payoff matrix with new observed strategy profiles.
-        Parameters:
-            new_raw_data : list of lists
-                New observed strategy profiles and their payoffs.
+        Args:
+            mixture: strategy mixture (distribution over strategies)
         Returns:
-            prior_payoff_table : list
-                The old payoff matrix before updates.
-            new_payoff_table : list
-                The updated payoff matrix.
+            expected gains for deviating to each pure strategy
         """
-        try:
-            prior_payoff_table = self.payoff_table.copy()
-            new_strategy_names = set()
-            for profile in new_raw_data:
-                for _, strategy, _ in profile:
-                    new_strategy_names.add(strategy)
 
-            new_strategy_names = sorted(list(new_strategy_names))
-            profile_dict = defaultdict(lambda: {"count": 0, "payoffs": defaultdict(list)})
+        if not torch.is_tensor(mixture):
+            mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)
+
+
+        #maybe reshaping is needed
+        is_vector = len(mixture.shape) == 1
+        if is_vector:
+            mixture = mixture.reshape(-1, 1)
+
+        #calculate deviation payoffs
+        dev_payoffs = self.deviation_payoffs(mixture)
+        #compoute the mixture of expected values
+        mixture_expectations = torch.sum(mixture * dev_payoffs, dim=0)
+
+        # Calculate gains
+        gains = torch.clamp(dev_payoffs - mixture_expectations, min=0)
+        if is_vector:
+            return gains.squeeze(1)
+        return gains
+    
+    def regret(self, mixture):
+        """
+        gets the regret for a mixture (ie. maximum gain from deviation)
+        inputs:
+            mixture: Strategy mixture
             
-            # Process new data
-            for profile in new_raw_data:
-                strat_count = tuple(sorted([
-                    (strategy, sum(1 for _, s, _ in profile if s == strategy)) 
-                    for strategy in new_strategy_names
-                ]))
-                profile_dict[strat_count]["count"] += 1
-                for _, strategy, payoff in profile:
-                    profile_dict[strat_count]["payoffs"][strategy].append(payoff)
+        returns:
+            Maximum regret
+        """
+        gains = self.deviation_gains(mixture)
+        return torch.max(gains, dim=0)[0]
+    
+    def best_responses(self, mixture, atol=1e-10):
+        """
+        find the best responses to a mixture.
+        args:
+            mixture: Strategy mixture
+            atol: Absolute tolerance for considering strategies as best responses
             
-            # Create profiles and payoffs from new data
-            new_profiles = []
-            new_payoffs = []
-            for strat_count, data in profile_dict.items():
-                profile = [count for _, count in strat_count]
-                new_profiles.append(profile)
-                expected_payoffs = [
-                    np.mean(data["payoffs"][strat]) if data["payoffs"][strat] else 0 
-                    for strat, _ in strat_count
-                ]
-                new_payoffs.append(expected_payoffs)
+        Returns:
+            Boolean tensor indicating which strategies are best responses
+        """
+        dev_pays = self.deviation_payoffs(mixture)
+        max_payoffs = torch.max(dev_pays, dim=0, keepdim=True)[0]
+        return torch.isclose(dev_pays, max_payoffs, atol=atol)
+    
+
+    def better_response(self, mixture, scale_factor=1.0):
+        '''
+        This function implements the better response algorithm from Bryce's paper
+        For use in Scarf's simplicial subdivision algorithm.
+        https://arxiv.org/abs/2207.10832
+        Args:
+            mixture: Strategy mixture
+            scale_factor: Scale factor for gains
             
-            # Create index map for existing profiles
-            existing_profiles = {tuple(p): i for i, p in enumerate(self.profiles)}
+        Returns:
+            Better response mixture
+        '''
+        if not torch.is_tensor(mixture):
+            mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)
             
-            # Update or add profiles
-            for profile, payoff in zip(new_profiles, new_payoffs):
-                profile_tuple = tuple(profile)
-                
-                if profile_tuple in existing_profiles:  # if profile exists, average payoffs
-                    idx = existing_profiles[profile_tuple]
-                    self.payoffs[idx] = [
-                        (self.payoffs[idx][i] + payoff[i]) / 2 
-                        for i in range(len(payoff))
-                    ]
-                    self.profile_payoff_dict[profile_tuple] = self.payoffs[idx]
-                else:  # if profile does not exist, add it
-                    self.profiles.append(profile)
-                    self.payoffs.append(payoff)
-                    self.profile_payoff_dict[profile_tuple] = payoff
+        
+        is_vector = len(mixture.shape) == 1
+        if is_vector:
+            mixture = mixture.reshape(-1, 1)  # Convert to column vector
             
-            # Update strategy names
-            self.strategy_names = sorted(set(self.strategy_names) | set(new_strategy_names))
+        # calculate gains
+        gains = torch.clamp(self.deviation_gains(mixture), min=0) * scale_factor
+        
+        # calculate better response
+        better_resp = (mixture + gains) / (1 + torch.sum(gains, dim=0, keepdim=True))
+        
+        # return in the appropriate shape
+        if is_vector:
+            return better_resp.squeeze(1)
+        return better_resp
+    
+    def filter_regrets(self, mixtures, threshold=1e-3, sorted=False):
+        """
+        filter mixtures based on regret.
+        
+        args:
+            mixtures: Matrix of mixtures
+            threshold: Regret threshold
+            sorted: Whether to sort by regret
             
-            # Regenerate matrices
-            self.numeric_payoff_matrix = self._create_numeric_payoff_matrix()
-            self.payoff_table = self._create_payoff_table()
+        returns:
+            Filtered mixtures
+        """
+        if not torch.is_tensor(mixtures):
+            mixtures = torch.tensor(mixtures, dtype=torch.float32, device=self.device)
             
-            return prior_payoff_table, self.payoff_table
+        #compute regrets
+        mixture_regrets = self.regret(mixtures)
+        
+        # filter by threshold
+        #NOTE: might need to change the threshold
+        below_threshold = mixture_regrets < threshold
+        filtered_mixtures = mixtures[:, below_threshold]
+        filtered_regrets = mixture_regrets[below_threshold]
+        
+        #we end by sorting by regret
+        if sorted and len(filtered_regrets) > 0:
+            sort_idx = torch.argsort(filtered_regrets)
+            filtered_mixtures = filtered_mixtures[:, sort_idx]
             
-        except Exception as e:
-            print(f"Error updating payoffs with new data: {e}")
-            print(f"Returning original payoff matrix")
-            return self.payoff_table, self.payoff_table
+        return filtered_mixtures
+    
+
