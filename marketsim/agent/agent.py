@@ -11,11 +11,6 @@ class Agent(ABC):
     @abstractmethod
     def take_action(self, side: bool, seed: int = None) -> List[Order]:
         pass
-
-    @abstractmethod
-    def melo_record_trade(self, side: bool, quantity:int, matched_order: MatchedOrder) -> None:
-        pass
-
     
     @abstractmethod
     def reset(self):

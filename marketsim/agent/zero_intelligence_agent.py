@@ -74,26 +74,6 @@ class ZIAgent(Agent):
         return estimate
         # return estimate + np.random.normal(0, np.sqrt(3e5))
 
-    def melo_take_action(self, side: bool, quantity:int, seed: int = None) -> List[Order]:
-        t = self.market.get_time()
-        self.generate_melo_pv()
-        if side == BUY:
-            price = self.estimate_fundamental() + self.meloPV
-            # price = midpoint + self.meloPv[0]
-        else:
-            price = self.estimate_fundamental() - self.meloPV
-            # price = midpoint - self.meloPv[0]
-        
-        order = Order(
-            price=price,
-            quantity=quantity,
-            agent_id=self.get_id(),
-            time=t,
-            order_type=side,
-            order_id=random.randint(1, 10000000)
-        )
-        return [order]
-
     def take_action(self, side, seed = 0):
         t = self.market.get_time()
         # random.seed(t + seed)
@@ -105,10 +85,6 @@ class ZIAgent(Agent):
             price = estimate + self.pv.value_for_exchange(self.position, BUY) - valuation_offset
         else:
             price = estimate + self.pv.value_for_exchange(self.position, SELL) + valuation_offset
-        # if 1000 < t < 1500:
-        #     print(f'It is time {t} and I am on {side} as a ZI. My estimate is {estimate}, my position is {self.position}, and my marginal pv is '
-        #         f'{self.pv.value_for_exchange(self.position, side)} with offset {valuation_offset}. '
-        #         f'Therefore I offer price {price}')
 
         if self.eta != 1.0:
             if side == BUY:
@@ -138,16 +114,6 @@ class ZIAgent(Agent):
     def update_position(self, q, p):
         self.position += q
         self.cash += p
-
-    def melo_record_trade(self, side, quantity, matched_order) -> None:
-        if side == BUY:
-            #Reserve price - executed price
-            one_unit_profit = matched_order.order.price - matched_order.price
-        else:
-            #executed price - reserve price
-            one_unit_profit = matched_order.price - matched_order.order.price
-        total_profit = one_unit_profit * quantity
-        self.meloProfit += total_profit
 
     def __str__(self):
         return f'ZI{self.agent_id}'

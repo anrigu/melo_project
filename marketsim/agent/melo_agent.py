@@ -11,7 +11,7 @@ import math
 
 
 class MeloAgent(Agent):
-    def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, pv_var: float, eta: float = 1.0):
+    def __init__(self, agent_id: int, market: Market, q_max: int, pv_var: float):
         self.agent_id = agent_id
         self.market = market
         self.q_max = q_max
@@ -21,10 +21,8 @@ class MeloAgent(Agent):
         self.meloPV = 0
         self.position = 0
         self.meloPosition = 0
-        self.shade = shade
         self.cash = 0
         self.meloProfit = 0
-        self.eta = eta
         self.melo_trades = []
         self.q_max = q_max
         self.pv_var = pv_var
@@ -80,7 +78,11 @@ class MeloAgent(Agent):
             one_unit_profit = matched_order.price - matched_order.order.price
         total_profit = one_unit_profit * quantity
         self.meloProfit += total_profit
-        self.position += quantity
+
+    def update_position(self, q, p):
+        self.position += q
+        self.cash += p
+
 
     def __str__(self):
         return f'ZI{self.agent_id}'
