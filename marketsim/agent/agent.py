@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from fourheap.order import Order
+from fourheap.order import Order, MatchedOrder
 from typing import List
 
 
@@ -13,9 +13,10 @@ class Agent(ABC):
         pass
 
     @abstractmethod
-    def melo_take_action(self, side: bool, quantity:int, seed: int = None) -> List[Order]:
+    def melo_record_trade(self, side: bool, quantity:int, matched_order: MatchedOrder) -> None:
         pass
 
+    
     @abstractmethod
     def reset(self):
         pass

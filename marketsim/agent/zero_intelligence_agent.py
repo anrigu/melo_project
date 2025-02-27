@@ -17,14 +17,15 @@ class ZIAgent(Agent):
         self.q_max = q_max
         self.pv_var = pv_var
         self.pv = PrivateValues(q_max, pv_var)
-        self.meloPv = torch.rand(2 * q_max) * pv_var
+        #Rand generated on entry
+        self.meloPV = 0
         self.position = 0
         self.meloPosition = 0
         self.shade = shade
         self.cash = 0
-        self.meloCash = 0
+        self.meloProfit = 0
         self.eta = eta
-
+        self.melo_trades = []
         self.q_max = q_max
         self.pv_var = pv_var
 
@@ -33,7 +34,7 @@ class ZIAgent(Agent):
         self.pv = PrivateValues(self.q_max, self.pv_var)
 
     def generate_melo_pv(self):
-        self.meloPV = torch.rand(2 * self.q_max) * np.sqrt(self.pv_var)
+        self.meloPV = random.uniform(10, 100)
 
     def get_id(self) -> int:
         return self.agent_id
@@ -75,18 +76,12 @@ class ZIAgent(Agent):
 
     def melo_take_action(self, side: bool, quantity:int, seed: int = None) -> List[Order]:
         t = self.market.get_time()
-        best_bid = self.market.order_book.get_best_bid()
-        best_ask = self.market.order_book.get_best_ask()
-        if math.isinf(best_ask) or math.isinf(best_bid):
-            midpoint = self.estimate_fundamental()
-        else:
-            midpoint = (best_bid + best_ask) / 2
-        #TODO: fix later
+        self.generate_melo_pv()
         if side == BUY:
-            price = midpoint
+            price = self.estimate_fundamental() + self.meloPV
             # price = midpoint + self.meloPv[0]
         else:
-            price = midpoint
+            price = self.estimate_fundamental() - self.meloPV
             # price = midpoint - self.meloPv[0]
         
         order = Order(
@@ -101,7 +96,7 @@ class ZIAgent(Agent):
 
     def take_action(self, side, seed = 0):
         t = self.market.get_time()
-        random.seed(t + seed)
+        # random.seed(t + seed)
         estimate = self.estimate_fundamental() 
         # estimate = self.estimate_fundamental() + np.random.normal(0, np.sqrt(1e6))
         spread = self.shade[1] - self.shade[0]
@@ -144,9 +139,15 @@ class ZIAgent(Agent):
         self.position += q
         self.cash += p
 
-    def melo_update_position(self, q, p):
-        self.meloPosition += q
-        self.meloCash += p
+    def melo_record_trade(self, side, quantity, matched_order) -> None:
+        if side == BUY:
+            #Reserve price - executed price
+            one_unit_profit = matched_order.order.price - matched_order.price
+        else:
+            #executed price - reserve price
+            one_unit_profit = matched_order.price - matched_order.order.price
+        total_profit = one_unit_profit * quantity
+        self.meloProfit += total_profit
 
     def __str__(self):
         return f'ZI{self.agent_id}'

@@ -30,6 +30,7 @@ class Market:
     def add_orders(self, orders):
         for order in orders:
             self.event_queue.schedule_activity(order)
+            # print(f"{type}: EventQueue adding order {order.order_id} at time {self.get_time()} for time {order.time}")
 
     def get_time(self):
         return self.event_queue.get_current_time()

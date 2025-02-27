@@ -13,7 +13,7 @@ class EventQueue:
 
     def schedule_activity(self, order: Order):
         t = order.time
-
+        # print(f"Scheduling order {order.order_id} at time {t} in {self}")
         self.scheduled_activities[t].append(order)
 
     def step(self) -> List[Order]:

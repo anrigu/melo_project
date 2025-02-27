@@ -41,7 +41,7 @@ class OrderQueue:
             
         if self.is_empty():
             return None
-        return self.heap[0][1]
+        return self.order_dict[self.heap[0][1]]
 
     def peek_order_id(self) -> float:
         if self.is_empty():
@@ -85,6 +85,7 @@ class OrderQueue:
             while self.peek_order_id() in self.deleted_ids:
                 heapq.heappop(self.heap)
         except (KeyError, AttributeError):
+            input("ERROR HERE")
             pass
         # except IndexError:
         #     print(order_id, self.peek_order(), self.deleted_ids, self.heap)
