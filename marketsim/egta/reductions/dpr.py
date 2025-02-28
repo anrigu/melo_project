@@ -44,7 +44,9 @@ class DPRGAME(SymmetricGame):
             device=device
         )
 
-        def _generate_configs(self, num_players, num_actions):
+        
+
+    def _generate_configs(self, num_players, num_actions):
             '''
             generate possible configs for reduced game
             '''
@@ -54,11 +56,11 @@ class DPRGAME(SymmetricGame):
                 for id in combo:
                     config[id] += 1
 
-                configs.append(conf)
+                configs.append(config)
             
             return configs
         
-        def _compute_reduced_payoffs(self, config_table):
+    def _compute_reduced_payoffs(self, config_table):
             '''
             compute payoffs for reduced game use the DPR mapping
 
@@ -76,14 +78,26 @@ class DPRGAME(SymmetricGame):
                                        device=device)
             
             for config_index, config in enumerate(config_table):
-                for strat_idx in (full_game.num_actions):
+                for strat_idx in range(full_game.num_actions):
                     if config[strat_idx] > 0: #strat is in that profile
                         expand_payoffs = self._expand_to_full_game(config, strat_idx)
                         payoff_table[strat_idx, config_index] = expand_payoffs
 
             return payoff_table
     
-        def _expand_to_full_game(self, reduced_config, strategy_idx):
+         
+
+    def _find_config_index(self, config_array):
+            '''
+            find the index of a profile in the full game's table
+            '''
+            config_tensor = torch.tensor(config_array, device=self.full_game.device)
+            for i, config in enumerate(self.full_game.config_table):
+                if torch.all(config == config_tensor):
+                    print(f"Found profile: {i}")
+                    return i
+            return -1 
+    def _expand_to_full_game(self, reduced_config, strategy_idx):
             '''
             map reduced game profile and strat to full game payoffs
             basically this is the dpr mapping logic
@@ -116,25 +130,14 @@ class DPRGAME(SymmetricGame):
             #finally look up payoff in the full game
             #convert scaled_config to the format for the full game
 
-            full_game_config_idx = self._find_config_idx(scaled_config)
+            full_game_config_idx = self._find_config_index(scaled_config)
 
             if full_game_config_idx >= 0:
                 return self.full_game.payoff_table[strategy_idx, full_game_config_idx]
             else: #TODO: check if we should interpotlate from similiar pofiles 
                 return self._interpolate_payoff(scaled_config, strategy_idx)
             
-
-        def _find_config_index(self, config_array):
-            '''
-            find the index of a profile in the full game's table
-            '''
-            config_tensor = torch.tensor(config_array, device=self.full_game.device)
-            for i, config in enumerate(self.full_game.config_table):
-                if torch.all(config == config_tensor):
-                    print(f"Found profile: {i}")
-                    return i
-            return -1 
-        def _interpolate_payoff(self, config, strategy_idx):
+    def _interpolate_payoff(self, config, strategy_idx):
             '''
             interpolates the payoff from similiar profile if say the exact profile does not
             exist in the true empirical game
@@ -161,7 +164,7 @@ class DPRGAME(SymmetricGame):
             similarities_tensor = torch.tensor(similarities, device=self.full_game.device)
             return torch.sum(similarities_tensor * torch.stack(payoffs)) / torch.sum(similarities_tensor)
         
-        def expand_mixture(self, reduced_mixture):
+    def expand_mixture(self, reduced_mixture):
             '''
             map reduced game mixed strat to the full empirical game
             remember in DPR the mixed strategies are preserved, ie. the same mixed strategy 
@@ -170,15 +173,15 @@ class DPRGAME(SymmetricGame):
 
             return reduced_mixture
         
-        def find_equilibrium(self, method="replicator_dynamics", **kwargs):
+    def find_equilibrium(self, method="replicator_dynamics", logging=True, **kwargs):
             '''
             compute equilibirum for the reduced game using method from eq_computation
 
             see eq_computation.py for algorithms and inputs to use.
             '''
-            eq_mixture, _, _ = find_equilibria(self, method=method, **kwargs)
+            eq_mixture, _, _ = find_equilibria(self, method=method, logging=logging, **kwargs)
             return eq_mixture
-        
+
 
 
 
