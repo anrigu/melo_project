@@ -12,7 +12,7 @@ original version of Bryce's code:
 https://github.com/Davidson-Game-Theory-Research/gameanalysis.jl/blob/master/RandomFunctions.jl
 '''
 '''
-TODO: validate
+TODO: validate wrtie test cases
 '''
 def random_polynomial(degr_probs=None, min_coefs=None, max_coefs=None, beta_params=None, device="cpu"):
     """
@@ -34,7 +34,7 @@ def random_polynomial(degr_probs=None, min_coefs=None, max_coefs=None, beta_para
     Returns:
     function : A callable function representing the polynomial
     """
-    # Default parameters
+    # Default parameters 
     if degr_probs is None:
         degr_probs = [0, 0.6, 0.4]
     if min_coefs is None:
@@ -194,22 +194,22 @@ def random_gaussian(mean_distr, mean_scale=1, var_scale=1, covar_scale=1, corr_s
     
   
     
-    # 1. generate random orthogonal matrix
+    #generate random orthogonal matrix
     A = torch.randn(d, d, device=device)
     Q, R = torch.linalg.qr(A)
     
-    # 2. generate eigenvalues with correlation strength
+    #generate eigenvalues with correlation strength
     eigenvalues = torch.rand(d, device=device) * (1/corr_strength)
     eigenvalues = eigenvalues / eigenvalues.sum() * d
     
-    # 3. build correlation matrix
+    #build correlation matrix
     Σ = Q @ torch.diag(eigenvalues) @ Q.t()
     
-    # 4. ensure it's a valid correlation matrix
+    #ensure it's a valid correlation matrix
     diag_sqrt_inv = torch.diag(1.0 / torch.sqrt(torch.diag(Σ)))
     Σ = diag_sqrt_inv @ Σ @ diag_sqrt_inv
     
-    # 5. scale variance and covariance
+    # scale variance and covariance
     # iagonal elements (these are variances)
     mask = torch.eye(d, device=device, dtype=torch.bool)
     Σ[mask] *= var_scale
@@ -221,11 +221,10 @@ def random_gaussian(mean_distr, mean_scale=1, var_scale=1, covar_scale=1, corr_s
     inverse = torch.inverse(Σ)
     determinant = torch.det(Σ)
     
-    # define the Gaussian PDF function
+    #define the Gaussian PDF function
     def gaussian_pdf(x):
         """
         evaluate the Gaussian PDF at points x.
-        
         Parameters:
         x : torch.Tensor or numpy.ndarray
             Points to evaluate the Gaussian PDF at, can be single point or batch
@@ -236,7 +235,7 @@ def random_gaussian(mean_distr, mean_scale=1, var_scale=1, covar_scale=1, corr_s
         if not torch.is_tensor(x):
             x = torch.tensor(x, dtype=torch.float32, device=device)
         
-        # Handle single point vs batch
+        #handle single point vs batch
         original_shape = x.shape
         if x.dim() == 1:
             x = x.unsqueeze(0)  # Add batch dimension

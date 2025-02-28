@@ -16,8 +16,7 @@ def uniform_mixture(num_actions):
 
 def random_mixture(num_actions, num_mixtures, alpha=1.0, device="cpu"):
     '''
-    This returns random points on the simplex
-    
+    this returns random points on the simplex
     Parameters:
     num_actions : int
         Number of dimensions in the simplex

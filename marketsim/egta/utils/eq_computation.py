@@ -51,7 +51,7 @@ def replicator_dynamics(game, mix, iterations=1000, offset=0, return_history=Fal
 def logged_replicator_dynamics(game, mix, iters=1000, offset=0):
     return replicator_dynamics(game, mix, iters, offset, return_history=True)
 
-def gain_descent(game, mix, iterations=1000, step_size=1e-6, return_history=False):
+def gain_descent(game, mix, iterations=1000, step_size=.001, return_history=False):
     """
     run gain descent to find Nash equilibrium.
     
@@ -70,8 +70,10 @@ def gain_descent(game, mix, iterations=1000, step_size=1e-6, return_history=Fals
     returns:
     torch.Tensor : Final mixture (or tuple with history if return_history=True)
     """
+    if mix is None:
+        mix = torch.ones(game.num_actions, device=game.device) / game.num_actions
 
-    if not torch.is_tensor(mix):
+    elif not torch.is_tensor(mix):
         mix = torch.tensor(mix, dtype=torch.float32, device=game.device)
     
     if isinstance(step_size, (int, float)):
@@ -93,7 +95,7 @@ def gain_descent(game, mix, iterations=1000, step_size=1e-6, return_history=Fals
         return mix, trace
     return mix
 
-def logged_gain_descent(game, mix, iters=1000, step_size=1e-6):
+def logged_gain_descent(game, mix, iters=1000, step_size=.001):
     return gain_descent(game, mix, iters, step_size, return_history=True)
 
 def ficticious_play(game, mix, iters=1000, initial_weight=100, return_history=False):
@@ -117,7 +119,7 @@ def ficticious_play(game, mix, iters=1000, initial_weight=100, return_history=Fa
 
     #initialize counts
     if initial_weight > 0:
-        #initialize with uniform mixture
+        #initialize with random mixture
         counts = torch.ones(game.num_actions, device=game.device) * (initial_weight / game.num_actions)
     else:
         #use provided mixture
@@ -140,8 +142,8 @@ def ficticious_play(game, mix, iters=1000, initial_weight=100, return_history=Fa
 
         mix = simplex_normalize(counts)
 
-    if return_history:
-            trace[:, i+1] = mix
+        if return_history:
+                trace[:, i+1] = mix
     
     if return_history:
         return mix, trace

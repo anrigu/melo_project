@@ -25,10 +25,8 @@ class AbstractGame(ABC):
     def deviation_payoffs(self, mixture):
         '''
         calculates expected payoff for each strategy against a mixture
-
         arguments:
             mix: strategy mixture (this is a probability distribution)
-
         returns:
             expected payoffs for deviating to each pure strategy
         '''
@@ -37,7 +35,6 @@ class AbstractGame(ABC):
     def deviation_gains(self, mixture):
         """
         calculate the gain from deviating to each pure strategy
-        
         Args:
             mixture: strategy mixture (distribution over strategies)
         Returns:
@@ -81,8 +78,7 @@ class AbstractGame(ABC):
         find the best responses to a mixture.
         args:
             mixture: Strategy mixture
-            atol: Absolute tolerance for considering strategies as best responses
-            
+            atol: Absolute tolerance for considering strategies as best responses 
         Returns:
             Boolean tensor indicating which strategies are best responses
         """
@@ -125,12 +121,10 @@ class AbstractGame(ABC):
     def filter_regrets(self, mixtures, threshold=1e-3, sorted=False):
         """
         filter mixtures based on regret.
-        
         args:
             mixtures: Matrix of mixtures
             threshold: Regret threshold
             sorted: Whether to sort by regret
-            
         returns:
             Filtered mixtures
         """

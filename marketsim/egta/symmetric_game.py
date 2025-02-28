@@ -57,8 +57,7 @@ class SymmetricGame(AbstractGame):
     def from_payoff_function(cls, num_players, num_actions, payoff_function, device="cpu",
                             ub=MAXIMUM_PAYOFF, lb=MINIMUM_PAYOFF):
         """
-        Creates a symmetric game from a payoff function 
-
+        creates a symmetric game from a payoff function
         input:
             num_players: Number of players
             num_actions: Number of actions/strategies
@@ -111,8 +110,7 @@ class SymmetricGame(AbstractGame):
     @staticmethod
     def _set_scale(min_val, max_val, ub=MAXIMUM_PAYOFF, lb=MINIMUM_PAYOFF):
         """
-        Set the scale and offset for payoff normalization
-
+        set the scale and offset for payoff normalization
         inputs:
             min_val: Minimum payoff value
             max_val: Maximum payoff value
@@ -142,8 +140,7 @@ class SymmetricGame(AbstractGame):
     
     def pure_payoffs(self, profile): 
         '''
-        calculates the payoofs for a pue strategy profile
-
+        calculates the payoffs for a pure strategy profile
         inputs:
             profile: strategy counts
         returns:
@@ -193,17 +190,17 @@ class SymmetricGame(AbstractGame):
         # Calculate deviation payoffs for each action
         # Shape: [num_actions, num_mixtures]
         dev_pays = torch.zeros((self.num_actions, mixture.shape[1]), device=self.device)
-        
         # For each action, compute expected payoff
         for s in range(self.num_actions):
             # Expand the payoff table to match dimensions
             # payoff_table[s] shape: [num_configs]
             # log_config_probs shape: [num_configs, num_mixtures]
             expanded_payoffs = self.payoff_table[s].unsqueeze(1)  # Shape: [num_configs, 1]
-            
             # Now add and exp - broadcasting will work properly
             # Result shape: [num_configs, num_mixtures]
             payoff_contributions = torch.exp(expanded_payoffs + log_config_probs)
+
+
             
             # Sum over configurations
             dev_pays[s] = torch.sum(payoff_contributions, dim=0)
@@ -213,16 +210,16 @@ class SymmetricGame(AbstractGame):
             return dev_pays.squeeze(1)
         return dev_pays
     
-    def deviation_derivatives(self, mixtures):
-        '''
-        compute the jacobian of deviation payoffs NOTE: this is for gradient based methods
+    def deviation_derivatives(self, mixture):
+        ''' 
+        compute the jacobian of deviation payoffs 
+        NOTE: this is for gradient based methods
         we might need this later?
-
-        input:
+        input: 
             mixture: strategy mixture 
-
         returns:
-            jacobian of deviation payoffs (num_actions x num_actions x num_mixtures)
+            jacobian of deviation payoffs 
+            (num_actions x num_actions x num_mixtures)
         '''
         if not torch.is_tensor(mixture):
             mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)
@@ -233,7 +230,7 @@ class SymmetricGame(AbstractGame):
         
         #first lets calculate the deviation payoffs 
         dev_pays = self.deviation_payoffs(mixture)
-        #initialize Jacobian
+        #initialize jacobian
         num_mixtures = mixture.shape[1]
         jac = torch.zeros((self.num_actions, self.num_actions, num_mixtures), device=self.device)
 
@@ -244,7 +241,7 @@ class SymmetricGame(AbstractGame):
         for m in range(num_mixtures):
             #recalculate probabilities for each mixture
             log_config_probs = self.config_table @ log_mixture[:, m:m+1]
-            #next we compute the derivatives for each action matchup:
+            #next we compute the derivatives for each action matchup: 
             for a1 in range(self.num_actions):
                 for a2 in range(self.num_actions):
                     weighted_derivative = 0
@@ -258,13 +255,13 @@ class SymmetricGame(AbstractGame):
             return jac[:, :, 0]
         return jac
     
+    #TODO: this needs to be checked and fixed 
     def gain_gradients(self, mixture):
         """
         computes gradients of deviation gains with respect to the mixture.
         #NOTE: for gradient based methods we may need later
         inputes:
-            mixture: Strategy mixture
-            
+            mixture: strategy mixture
         returns:
             gradients of deviation gains
         """
@@ -295,7 +292,7 @@ class SymmetricGame(AbstractGame):
             for a in range(self.num_actions):
                 gain_jac[s, a] = dev_jac[a, s] - util_gradients[s]
 
-         #zero out entries where deviation doesn't improve payoff
+        #zero out entries where deviation doesn't improve payoff
         mask = dev_pays < mixture_expectations
         for a in range(self.num_actions):
             gain_jac[:, a, mask[a]] = 0
