@@ -35,9 +35,9 @@ class AbstractGame(ABC):
     def deviation_gains(self, mixture):
         """
         calculate the gain from deviating to each pure strategy
-        Args:
+        args:
             mixture: strategy mixture (distribution over strategies)
-        Returns:
+        returns:
             expected gains for deviating to each pure strategy
         """
 
@@ -45,7 +45,6 @@ class AbstractGame(ABC):
             mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)
 
 
-        #maybe reshaping is needed
         is_vector = len(mixture.shape) == 1
         if is_vector:
             mixture = mixture.reshape(-1, 1)
@@ -55,7 +54,6 @@ class AbstractGame(ABC):
         #compoute the mixture of expected values
         mixture_expectations = torch.sum(mixture * dev_payoffs, dim=0)
 
-        # Calculate gains
         gains = torch.clamp(dev_payoffs - mixture_expectations, min=0)
         if is_vector:
             return gains.squeeze(1)
@@ -79,7 +77,7 @@ class AbstractGame(ABC):
         args:
             mixture: Strategy mixture
             atol: Absolute tolerance for considering strategies as best responses 
-        Returns:
+        returns:
             Boolean tensor indicating which strategies are best responses
         """
         dev_pays = self.deviation_payoffs(mixture)
@@ -92,11 +90,11 @@ class AbstractGame(ABC):
         This function implements the better response algorithm from Bryce's paper
         For use in Scarf's simplicial subdivision algorithm.
         https://arxiv.org/abs/2207.10832
-        Args:
+        args:
             mixture: Strategy mixture
             scale_factor: Scale factor for gains
             
-        Returns:
+        returns:
             Better response mixture
         '''
         if not torch.is_tensor(mixture):

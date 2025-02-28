@@ -19,18 +19,18 @@ def random_mixture(num_actions, num_mixtures, alpha=1.0, device="cpu"):
     this returns random points on the simplex
     Parameters:
     num_actions : int
-        Number of dimensions in the simplex
+        dimensions in the simplex
     num_mixtures : int
-        Number of random points to generate
+        random points to generate
     alpha : float or list
-        Concentration parameter for Dirichlet distribution
+        concentration parameter for Dirichlet distribution #taken from Bryce's code
     device : str
         Device to place the tensor on ("cpu" or "cuda")
     Returns: 
-    torch.Tensor : Tensor of shape (num_actions, num_mixtures) with random points on the simplex
+    torch.Tensor : tensor of shape (num_actions, num_mixtures) with random points on the simplex
     '''
     if isinstance(alpha, (list, tuple, np.ndarray)):
-        #i f alpha is an array, use it directly as concentration parameters
+        #if alpha is an array, use it directly as concentration parameters
         alpha_tensor = torch.tensor(alpha, device=device)
         return torch.distributions.Dirichlet(alpha_tensor).sample((num_mixtures,)).T
     else:
@@ -40,23 +40,23 @@ def random_mixture(num_actions, num_mixtures, alpha=1.0, device="cpu"):
     
 def sample_profile(num_players, mixture, device="cpu"):
     '''
-    This samples a profile from a given mixture
+    this samples a profile from a given mixture
     '''
     mixture = torch.as_tensor(mixture, device=device)
     return torch.distributions.Multinomial(num_players, probs=mixture).sample()
 
 def sample_profiles(num_players, mixtures, device="cpu"):
     '''
-    Sample profiles from multiple mixtures
+    sample profiles from multiple mixtures
     Parameters:
     num_players : int
-        Number of players in the game
+        number of players in the game
     mixtures : torch.Tensor
-        Matrix where each column is a mixture
+        matrix where each column is a mixture
     device : str
-        Device to place the tensor on
-    Returns:
-    torch.Tensor : Matrix where each column is a sampled profile
+        device to place the tensor on
+    returns:
+    torch.Tensor : matrix where each column is a sampled profile
     '''
     mixtures = torch.as_tensor(mixtures, device=device)
     profiles = torch.zeros_like(mixtures)
@@ -117,7 +117,7 @@ def profile_rankings(profile):
     profile = torch.as_tensor(profile)
     num_actions = len(profile)
     num_opponents = torch.sum(profile) 
-    preceding_profiles = 0
+    preceding_profiles = 0 #this is the number of profiles that come before the current profile
 
     for a in range(num_actions):
         num_opponents -= profile[a] 
@@ -132,30 +132,29 @@ def mixture_grid(num_actions, points_per_dim, device="cpu"):
 
     '''
     creates a grid equally spaced points throughout the simplex
-    Parameters:
-
+    inputs:
     num_actions : int
-        Number of dimensions in the simplex
+        number of dimensions in the simplex
     points_per_dim : int
         Number of points along each dimension
     device : str
         Device to place the tensor on
 
-    Returns:
+    returns:
     torch.Tensor : Matrix where each column is a point on the grid
     '''
     num_mixtures = comb(num_actions - 1, points_per_dim - 1, exact = True)
     mixtures = torch.zeros((num_actions, num_mixtures), device=device)
 
     #generate points on unit simplex using stars and bars algorithm:
-    # https://en.wikipedia.org/wiki/Stars_and_bars_(combinatorics)
+    #https://en.wikipedia.org/wiki/Stars_and_bars_(combinatorics)
     for m, config in enumerate(combinations_with_replacement(range(1, num_actions + 1), points_per_dim - 1)):
         #count occurrences of each action in the configuration
         counts = torch.zeros(num_actions, device=device)
         for c in config:
             counts[c - 1] += 1
         
-        #normalize to create a point on the simplex
+        #normalize to create a point on the simplex 
         mix = counts / (points_per_dim - 1)
         mixtures[:, m] = mix
     
@@ -164,16 +163,14 @@ def mixture_grid(num_actions, points_per_dim, device="cpu"):
 def simplex_projection_sum(y, simplex_sum=1.0, device="cpu"):
     '''
     projects onto a smaller sub-simplex where the dimensions add to simplex_sum
-    
-    Parameters:
+    inputs:
     y : torch.Tensor
         Vector or matrix to project
     simplex_sum : float
         Target sum for the simplex
     device : str
         Device to place the tensor on
-
-    Returns:
+    returns:
     torch.Tensor: projected vector/matrix
     '''
     y = torch.as_tensor(y, device = device)

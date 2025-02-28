@@ -19,13 +19,14 @@ class SymmetricGame(AbstractGame):
     """
     representation of symmetric games based on Bryce's implementation.
     uses count-based profiles and efficient computation of deviation payoffs.
+    based off of Bryce's implementation: https://github.com/Davidson-Game-Theory-Research/gameanalysis.jl/blob/master/SymmetricGames.jl
+
     """
     def __init__(self, num_players, num_actions, config_table, payoff_table, strategy_names,
                  offset=0.0, scale=1.0, epsilon=None, device="cpu"):
         """
-        Initialize a symmetric game.
-        
-        Args:
+        initialize a symmetric game.
+        inputs:
             num_players: Number of players
             num_actions: Number of actions/strategies
             config_table: Matrix of strategy counts (num_configs x num_actions)
@@ -122,7 +123,7 @@ class SymmetricGame(AbstractGame):
         """
         range_val = max_val - min_val
         if range_val == 0:
-            # all payoffs are identical, use default scaling
+            # if all payoffs are identical, use default scaling
             scale = 1.0
             offset = min_val - lb
         else:
@@ -187,25 +188,22 @@ class SymmetricGame(AbstractGame):
         log_mixture = torch.log(mixture + self.epsilon)
         log_config_probs = self.config_table @ log_mixture  # Matrix multiplication
         
-        # Calculate deviation payoffs for each action
-        # Shape: [num_actions, num_mixtures]
+        # calculate deviation payoffs for each action
+        # Shape: [num_actions, num_mixtures] (num actions is the same as num stratergies, im just stupid)
         dev_pays = torch.zeros((self.num_actions, mixture.shape[1]), device=self.device)
-        # For each action, compute expected payoff
+        #for all the actions, compute expected payoff
         for s in range(self.num_actions):
             # Expand the payoff table to match dimensions
             # payoff_table[s] shape: [num_configs]
             # log_config_probs shape: [num_configs, num_mixtures]
             expanded_payoffs = self.payoff_table[s].unsqueeze(1)  # Shape: [num_configs, 1]
-            # Now add and exp - broadcasting will work properly
-            # Result shape: [num_configs, num_mixtures]
+            # now add and exp - broadcasting will work properly
+            # result shape: [num_configs, num_mixtures]
             payoff_contributions = torch.exp(expanded_payoffs + log_config_probs)
 
-
-            
-            # Sum over configurations
+            #sum over configurations
             dev_pays[s] = torch.sum(payoff_contributions, dim=0)
         
-        # Return in the appropriate shape
         if is_vector:
             return dev_pays.squeeze(1)
         return dev_pays
@@ -237,7 +235,7 @@ class SymmetricGame(AbstractGame):
         #add in that epsilon fella for numerical stability
         log_mixture = torch.log(mixture + self.epsilon)
 
-        #calcualte the jacobian for each mixture
+        #calcualte the jacobian for each mixture 
         for m in range(num_mixtures):
             #recalculate probabilities for each mixture
             log_config_probs = self.config_table @ log_mixture[:, m:m+1]
@@ -255,7 +253,7 @@ class SymmetricGame(AbstractGame):
             return jac[:, :, 0]
         return jac
     
-    #TODO: this needs to be checked and fixed 
+    
     def gain_gradients(self, mixture):
         """
         computes gradients of deviation gains with respect to the mixture.
@@ -350,6 +348,26 @@ class SymmetricGame(AbstractGame):
         
         # Print the table
         print(tabulate(rows, headers=headers, tablefmt="pipe"))
+
+
+    #TODO: check this
+    def compute_statisitcs_and_covariant(self):
+        '''
+        compute the mean and covariance of the payoff table
+        '''
+        mean_payoff = torch.mean(self.payoff_table, dim=1)
+        cov_payoff = torch.cov(self.payoff_table) 
+        return mean_payoff, cov_payoff
+    
+    def add_data_to_payoff_table(self, data):
+        '''
+        add data to the payoff table
+        '''
+        self.payoff_table = torch.cat([self.payoff_table, data], dim=1)
+        self.num_configs = self.payoff_table.shape[1]
+        
+    
+    
     
     
   
