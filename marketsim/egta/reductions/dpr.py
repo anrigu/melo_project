@@ -50,6 +50,7 @@ class DPRGAME(SymmetricGame):
             '''
             generate possible configs for reduced game
             '''
+            
             configs = []
             for combo in combinations_with_replacement(range(num_actions), num_players):
                 config = [0] * num_actions

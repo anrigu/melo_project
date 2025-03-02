@@ -178,13 +178,11 @@ class SymmetricGame(AbstractGame):
         if not torch.is_tensor(mixture):
             mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)
             
-        # Reshape mixture if needed
         is_vector = len(mixture.shape) == 1
         if is_vector:
-            mixture = mixture.reshape(-1, 1)  # Convert to column vector
+            mixture = mixture.reshape(-1, 1)
         
-        # Calculate log probabilities for each configuration
-        # Shape: [num_configs, num_mixtures]
+        # [num_configs, num_mixtures], log probs
         log_mixture = torch.log(mixture + self.epsilon)
         log_config_probs = self.config_table @ log_mixture  # Matrix multiplication
         
@@ -302,7 +300,7 @@ class SymmetricGame(AbstractGame):
             return gain_grads.squeeze(1)
         return gain_grads
     
-    
+    #TODO: debugg
     def print_full_heuristic_payoff_table(self):
         """
         Print the full heuristic payoff table in a readable format, showing:
@@ -310,13 +308,10 @@ class SymmetricGame(AbstractGame):
         - Payoffs for each strategy in each profile
         """
         
-        # First, denormalize the payoffs
         denormalized_payoffs = []
         for s in range(self.num_actions):
-            # Get payoffs for this strategy and unweight them
             strat_payoffs = []
             for c in range(self.config_table.shape[0]):
-                # Remove log weighting and denormalize
                 weighted_payoff = self.payoff_table[s, c].item()
                 repeats = logmultinomial(*self.config_table[c].detach().cpu().numpy())
                 normalized_payoff = math.exp(weighted_payoff - repeats)
@@ -324,21 +319,17 @@ class SymmetricGame(AbstractGame):
                 strat_payoffs.append(actual_payoff)
             denormalized_payoffs.append(strat_payoffs)
         
-        #Create table headers
         headers = ["Profile"]
         for name in self.strategy_names:
             headers.append(f"{name} Count")
         for name in self.strategy_names:
             headers.append(f"{name} Payoff")
         
-        # Create table rows
         rows = []
         for c in range(self.config_table.shape[0]):
             row = [f"Profile {c+1}"]
-            # Add counts for each strategy
             for s in range(self.num_actions):
                 row.append(int(self.config_table[c, s].item()))
-            # Add payoffs for each strategy (if applicable)
             for s in range(self.num_actions):
                 if self.config_table[c, s] > 0:
                     row.append(f"{denormalized_payoffs[s][c]:.4f}")
@@ -346,7 +337,6 @@ class SymmetricGame(AbstractGame):
                     row.append("N/A")
             rows.append(row)
         
-        # Print the table
         print(tabulate(rows, headers=headers, tablefmt="pipe"))
 
 
@@ -365,10 +355,42 @@ class SymmetricGame(AbstractGame):
         '''
         self.payoff_table = torch.cat([self.payoff_table, data], dim=1)
         self.num_configs = self.payoff_table.shape[1]
+
+    
         
     
     
     
+    '''
+    Statistics notes:
+    variance reduction techniques:
+        - one way to do this is use control variates:
+            - basically exploit the correlation between a payoffs and observable features
+
+    Spurious Equilibria:
+    - Key challenge of EGTA is empirical game might not align with true underlying game
+    - A profile could be in the empirical game and be an equilibrium there and not in true game
+    - vice versa is also true.
+    - precision: of all the profiles you find to be equilibria in the empirical game, how many truly are equilibria in the original game
+    - recall: of all true equilibria in the original game, how many appear as equilibria in the empirical model.
+
+    Sampling and approximation bounds:
+    - in a uniform approximation of a game, is within some error epsilon of its true payoff, you can get this if:
+    - any true equilibria of the real game, will be at most a small bounded distance from equilibrium of the empirical game
+    - we can control how how error gets into the regret or equilibrium calculation bc a uniform error of epsilon in payoffs translates into bounded shift in regret. 
+    - we can yield an epsilon accurate game if we collect enough samples per strategy profile:
+        - Hoeffdings inequality would depend on the requirement that depends only on the maximum range of payoffs
+        - Bennett's inequality can tighten these estimates if you can bound or estimate the variance of the payoffs, rather than just abolsute range
+
+    - can wee how many samples per profile we need to make sure in the worst case all payoff estimates are accurate within epsilon with high probability 
+
+    Measuring Uncertainty in results:
+    - can use bootstrapping to build distribution of outcomes for a profile
+    
+    Set up Bayesian optimization or gaussian samplimg to adaptively decide which to 
+    sample more
+
+    '''
     
   
 

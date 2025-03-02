@@ -86,6 +86,7 @@ def create_symmetric_game_from_data(raw_data, device="cpu"):
     num_players = 0
     for profile in raw_data:
         num_players = len(profile)
+        print(profile)
         for _, strategy, _ in profile:
             strategy_names.add(strategy)
     
