@@ -23,8 +23,8 @@ class DPRGAME(SymmetricGame):
 
         assert isinstance(full_game, SymmetricGame), "full game should be Symmetric"
         assert reduced_players > 1, "reduced game must have at least 2 players"
+        assert (full_game.num_players - 1) % (reduced_players - 1) == 0, "ratio of (full_players-1)/(reduced_players-1) must be an integer"
         assert full_game.num_players >= reduced_players, "reduced players must be <= full players"
-
         reduced_configs = self._generate_configs(reduced_players, self.full_game.num_actions)
         config_table = torch.zeros((len(reduced_configs), self.full_game.num_actions), 
                                     device=self.device)
@@ -44,13 +44,13 @@ class DPRGAME(SymmetricGame):
             device=device
         )
 
-        
+
 
     def _generate_configs(self, num_players, num_actions):
             '''
             generate possible configs for reduced game
             '''
-            
+
             configs = []
             for combo in combinations_with_replacement(range(num_actions), num_players):
                 config = [0] * num_actions

@@ -272,3 +272,64 @@ def generate_market_entry_game(num_players=25, capacity=12):
     return profiles, strategies
 
 # Known equilibrium: Each player enters with probability capacity/num_players
+
+def generate_prisoners_dilemma(num_players=2, benefit=10, cost=4):
+    """
+    Generate data for a multi-player Prisoner's Dilemma - computationally simple with pure Nash.
+    
+    In this version:
+    - Players choose to either Cooperate or Defect
+    - When a player Cooperates, all other players receive a benefit
+    - A player who Cooperates pays a personal cost
+    - Defect is a dominant strategy for all players
+    
+    Parameters:
+        num_players: Number of players
+        benefit: Benefit provided to others when a player cooperates
+        cost: Cost paid by a cooperating player
+        
+    Returns:
+        List of game data entries, strategy names
+    """
+    strategies = ['Cooperate', 'Defect']
+    profiles = []
+    
+    # Generate all possible strategy profiles
+    for profile_idx in range(100):  # Sample 100 random profiles
+        counts = [0, 0]  # Count of [Cooperate, Defect]
+        profile = []
+        
+        # Randomly assign strategies to players
+        for p_idx in range(num_players):
+            strategy_idx = random.randint(0, 1)  # 0=Cooperate, 1=Defect
+            strategy = strategies[strategy_idx]
+            counts[strategy_idx] += 1
+            
+            # Calculate payoff for this player
+            if strategy == 'Cooperate':
+                # Player cooperates: gets benefit from other cooperators but pays cost
+                payoff = (counts[0] - 1) * benefit / num_players - cost
+            else:
+                # Player defects: gets benefit from cooperators but pays no cost
+                payoff = counts[0] * benefit / num_players
+                
+            profile.append([f'agent_{p_idx+1}', strategy, payoff])
+        
+        profiles.append(profile)
+        
+        # Also add all-defect profile to ensure it's included
+        if profile_idx == 0:
+            all_defect_profile = []
+            for p_idx in range(num_players):
+                all_defect_profile.append([f'agent_{p_idx+1}', 'Defect', 0])
+            profiles.append(all_defect_profile)
+            
+        # Also add all-cooperate profile
+        if profile_idx == 1:
+            all_cooperate_profile = []
+            for p_idx in range(num_players):
+                payoff = benefit - cost  # Each player cooperates and gets benefit from others
+                all_cooperate_profile.append([f'agent_{p_idx+1}', 'Cooperate', payoff])
+            profiles.append(all_cooperate_profile)
+    
+    return profiles, strategies
