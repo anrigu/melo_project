@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from fourheap.order import Order, MatchedOrder
+from marketsim.fourheap.order import Order
 from typing import List
 
 
@@ -21,4 +22,3 @@ class Agent(ABC):
 
     def get_pos_value(self) -> float:
         pass
-

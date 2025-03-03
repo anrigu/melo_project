@@ -4,6 +4,7 @@ from market.market import Market
 from fundamental.mean_reverting import GaussianMeanReverting
 from fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
 from agent.zero_intelligence_agent import ZIAgent
+from typing import List
 
 
 

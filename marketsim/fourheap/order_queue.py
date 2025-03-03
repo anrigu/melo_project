@@ -2,7 +2,7 @@ import heapq
 import math
 from typing import Optional
 
-from fourheap.order import Order, MatchedOrder
+from marketsim.fourheap.order import Order, MatchedOrder
 
 
 class OrderQueue:
