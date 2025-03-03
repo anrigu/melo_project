@@ -8,6 +8,7 @@ class MeloMarket(Market):
     def __init__(self, fundamental: Fundamental, time_steps, holding_period):
         super().__init__(fundamental, time_steps)
         self.order_book = MELOFourHeap(holding_period)
+        self.orders_rec = []
 
     def clear_market(self):
         new_orders = self.order_book.market_clear()
@@ -20,15 +21,16 @@ class MeloMarket(Market):
     def step(self, best_bid, best_ask):
         # TODO Need to figure out how to handle ties for price and time
         orders = self.event_queue.step()
-        if orders:
-            for order in orders:
-                if order.quantity <= 0:
-                    continue
-                self.order_book.insert(order)
-                self.order_book.update_best_bid(best_bid)
-                self.order_book.update_best_ask(best_ask)
-                self.order_book.update_eligiblity_queue()
-            self.order_book.update_active_queue(self.get_time())
+        for order in orders:
+            if order.quantity <= 0:
+                continue
+            # print(f"EventQueue INSERTING orders at time {self.get_time()}: {[o.order_id for o in orders]}")
+            self.order_book.insert(order)
+            self.order_book.update_best_bid(best_bid)
+            self.order_book.update_best_ask(best_ask)
+            self.order_book._update_midpoint()
+            self.order_book.update_eligiblity_queue()
+        self.order_book.update_active_queue(self.get_time())
         new_orders = self.order_book.matching_orders(self.get_time())
 
         return new_orders
@@ -37,6 +39,7 @@ class MeloMarket(Market):
         if best_bid or best_ask:
             self.order_book.update_best_bid(best_bid)
             self.order_book.update_best_ask(best_ask)
+            self.order_book._update_midpoint()
         self.order_book.update_eligiblity_queue()
         self.order_book.update_active_queue(self.get_time())
         return self.order_book.matching_orders(self.get_time())
