@@ -273,3 +273,5 @@ def num_payoffs(num_players, num_actions, dev=True):
     else:
         return int(np.exp(logmultinomial(num_players, num_actions-1)) * num_actions)
 
+
+

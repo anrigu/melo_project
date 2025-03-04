@@ -167,9 +167,8 @@ class SymmetricGame(AbstractGame):
     
     def deviation_payoffs(self, mixture):
         """
-        Calculate the expected payoff for each pure strategy against a mixture.
-        
-        Args:
+        calculate the expected payoff for each pure strategy against a mixture.
+        inputs:
             mixture: Strategy mixture (probability distribution)
             
         Returns:
@@ -195,7 +194,6 @@ class SymmetricGame(AbstractGame):
             # payoff_table[s] shape: [num_configs]
             # log_config_probs shape: [num_configs, num_mixtures]
             expanded_payoffs = self.payoff_table[s].unsqueeze(1)  # Shape: [num_configs, 1]
-            # now add and exp - broadcasting will work properly
             # result shape: [num_configs, num_mixtures]
             payoff_contributions = torch.exp(expanded_payoffs + log_config_probs)
 
@@ -349,14 +347,107 @@ class SymmetricGame(AbstractGame):
         cov_payoff = torch.cov(self.payoff_table) 
         return mean_payoff, cov_payoff
     
-    def add_data_to_payoff_table(self, data):
-        '''
-        add data to the payoff table
-        '''
-        self.payoff_table = torch.cat([self.payoff_table, data], dim=1)
-        self.num_configs = self.payoff_table.shape[1]
+   
 
-    
+    def update_with_new_data(self, raw_data):
+        """
+        Update the game with new data, potentially including new strategies.
+        
+        inputs:
+            raw_data : list of lists
+                Each sublist represents a strategy profile containing agent-level data.
+                Format: [(player_id, strategy_name, payoff), ...]
+        
+        Returns:
+            None (updates the game in place)
+        """
+        new_strategy_names = set()
+        for profile in raw_data:
+            for _, strategy, _ in profile:
+                new_strategy_names.add(strategy)
+        
+        existing_strategies = set(self.strategy_names)
+        completely_new_strategies = new_strategy_names - existing_strategies
+        
+        merged_strategy_names = self.strategy_names.copy()
+        merged_strategy_names.extend(sorted(list(completely_new_strategies)))
+        num_new_actions = len(merged_strategy_names)
+        
+        strategy_to_index = {name: i for i, name in enumerate(merged_strategy_names)}
+        old_strategy_to_index = {name: i for i, name in enumerate(self.strategy_names)}
+        
+        profile_dict = defaultdict(lambda: {"count": 0, "payoffs": [[] for _ in range(num_new_actions)]})
+
+        for profile in raw_data:
+            strat_counts = [0] * num_new_actions
+            for _, strategy, _ in profile:
+                strat_idx = strategy_to_index[strategy]
+                strat_counts[strat_idx] += 1
+            
+            strat_counts_tuple = tuple(strat_counts)
+            
+            profile_dict[strat_counts_tuple]["count"] += 1
+            for _, strategy, payoff in profile:
+                strat_idx = strategy_to_index[strategy]
+                profile_dict[strat_counts_tuple]["payoffs"][strat_idx].append(float(payoff))
+        
+        configs = list(profile_dict.keys())
+        num_new_configs = len(configs)
+        
+        new_config_table = np.zeros((num_new_configs, num_new_actions))
+        new_raw_payoff_table = np.zeros((num_new_actions, num_new_configs))
+        
+        for c, config in enumerate(configs):
+            new_config_table[c] = config
+            
+            for strat_idx in range(num_new_actions):
+                if config[strat_idx] > 0:  # Only if strategy was used
+                    payoffs = profile_dict[config]["payoffs"][strat_idx]
+                    if payoffs:
+                        new_raw_payoff_table[strat_idx, c] = np.mean(payoffs)
+        
+        if completely_new_strategies:
+            expanded_config_table = np.zeros((self.config_table.shape[0], num_new_actions))
+            
+            for old_idx, strat_name in enumerate(self.strategy_names):
+                new_idx = strategy_to_index[strat_name]
+                expanded_config_table[:, new_idx] = self.config_table[:, old_idx].cpu().numpy()
+            
+            expanded_payoff_table = np.zeros((num_new_actions, self.payoff_table.shape[1]))
+            for old_idx, strat_name in enumerate(self.strategy_names):
+                new_idx = strategy_to_index[strat_name]
+                expanded_payoff_table[new_idx, :] = self.payoff_table[old_idx, :].cpu().numpy()
+            
+            merged_config_table = np.vstack([expanded_config_table, new_config_table])
+            merged_payoff_table = np.hstack([expanded_payoff_table, new_raw_payoff_table])
+        else:
+            merged_config_table = np.vstack([self.config_table.cpu().numpy(), new_config_table])
+            merged_payoff_table = np.hstack([self.payoff_table.cpu().numpy(), new_raw_payoff_table])
+        
+        min_payoff = np.min(new_raw_payoff_table)
+        max_payoff = np.max(new_raw_payoff_table)
+        
+        new_normalized_payoffs = (new_raw_payoff_table - self.offset) / self.scale
+        
+        epsilon = self.epsilon.cpu().numpy() if torch.is_tensor(self.epsilon) else self.epsilon
+        new_normalized_payoffs = np.clip(new_normalized_payoffs, epsilon, 1.0)
+        
+        new_log_payoffs = np.log(new_normalized_payoffs)
+        
+        if completely_new_strategies:
+            for old_idx, strat_name in enumerate(self.strategy_names):
+                new_idx = strategy_to_index[strat_name]
+                merged_payoff_table[new_idx, -num_new_configs:] = new_log_payoffs[new_idx, :]
+        else:
+            merged_payoff_table[:, -num_new_configs:] = new_log_payoffs
+        
+        self.strategy_names = merged_strategy_names
+        self.num_actions = len(merged_strategy_names)
+        self.config_table = torch.tensor(merged_config_table, dtype=torch.float32, device=self.device)
+        self.payoff_table = torch.tensor(merged_payoff_table, dtype=torch.float32, device=self.device)
+        
+        print(f"Game updated: {len(completely_new_strategies)} new strategies added, {num_new_configs} new profiles added")
+        return None
         
     
     
