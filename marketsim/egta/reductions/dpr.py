@@ -44,22 +44,82 @@ class DPRGAME(SymmetricGame):
             device=device
         )
 
-
-
+    '''
     def _generate_configs(self, num_players, num_actions):
-            '''
-            generate possible configs for reduced game
-            '''
-
-            configs = []
-            for combo in combinations_with_replacement(range(num_actions), num_players):
-                config = [0] * num_actions
-                for id in combo:
-                    config[id] += 1
-
-                configs.append(config)
-            
-            return configs
+        
+        
+        
+        # Generate all combinations with replacement
+        combos = list(combinations_with_replacement(range(num_actions), num_players))
+        
+        # Convert to configuration format using sparse tensor operations
+        indices = torch.tensor([[i, val] for i, combo in enumerate(combos) 
+                            for val in combo], device=self.device)
+        
+        values = torch.ones(indices.shape[0], device=self.device)
+        configs = torch.sparse_coo_tensor(
+            indices.t(), values, 
+            (len(combos), num_actions)
+        ).to_dense()
+    
+    
+    return configs
+    '''
+    def _generate_configs(self, num_players, num_actions):
+        '''
+        generate configurations for the reduced game that have corresponding
+        valid data in the full game.
+        instead of generating all theoretical profiles, this only includes
+        profiles that can be mapped to existing data in the full game.
+        '''
+        full_game = self.full_game
+        reduced_players = num_players
+        scale_factor = (full_game.num_players - 1) / (reduced_players - 1)
+        
+        full_configs = full_game.config_table
+        
+        reduced_configs_set = set()
+        
+        for full_config in full_configs:
+            for strat_idx in range(num_actions):
+                if full_config[strat_idx] > 0:
+                    dev_config = full_config.clone()
+                    dev_config[strat_idx] -= 1
+                    
+                    reduced_dev_config = torch.round(dev_config / scale_factor).long()
+                    
+                    total_players = reduced_dev_config.sum().item()
+                    if total_players != reduced_players - 1:
+                        probs = dev_config.float() / max(dev_config.sum().item(), 1)
+                        while total_players < reduced_players - 1:
+                            idx = torch.multinomial(probs, 1).item()
+                            reduced_dev_config[idx] += 1
+                            total_players += 1
+                        while total_players > reduced_players - 1:
+                            valid_indices = (reduced_dev_config > 0).nonzero().flatten()
+                            if len(valid_indices) == 0:
+                                break  
+                            idx = valid_indices[torch.multinomial(
+                                torch.ones(len(valid_indices), device=self.device), 1
+                            ).item()]
+                            reduced_dev_config[idx] -= 1
+                            total_players -= 1
+                    
+                    reduced_config = reduced_dev_config.clone()
+                    reduced_config[strat_idx] += 1
+                    
+                    reduced_configs_set.add(tuple(reduced_config.cpu().tolist()))
+        
+        if not reduced_configs_set:
+            return torch.zeros((0, num_actions), device=self.device)
+        
+        reduced_configs = torch.tensor(
+            list(reduced_configs_set), 
+            dtype=torch.int64, 
+            device=self.device
+        )
+        
+        return reduced_configs
         
     def _compute_reduced_payoffs(self, config_table):
             '''

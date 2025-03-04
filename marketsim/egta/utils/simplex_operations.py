@@ -143,7 +143,9 @@ def mixture_grid(num_actions, points_per_dim, device="cpu"):
     returns:
     torch.Tensor : Matrix where each column is a point on the grid
     '''
-    num_mixtures = comb(num_actions - 1, points_per_dim - 1, exact = True)
+    #num_mixtures = comb(num_actions - 1, points_per_dim - 1, exact = True)
+    num_mixtures = comb(num_actions + points_per_dim - 2, points_per_dim - 1, exact=True)
+
     mixtures = torch.zeros((num_actions, num_mixtures), device=device)
 
     #generate points on unit simplex using stars and bars algorithm:
