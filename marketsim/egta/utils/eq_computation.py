@@ -29,10 +29,17 @@ def replicator_dynamics(game, mix, iterations=1000, offset=0, return_history=Fal
 
     if not torch.is_tensor(mix):
         mix = torch.tensor(mix, dtype=torch.float32, device=game.device)
-        
+
+    is_batch = len(mix.shape) > 1
+ 
     if return_history:
-        trace = torch.zeros((game.num_actions, iterations+1), device=game.device)
-        trace[:, 0] = mix
+        if is_batch:
+            batch_size = mix.shape[1]
+            trace = torch.zeros((game.num_actions, batch_size, iterations+1), device=game.device)
+            trace[:, :, 0] = mix
+        else:
+            trace = torch.zeros((game.num_actions, iterations+1), device=game.device)
+            trace[:, 0] = mix
 
 
 
@@ -41,7 +48,10 @@ def replicator_dynamics(game, mix, iterations=1000, offset=0, return_history=Fal
         dev_pays = game.deviation_payoffs(mix) 
         mix = simplex_normalize(mix * (dev_pays - offset)) 
         if return_history:
-            trace[:, i+1] = mix
+            if is_batch:
+                trace[:, :, i+1] = mix
+            else:
+                trace[:, i+1] = mix
         
     if return_history:
         return mix, trace
@@ -276,7 +286,7 @@ def find_equilibria(game, method='replicator_dynamics', num_restarts=10, logging
     nash_func = method_map[method]
     
     #run the method with batches
-    eq_candidates = batch_nash(nash_func, game, mixtures, batch_size=1, **kwargs)
+    eq_candidates = batch_nash(nash_func, game, mixtures, batch_size=num_restarts, **kwargs)
     
     #calculate regrets
     regrets = game.regret(eq_candidates)
