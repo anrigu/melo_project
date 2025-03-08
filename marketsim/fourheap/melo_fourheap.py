@@ -55,8 +55,8 @@ class MELOFourHeap(FourHeap):
         self.sell_active_queue: deque[Order] = deque([])
 
         #Pending wait time after activation
-        self.buy_activation_queue: deque[Order] = deque([])
-        self.sell_activation_queue: deque[Order] = deque([])
+        self.buy_activation_queue: deque[(Order, int)] = deque([])
+        self.sell_activation_queue: deque[(Order, int)] = deque([])
 
         #Waiting for midpoint cross for activation (sorted by price)
         self.buy_eligibility_queue = OrderQueue(is_max_heap=True)
@@ -76,12 +76,12 @@ class MELOFourHeap(FourHeap):
         #If crosses midpoint on placement
         if order.order_type == constants.BUY:
             if not math.isnan(self.midpoint) and order.price >= self.midpoint:
-                self.buy_activation_queue.append(order)
+                self.buy_activation_queue.append((order, order.time))
             else:
                 self.buy_eligibility_queue.add_order(order)
         else:
             if not math.isnan(self.midpoint) and order.price <= self.midpoint:
-                self.sell_activation_queue.append(order)
+                self.sell_activation_queue.append((order, order.time))
             else:
                 self.sell_eligibility_queue.add_order(order)
     
@@ -90,11 +90,10 @@ class MELOFourHeap(FourHeap):
         Move orders from activation queues to active queues if they've completed their holding period.
         Orders are processed in FIFO order within each queue.
         """
-        while self.buy_activation_queue and curr_time - self.buy_activation_queue[0].time >= self.holding_period:
+        while self.buy_activation_queue and curr_time - self.buy_activation_queue[0][1] >= self.holding_period:
             self.buy_active_queue.append(self.buy_activation_queue.popleft())
         
-        c = copy.deepcopy(self.sell_activation_queue)
-        while self.sell_activation_queue and curr_time - self.sell_activation_queue[0].time >= self.holding_period:
+        while self.sell_activation_queue and curr_time - self.sell_activation_queue[0][1] >= self.holding_period:
             self.sell_active_queue.append(self.sell_activation_queue.popleft())
         
         for i in range(len(self.sell_active_queue) - 1):
@@ -106,7 +105,7 @@ class MELOFourHeap(FourHeap):
             self.remove(order_id)
         self.agent_id_map[agent_id] = []
 
-    def update_eligiblity_queue(self):
+    def update_eligiblity_queue(self, curr_time):
         """
         Check orders in eligibility queues and move them to activation queues if they cross midpoint.
         """
@@ -116,7 +115,7 @@ class MELOFourHeap(FourHeap):
                 if peek_value == float('inf') or peek_value == float('-inf'):
                     break
                 if peek_value >= self.midpoint:
-                    self.buy_activation_queue.append(self.buy_eligibility_queue.peek_order())
+                    self.buy_activation_queue.append((self.buy_eligibility_queue.peek_order(), curr_time))
                     self.buy_eligibility_queue.remove(self.buy_eligibility_queue.peek_order_id())
                 else:
                     break
@@ -126,7 +125,7 @@ class MELOFourHeap(FourHeap):
                 if peek_value == float('inf') or peek_value == float('-inf'):
                     break
                 if peek_value <= self.midpoint:
-                    self.sell_activation_queue.append(self.sell_eligibility_queue.peek_order())
+                    self.sell_activation_queue.append((self.sell_eligibility_queue.peek_order(), curr_time))
                     self.sell_eligibility_queue.remove(self.sell_eligibility_queue.peek_order_id())
                 else:
                     break
