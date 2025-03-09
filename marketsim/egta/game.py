@@ -6,7 +6,7 @@ import torch
 from abc import ABC, abstractmethod
 from itertools import combinations_with_replacement
 from collections import Counter
-from egta.utils.simplex_operations import logmultinomial, simplex_normalize
+from utils.simplex_operations import logmultinomial, simplex_normalize
 from torch.nn.functional import pad
 
 # Constants matching Bryce's implementation 

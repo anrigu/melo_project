@@ -7,9 +7,9 @@ from abc import ABC, abstractmethod
 from itertools import combinations_with_replacement
 from collections import Counter
 
-from egta.utils.simplex_operations import logmultinomial, simplex_normalize
+from utils.simplex_operations import logmultinomial, simplex_normalize
 from torch.nn.functional import pad
-from egta.game import AbstractGame, MINIMUM_PAYOFF, MAXIMUM_PAYOFF, F32_EPSILON, F64_EPSILON
+from game import AbstractGame, MINIMUM_PAYOFF, MAXIMUM_PAYOFF, F32_EPSILON, F64_EPSILON
 from tabulate import tabulate  
 import math
 
@@ -55,7 +55,7 @@ class SymmetricGame(AbstractGame):
 
 
     @classmethod
-    def from_payoff_function(cls, num_players, num_actions, payoff_function, device="cpu",
+    def from_payoff_function(cls, num_players, num_actions, payoff_function,  strategy_names, device="cpu",
                             ub=MAXIMUM_PAYOFF, lb=MINIMUM_PAYOFF):
         """
         creates a symmetric game from a payoff function
@@ -103,6 +103,7 @@ class SymmetricGame(AbstractGame):
             num_actions=num_actions,
             config_table=config_table,
             payoff_table=weighted_payoffs,
+            strategy_names=strategy_names, 
             offset=offset,
             scale=scale,
             device=device
