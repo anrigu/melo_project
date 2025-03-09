@@ -1,0 +1,25 @@
+# Python venv #
+###############
+/bin
+/lib
+/lib64
+/include
+/man
+/share
+/build
+/pyvenv.cfg
+/*.egg-info
+/.coverage*
+/.cache
+
+# Vim #
+#######
+.*.un~
+.*.swp
+
+# Python #
+##########
+/pip-selfcheck.json
+/dist
+/.pytest_cache
+__pycache__
