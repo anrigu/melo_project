@@ -1,12 +1,12 @@
 import random
-from agent.agent import Agent 
-from agent.hbl_agent import HBLAgent
-from fourheap.constants import BUY, SELL, MELO, CDA
-from market.market import Market
-from market.melo_market import MeloMarket
-from fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
-from agent.zero_intelligence_agent import ZIAgent
-from agent.melo_agent import MeloAgent
+from marketsim.agent.agent import Agent 
+from marketsim.agent.hbl_agent import HBLAgent
+from marketsim.fourheap.constants import BUY, SELL, MELO, CDA
+from marketsim.market.market import Market
+from marketsim.market.melo_market import MeloMarket
+from marketsim.fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
+from marketsim.agent.zero_intelligence_agent import ZIAgent
+from marketsim.agent.melo_agent import MeloAgent
 import torch.distributions as dist
 import torch
 import math
@@ -32,10 +32,10 @@ class MELOSimulatorSampledArrival:
                  q_max: int = 10,
                  pv_var: float = 5e6,
                  shade=None,
-                 eta: float = 0.2,
+                 eta: float = 0.5,
                  hbl_agent: bool = False,
                  lam_r: float = None,
-                 holding_period = 10,
+                 holding_period = 1,
                  lam_melo = 0.1,
                  ):
 
@@ -198,10 +198,10 @@ class MELOSimulatorSampledArrival:
             agent = self.agents[agent_id]
             values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
             melo_profits[agent_id] = agent.meloProfit
-        # print(f'At the end of the simulation we get {values}')
-        # print(f'MELO_ At the end of the simulation we get {melo_profits}')
-        # input()
-        return values
+        print(f'At the end of the simulation we get {values}')
+        print(f'MELO_ At the end of the simulation we get {melo_profits}')
+        #input()
+        return values, melo_profits  # Return both CDA and MELO profits
 
     def run(self):
         for t in range(self.sim_time):
