@@ -1,0 +1,265 @@
+"""
+Deviation Preserving Reduction (DPR) scheduler for EGTA.
+Based on the original implementation from quiesce-master.
+"""
+import itertools
+import random
+import numpy as np
+from collections import defaultdict
+from typing import Dict, List, Tuple, Any, Optional, Set, Union
+
+from marketsim.egta.core.game import Game
+from marketsim.egta.schedulers.base import Scheduler
+
+
+class DPRScheduler(Scheduler):
+    """
+    Deviation Preserving Reduction scheduler for EGTA.
+    DPR reduces the number of profiles that need to be simulated
+    by only requesting profiles needed to compute approximate equilibria.
+    """
+    
+    def __init__(self, 
+                strategies: List[str], 
+                num_players: int, 
+                subgame_size: int = 3,
+                batch_size: int = 10,
+                seed: Optional[int] = None):
+        """
+        Initialize a DPR scheduler.
+        
+        Args:
+            strategies: List of strategy names
+            num_players: Number of players
+            subgame_size: Size of subgames to explore
+            batch_size: Number of profiles to return per batch
+            seed: Random seed
+        """
+        self.strategies = strategies
+        self.num_players = num_players
+        self.subgame_size = min(subgame_size, len(strategies))
+        self.batch_size = batch_size
+        self.rand = random.Random(seed)
+        self.game = None
+        
+        # Track profiles we've seen and scheduled
+        self.scheduled_profiles: Set[Tuple[str, ...]] = set()
+        self.requested_subgames: List[Set[str]] = []
+        
+        # Initialize with a full subgame request
+        self._initialize_with_uniform_subgame()
+    
+    def _initialize_with_uniform_subgame(self):
+        """Initialize with a uniform subgame."""
+        # Choose strategies uniformly at random
+        initial_strategies = set(self.rand.sample(self.strategies, self.subgame_size))
+        self.requested_subgames.append(initial_strategies)
+    
+    def _generate_profiles_for_subgame(self, subgame: Set[str]) -> List[List[str]]:
+        """
+        Generate all profiles for a subgame.
+        
+        Args:
+            subgame: Set of strategies in the subgame
+            
+        Returns:
+            List of profiles
+        """
+        subgame_list = list(subgame)
+        
+        # Generate all possible distributions of players among strategies
+        profiles = []
+        for counts in self._distribute_players(len(subgame_list), self.num_players):
+            profile = []
+            for i, count in enumerate(counts):
+                profile.extend([subgame_list[i]] * count)
+            profiles.append(profile)
+        
+        return profiles
+    
+    def _distribute_players(self, num_strategies: int, num_players: int) -> List[List[int]]:
+        """
+        Generate all ways to distribute players among strategies.
+        
+        Args:
+            num_strategies: Number of strategies
+            num_players: Number of players
+            
+        Returns:
+            List of distributions, each a list of counts
+        """
+        if num_strategies == 1:
+            return [[num_players]]
+        
+        result = []
+        for i in range(num_players + 1):
+            for sub_dist in self._distribute_players(num_strategies - 1, num_players - i):
+                result.append([i] + sub_dist)
+        
+        return result
+    
+    def _select_equilibrium_candidates(self, game: Game, max_candidates: int = 3) -> List[np.ndarray]:
+        """
+        Select candidate equilibria from the game.
+        
+        Args:
+            game: Game with existing data
+            max_candidates: Maximum number of candidates to return
+            
+        Returns:
+            List of candidate equilibrium mixtures
+        """
+        from marketsim.egta.solvers.equilibria import replicator_dynamics
+        
+        device = game.game.device
+        strategy_mapping = {name: i for i, name in enumerate(game.strategy_names)}
+        
+        # Create candidates for each subgame we've explored
+        candidates = []
+        
+        for subgame in self.requested_subgames:
+            # Skip if not all profiles for this subgame have been simulated
+            subgame_indices = [strategy_mapping[s] for s in subgame if s in strategy_mapping]
+            
+            if len(subgame_indices) < len(subgame):
+                continue
+            
+            # Create initial mixture over just this subgame
+            mixture = np.zeros(len(game.strategy_names))
+            mixture[subgame_indices] = 1.0 / len(subgame_indices)
+            
+            # Convert to tensor
+            import torch
+            mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
+            
+            # Run replicator dynamics
+            eq_mixture = replicator_dynamics(game, mixture_tensor, iters=1000)
+            
+            # Add to candidates
+            candidates.append(eq_mixture.cpu().numpy())
+        
+        # Add uniform mixture if we have no candidates
+        if not candidates:
+            mixture = np.ones(len(game.strategy_names)) / len(game.strategy_names)
+            candidates.append(mixture)
+        
+        # Limit number of candidates
+        if len(candidates) > max_candidates:
+            candidates = self.rand.sample(candidates, max_candidates)
+        
+        return candidates
+    
+    def _select_deviating_strategies(self, game: Game, mixture: np.ndarray, num_deviations: int = 2) -> Set[str]:
+        """
+        Select strategies with highest deviation payoff.
+        
+        Args:
+            game: Game with existing data
+            mixture: Mixture to analyze
+            num_deviations: Number of deviating strategies to select
+            
+        Returns:
+            Set of strategy names
+        """
+        import torch
+        
+        device = game.game.device
+        mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
+        
+        # Get deviation payoffs
+        payoffs = game.deviation_payoffs(mixture_tensor).cpu().numpy()
+        
+        # Sort strategies by payoff
+        sorted_indices = np.argsort(-payoffs)  # Descending order
+        
+        # Select top deviations
+        deviating_indices = sorted_indices[:num_deviations]
+        
+        # Get strategy names
+        return {game.strategy_names[i] for i in deviating_indices}
+    
+    def _select_support_strategies(self, game: Game, mixture: np.ndarray, threshold: float = 0.01) -> Set[str]:
+        """
+        Select strategies that are played with significant probability.
+        
+        Args:
+            game: Game instance
+            mixture: Mixture to analyze
+            threshold: Probability threshold
+            
+        Returns:
+            Set of strategy names
+        """
+        support_indices = np.where(mixture > threshold)[0]
+        return {game.strategy_names[i] for i in support_indices}
+    
+    def get_next_batch(self, game: Optional[Game] = None) -> List[List[str]]:
+        """
+        Get the next batch of profiles to simulate.
+        
+        Args:
+            game: Optional game with existing data
+            
+        Returns:
+            List of strategy profiles
+        """
+        if game is None:
+            # If no game data, use random initial subgame
+            profiles_to_simulate = []
+            for subgame in self.requested_subgames:
+                profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
+        else:
+            # Update game reference
+            self.game = game
+            
+            # Get candidate equilibria
+            candidates = self._select_equilibrium_candidates(game)
+            
+            # Get deviating strategies for each candidate
+            new_subgames = []
+            for candidate in candidates:
+                # Get support strategies
+                support_strategies = self._select_support_strategies(game, candidate)
+                
+                # Get deviating strategies
+                deviating_strategies = self._select_deviating_strategies(game, candidate)
+                
+                # Combine into a new subgame
+                new_subgame = support_strategies.union(deviating_strategies)
+                
+                # Ensure subgame is not too large
+                if len(new_subgame) > self.subgame_size:
+                    new_subgame = set(list(new_subgame)[:self.subgame_size])
+                
+                new_subgames.append(new_subgame)
+            
+            # Add new subgames
+            self.requested_subgames.extend(new_subgames)
+            
+            # Generate profiles for new subgames
+            profiles_to_simulate = []
+            for subgame in new_subgames:
+                profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
+        
+        # Filter out profiles we've already scheduled
+        new_profiles = []
+        for profile in profiles_to_simulate:
+            # Sort profile for consistent representation
+            sorted_profile = tuple(sorted(profile))
+            
+            if sorted_profile not in self.scheduled_profiles:
+                new_profiles.append(profile)
+                self.scheduled_profiles.add(sorted_profile)
+        
+        # Shuffle and limit batch size
+        self.rand.shuffle(new_profiles)
+        return new_profiles[:self.batch_size]
+    
+    def update(self, game: Game) -> None:
+        """
+        Update the scheduler with new game data.
+        
+        Args:
+            game: Game with updated data
+        """
+        self.game = game 

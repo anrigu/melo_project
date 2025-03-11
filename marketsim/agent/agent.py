@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from fourheap.order import Order, MatchedOrder
-from marketsim.fourheap.order import Order
+from marketsim.fourheap.order import Order, MatchedOrder
 from typing import List
 
 
