@@ -2,7 +2,7 @@
 
 ## Overview of Changes
 
-We've updated the EGTA framework to study how strategic agents allocate their trading between two market mechanisms (CDA and MELO). The key changes are:
+Updated the EGTA framework to see howstrategic agents allocate their trading between two market mechanisms (CDA and MELO). The key changes are:
 
 ### 1. Updated MeloSimulator Class
 
@@ -13,20 +13,19 @@ We've updated the EGTA framework to study how strategic agents allocate their tr
 
 - **Agent Creation**: Modified to create MELO agents with specific allocation parameters
   - Each agent now has `cda_proportion` and `melo_proportion` parameters
-  - Fixed order quantity (5) as specified in requirements
+  - Fixed order quantity (5) as Anri mentioned
 
 - **Payoff Calculation**: Updated to combine payoffs from both markets based on allocation
   - Total payoff = (CDA payoff × cda_proportion) + (MELO payoff × melo_proportion)
 
 ### 2. Updated Example Script (run_melo_egta.py)
 
-- Improved command line argument descriptions
-- Added explanatory comments about strategy meanings
-- Enhanced output messages to better explain what the simulation is doing
+- Command line argument descriptions
+- Better Logging
 
 ### 3. Added Documentation
 
-- Created a README specifically for this experiment
+- README for example experiment
 - Added implementation notes for future reference
 - Created a test script to verify the simulator works correctly
 
@@ -59,4 +58,3 @@ To test the implementation:
 
 1. Consider adding more fine-grained allocation strategies (e.g., 10% increments)
 2. Add analysis of market liquidity and price efficiency under different allocation mixes
-3. Implement sensitivity analysis for key parameters (holding period, arrival rates) 

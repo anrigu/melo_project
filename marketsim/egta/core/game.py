@@ -19,7 +19,7 @@ class Game:
                  symmetric_game: SymmetricGame, 
                  metadata: Optional[Dict] = None):
         """
-        Initialize a Game wrapper.
+        initialize a Game wrapper.
         
         Args:
             symmetric_game: The underlying SymmetricGame instance
@@ -78,7 +78,6 @@ class Game:
         Returns:
             A Game instance
         """
-        # Extract strategy names if not provided
         if strategy_names is None:
             strategy_names_set = set()
             for profile in payoff_data:
@@ -86,54 +85,43 @@ class Game:
                     strategy_names_set.add(strategy)
             strategy_names = sorted(list(strategy_names_set))
         
-        # Extract number of players
+      
         num_players = 0
         for profile in payoff_data:
             num_players = max(num_players, len(profile))
         
-        # Create strategy name to index mapping
         strategy_to_index = {name: i for i, name in enumerate(strategy_names)}
         
-        # Aggregate data by profile
         profile_dict = defaultdict(lambda: {"count": 0, "payoffs": [[] for _ in range(len(strategy_names))]})
         
         for profile in payoff_data:
-            # Convert profile to counts of each strategy
             strat_counts = [0] * len(strategy_names)
             for _, strategy, _ in profile:
                 strat_idx = strategy_to_index[strategy]
                 strat_counts[strat_idx] += 1
             
-            # Use tuple for dictionary key
             strat_counts_tuple = tuple(strat_counts)
             
-            # Increment profile count and collect payoffs by strategy index
             profile_dict[strat_counts_tuple]["count"] += 1
             for _, strategy, payoff in profile:
                 strat_idx = strategy_to_index[strategy]
                 profile_dict[strat_counts_tuple]["payoffs"][strat_idx].append(float(payoff))
         
-        # Create config_table and calculate payoffs
         configs = list(profile_dict.keys())
         num_configs = len(configs)
         
-        # Initialize arrays
         config_table = np.zeros((num_configs, len(strategy_names)))
         raw_payoff_table = np.zeros((len(strategy_names), num_configs))
         
-        # Fill the tables
         for c, config in enumerate(configs):
-            # Set the configuration counts
             config_table[c] = config
             
-            # Calculate expected payoffs for each strategy
             for strat_idx in range(len(strategy_names)):
                 if config[strat_idx] > 0:  # Only if strategy was used
                     payoffs = profile_dict[config]["payoffs"][strat_idx]
                     if payoffs:
                         raw_payoff_table[strat_idx, c] = np.mean(payoffs)
         
-        # Create the SymmetricGame instance
         sym_game = SymmetricGame(
             num_players=num_players,
             num_actions=len(strategy_names),
