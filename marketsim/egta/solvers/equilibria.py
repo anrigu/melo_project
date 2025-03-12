@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Union, Optional, Callable
 import time
 from marketsim.egta.core.game import Game
-from marketsim.math.simplex_operations import simplex_normalize
+from marketsim.math.simplex_operations import simplex_normalize, simplex_projection
 
 
 def replicator_dynamics(game: Game, 
@@ -160,14 +160,13 @@ def gain_descent(game: Game,
     
     trace = [mixture.clone()] if return_trace else None
     
-    # Convert step_size to list if necessary
     if isinstance(step_size, (int, float)):
         step_size = [step_size] * iters
     
     prev_mixture = None
     for i in range(min(iters, len(step_size))):
         gradients = game.game.gain_gradients(mixture)
-        new_mixture = simplex_project(mixture - step_size[i] * gradients)
+        new_mixture = simplex_projection(mixture - step_size[i] * gradients)
         
         # Check for convergence
         if prev_mixture is not None and torch.max(torch.abs(new_mixture - prev_mixture)) < converge_threshold:
