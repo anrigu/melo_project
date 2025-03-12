@@ -21,6 +21,9 @@ class MELOSimulatorSampledArrival:
     def __init__(self,
                  num_background_agents: int,
                  sim_time: int,
+                 num_zi: int,
+                 num_hbl: int,
+                 num_melo: int,
                  num_assets: int = 1,
                  lam: float = 0.1,
                  mean: float = 100,
@@ -66,8 +69,7 @@ class MELOSimulatorSampledArrival:
 
         self.agents = {}
         #Market is only passed in for access to fundamental. Melo doesn't care about that
-        num_melo_traders = 15
-        for agent_id in range(num_background_agents - num_melo_traders):
+        for agent_id in range(num_zi):
             self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
             self.arrival_index += 1
             self.agents[agent_id] = (
@@ -80,7 +82,20 @@ class MELOSimulatorSampledArrival:
                     eta=eta
                 ))
 
-        for agent_id in range(num_background_agents - num_melo_traders, num_background_agents + 1):
+        for agent_id in range(num_zi, num_zi + num_hbl):
+            self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+            self.arrival_index += 1
+            self.agents[agent_id] = (
+                ZIAgent(
+                    agent_id=agent_id,
+                    market=self.market,
+                    q_max=q_max,
+                    shade=shade,
+                    pv_var=pv_var,
+                    eta=eta
+                ))
+
+        for agent_id in range(num_zi + num_hbl, num_background_agents):
             self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(agent_id)
             self.arrival_index_melo += 1
             self.agents[agent_id] = (
@@ -183,9 +198,9 @@ class MELOSimulatorSampledArrival:
             agent = self.agents[agent_id]
             values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
             melo_profits[agent_id] = agent.meloProfit
-        print(f'At the end of the simulation we get {values}')
-        print(f'MELO_ At the end of the simulation we get {melo_profits}')
-        input()
+        # print(f'At the end of the simulation we get {values}')
+        # print(f'MELO_ At the end of the simulation we get {melo_profits}')
+        # input()
         return values
 
     def run(self):
