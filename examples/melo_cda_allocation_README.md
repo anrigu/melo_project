@@ -1,5 +1,6 @@
 # MELO vs CDA Market Allocation Experiment
-
+# Note 
+Not everything in here fully works, its being debugged. 
 This experiment uses Empirical Game-Theoretic Analysis (EGTA) to study how strategic agents allocate their trading between two market mechanisms:
 
 1. **Continuous Double Auction (CDA)**: Traditional order book market mechanism
