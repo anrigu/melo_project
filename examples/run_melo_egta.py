@@ -1,9 +1,12 @@
 """
-Example script for running EGTA with the MELO simulator.
+script for running EGTA with the MELO simulator.
 
 This script allows you to simulate strategic interactions between MELO agents 
 deciding how to allocate their trading between the traditional CDA market
 and the MELO mechanism.
+
+#TODO: 
+- Needs testing and debugging. 
 """
 import argparse
 import os

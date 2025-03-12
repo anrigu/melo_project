@@ -8,8 +8,8 @@ import os
 import sys
 import json
 
-# FIX PATH CONFIGURATION: Add the project root to Python path
-notebook_dir = os.getcwd()  # Current working directory
+# Add the project root to Python path
+notebook_dir = os.getcwd() 
 
 # Check if we're in the examples directory
 if notebook_dir.endswith('examples'):
@@ -37,14 +37,12 @@ print(f"Current working directory: {notebook_dir}")
 print(f"Project root directory: {project_root}")
 print(f"sys.path: {sys.path[0]}")
 
-# Try importing fix_path as a fallback
 try:
     import fix_path
     fix_path.add_project_root_to_path()
 except ImportError:
     print("Could not import fix_path module, using direct path configuration")
 
-# Now test if marketsim can be imported
 try:
     import marketsim
     print("Successfully imported marketsim module")
@@ -52,4 +50,3 @@ except ImportError as e:
     print(f"Error importing marketsim: {e}")
     print("Please make sure marketsim is installed or the path is correctly set")
 
-# Rest of your imports should work now 

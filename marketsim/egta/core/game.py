@@ -2,6 +2,9 @@
 Game representation for EGTA framework.
 This module provides a wrapper around the SymmetricGame implementation
 with additional functionality for serialization and analysis.
+
+TODO: 
+- Add support for more complex game structures (e.g., games with multiple roles)
 """
 import json
 import torch

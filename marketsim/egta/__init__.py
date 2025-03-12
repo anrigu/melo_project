@@ -5,7 +5,7 @@ This package provides tools for game-theoretic analysis of strategic interaction
 
 # Import core classes
 from marketsim.egta.core.game import Game
-from marketsim.egta.core.egta import EGTA
+from marketsim.egta.egta import EGTA
 
 # Import solvers
 from marketsim.egta.solvers.equilibria import (

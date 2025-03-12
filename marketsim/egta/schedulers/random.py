@@ -13,6 +13,7 @@ class RandomScheduler(Scheduler):
     """
     Random scheduler for EGTA.
     Samples profiles uniformly at random from the set of all possible profiles.
+    This is just a random scheduler, don't dig to deep
     """
     
     def __init__(self, 
@@ -35,6 +36,7 @@ class RandomScheduler(Scheduler):
         self.rand = random.Random(seed)
         
         # Track profiles we've seen and scheduled
+        # gabe is dumb 
         self.scheduled_profiles: Set[Tuple[str, ...]] = set()
     
     def _sample_random_profile(self) -> List[str]:
@@ -44,7 +46,7 @@ class RandomScheduler(Scheduler):
         Returns:
             A random profile as a list of strategies
         """
-        # Sample a distribution over strategies
+        
         profile = []
         for _ in range(self.num_players):
             profile.append(self.rand.choice(self.strategies))

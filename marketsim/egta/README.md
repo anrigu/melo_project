@@ -1,6 +1,9 @@
 # Empirical Game-Theoretic Analysis (EGTA) Framework
 
-A modern PyTorch-based implementation of EGTA for market simulations, integrating with the MELO simulator.
+PyTorch-based implementation of EGTA for market simulations, integrating with the MELO simulator.
+
+## Note 
+This needs to be rewritten and will change
 
 ## Overview
 

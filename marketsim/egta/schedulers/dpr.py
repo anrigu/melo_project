@@ -7,7 +7,7 @@ import random
 import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any, Optional, Set, Union
-
+import torch
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
 
@@ -128,8 +128,7 @@ class DPRScheduler(Scheduler):
             mixture = np.zeros(len(game.strategy_names))
             mixture[subgame_indices] = 1.0 / len(subgame_indices)
             
-            # Convert to tensor
-            import torch
+           
             mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
             
             # Run replicator dynamics
@@ -161,21 +160,16 @@ class DPRScheduler(Scheduler):
         Returns:
             Set of strategy names
         """
-        import torch
         
         device = game.game.device
         mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
         
-        # Get deviation payoffs
         payoffs = game.deviation_payoffs(mixture_tensor).cpu().numpy()
         
-        # Sort strategies by payoff
-        sorted_indices = np.argsort(-payoffs)  # Descending order
+        sorted_indices = np.argsort(-payoffs) 
         
-        # Select top deviations
         deviating_indices = sorted_indices[:num_deviations]
         
-        # Get strategy names
         return {game.strategy_names[i] for i in deviating_indices}
     
     def _select_support_strategies(self, game: Game, mixture: np.ndarray, threshold: float = 0.01) -> Set[str]:
@@ -196,55 +190,41 @@ class DPRScheduler(Scheduler):
     def get_next_batch(self, game: Optional[Game] = None) -> List[List[str]]:
         """
         Get the next batch of profiles to simulate.
-        
         Args:
             game: Optional game with existing data
-            
         Returns:
             List of strategy profiles
         """
         if game is None:
-            # If no game data, use random initial subgame
             profiles_to_simulate = []
             for subgame in self.requested_subgames:
                 profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         else:
-            # Update game reference
             self.game = game
             
-            # Get candidate equilibria
             candidates = self._select_equilibrium_candidates(game)
             
-            # Get deviating strategies for each candidate
             new_subgames = []
             for candidate in candidates:
-                # Get support strategies
                 support_strategies = self._select_support_strategies(game, candidate)
                 
-                # Get deviating strategies
                 deviating_strategies = self._select_deviating_strategies(game, candidate)
                 
-                # Combine into a new subgame
                 new_subgame = support_strategies.union(deviating_strategies)
                 
-                # Ensure subgame is not too large
                 if len(new_subgame) > self.subgame_size:
                     new_subgame = set(list(new_subgame)[:self.subgame_size])
                 
                 new_subgames.append(new_subgame)
             
-            # Add new subgames
             self.requested_subgames.extend(new_subgames)
             
-            # Generate profiles for new subgames
             profiles_to_simulate = []
             for subgame in new_subgames:
                 profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         
-        # Filter out profiles we've already scheduled
         new_profiles = []
         for profile in profiles_to_simulate:
-            # Sort profile for consistent representation
             sorted_profile = tuple(sorted(profile))
             
             if sorted_profile not in self.scheduled_profiles:
