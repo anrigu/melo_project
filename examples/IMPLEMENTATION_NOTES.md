@@ -58,3 +58,106 @@ To test the implementation:
 
 1. Consider adding more fine-grained allocation strategies (e.g., 10% increments)
 2. Add analysis of market liquidity and price efficiency under different allocation mixes
+
+# QUIESCE Implementation Notes
+
+This document outlines the improved implementation of the QUIESCE algorithm in the EGTA framework. The implementation follows the formal algorithm as outlined in "Solving Large Incomplete-Information Games Using Quiesce" (Brinkman et al.).
+
+## Key Improvements
+
+1. **Asynchronous Programming**:
+   - The implementation uses asynchronous programming for efficiency
+   - Helper functions like `test_unconfirmed_candidates` and `test_deviations` are defined as async functions
+   - A synchronous wrapper `quiesce_sync` is provided for ease of use
+
+2. **Explicit Tracking of Game State**:
+   - `SubgameCandidate` class to track candidates, their status, and support sets
+   - `MaximalSubgameCollection` class to manage subgames and check containment
+   - `DeviationPriorityQueue` class to prioritize the exploration of deviations by gain
+
+3. **Separation of Solver and Game View Operations (GVO)**:
+   - Clear separation between equilibrium finding and candidate generation
+   - Explicit handling of unconfirmed and confirmed candidates
+   - Follows the flowchart in the formal algorithm
+
+4. **Adaptive Exploration of Strategy Space**:
+   - Priority queue for deviations based on gain
+   - Exploration of mixed strategy candidates in addition to pure strategies
+   - Consideration of the uniform mixture as a potential equilibrium
+
+## Algorithm Flow
+
+The implementation follows this general flow:
+
+1. **Initialization**:
+   - Create singleton strategy subgames
+   - Initialize data structures for tracking game state
+
+2. **Main Loop**:
+   - Test unconfirmed candidates to see if they are equilibria
+   - If no unconfirmed candidates, explore new subgames from the deviation queue
+   - If no more candidates or deviations, we're done
+
+3. **Testing Unconfirmed Candidates**:
+   - Solve equilibria for all unconfirmed candidates
+   - Calculate regrets
+   - Test for beneficial deviations
+   - If no beneficial deviations, add to confirmed equilibria
+
+4. **Testing Deviations**:
+   - Calculate gains from deviation
+   - Add beneficial deviations to the priority queue
+   - Also add mixed strategy candidates between pure strategies and beneficial deviations
+
+5. **Exploring New Subgames**:
+   - Select the highest-gain deviation from the queue
+   - Check if it creates a new maximal subgame
+   - Add a new candidate if it does
+
+## Comparison with Traditional QUIESCE
+
+This implementation more closely follows the formal QUIESCE algorithm compared to the original implementation in several ways:
+
+1. **Adaptive vs. Fixed Exploration**:
+   - Original: Used fixed mixing weights (0.25, 0.5, 0.75) to generate new candidates
+   - Improved: Uses a priority queue based on gain to explore the most promising strategies first
+
+2. **Subgame Management**:
+   - Original: Did not explicitly track maximal subgames
+   - Improved: Maintains a collection of maximal subgames and checks containment
+
+3. **Asynchronous Programming**:
+   - Original: Purely synchronous implementation
+   - Improved: Uses asynchronous programming for better efficiency
+
+4. **Mixed Strategy Support**:
+   - Original: Limited exploration of mixed strategies
+   - Improved: Better testing and exploration of mixed strategy candidates
+
+## Usage
+
+The implementation provides two main entry points:
+
+1. `quiesce`: Asynchronous implementation of the QUIESCE algorithm
+2. `quiesce_sync`: Synchronous wrapper for ease of use
+
+Example usage:
+
+```python
+from marketsim.egta.solvers.equilibria import quiesce_sync
+
+equilibria = quiesce_sync(
+    game=game,
+    num_iters=10,
+    regret_threshold=1e-4,
+    dist_threshold=1e-3,
+    restricted_game_size=4,
+    solver='replicator',
+    solver_iters=1000,
+    verbose=True
+)
+```
+
+## Testing
+
+The implementation has been tested with classic game theory examples like Rock-Paper-Scissors, Prisoner's Dilemma, and Stag Hunt. It successfully finds both pure and mixed strategy equilibria in these games.

@@ -14,7 +14,7 @@ from marketsim.egta.schedulers.base import Scheduler
 from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.simulators.base import Simulator
-from marketsim.egta.solvers.equilibria import quiesce, replicator_dynamics, regret
+from marketsim.egta.solvers.equilibria import quiesce_sync, replicator_dynamics, regret
 
 
 class EGTA:
@@ -60,40 +60,55 @@ class EGTA:
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
         
-        # Game state
+        # Initialize empty game and equilibria
         self.game = None
-        self.payoff_data = []
-        self.simulated_profiles = set()
         self.equilibria = []
+        self.payoff_data = []
     
     def run(self, 
            max_iterations: int = 10, 
-           profiles_per_iteration: int = 10,
+           profiles_per_iteration: int = 5,
            save_frequency: int = 1,
            verbose: bool = True) -> Game:
         """
         Run the EGTA process.
         
         Args:
-            max_iterations: Maximum number of iterations
-            profiles_per_iteration: Number of profiles to simulate per iteration
-            save_frequency: How often to save results (in iterations)
+            max_iterations: Maximum number of iterations to run
+            profiles_per_iteration: Number of profiles to simulate in each iteration
+            save_frequency: How often to save results (every N iterations)
             verbose: Whether to print progress
             
         Returns:
-            The final game
+            The final Game object
         """
-        total_profiles = 0
         start_time = time.time()
         
-        for iteration in range(max_iterations):
+        # Initialize
+        if verbose:
+            print("Starting EGTA process")
+            print(f"Simulator: {self.simulator.__class__.__name__}")
+            print(f"Scheduler: {self.scheduler.__class__.__name__}")
+            print(f"Strategies: {self.simulator.get_strategies()}")
+            print(f"Number of players: {self.simulator.get_num_players()}")
+            print(f"Device: {self.device}")
+            print(f"Maximum profiles: {self.max_profiles}")
+            print(f"Maximum iterations: {max_iterations}")
+            print(f"Profiles per iteration: {profiles_per_iteration}")
+            print()
+            
+        iteration = 0
+        total_profiles = 0
+        
+        while iteration < max_iterations:
             iteration_start = time.time()
-            
             if verbose:
-                print(f"\nIteration {iteration+1}/{max_iterations}")
+                print(f"Iteration {iteration+1}/{max_iterations}")
             
-            # Get next batch of profiles to simulate
-            profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+            # Schedule profiles
+            profiles_to_simulate = self.scheduler.get_next_batch(
+                game=self.game
+            )
             
             if not profiles_to_simulate:
                 if verbose:
@@ -134,10 +149,11 @@ class EGTA:
                 print("Finding equilibria...")
             
             equilibria_start = time.time()
-            self.equilibria = quiesce(
+            self.equilibria = quiesce_sync(
                 game=self.game,
                 num_iters=3,
-                num_random_starts=10,
+                regret_threshold=1e-4,
+                restricted_game_size=min(4, len(self.game.strategy_names)),
                 solver='replicator',
                 solver_iters=1000,
                 verbose=verbose
@@ -170,6 +186,8 @@ class EGTA:
                 if verbose:
                     print(f"Reached maximum number of profiles ({self.max_profiles}). Stopping.")
                 break
+            
+            iteration += 1
         
         total_time = time.time() - start_time
         if verbose:

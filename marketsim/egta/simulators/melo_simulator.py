@@ -71,8 +71,7 @@ class MeloSimulator(Simulator):
         self.reps = reps
         self.order_quantity = 5  # Fixed order quantity as specified
         
-        # Define strategies as allocation proportions between CDA and MELO
-        # Format: "MELO_X_Y" where X is percentage in CDA and Y is percentage in MELO
+        #Define strategies as allocation proportions between CDA and MELO
         self.strategies = [
             "MELO_100_0",   # 100% CDA, 0% MELO
             "MELO_75_25",   # 75% CDA, 25% MELO
@@ -123,7 +122,6 @@ class MeloSimulator(Simulator):
         """
         params = self.strategy_params[strategy]
         
-        # Create a MELO agent with specific allocation between markets
         return MeloAgent(
             agent_id=agent_id,
             market=market,
@@ -187,14 +185,11 @@ class MeloSimulator(Simulator):
                         meloMarket=sim.meloMarket
                     )
                     
-                    # Replace the agent in the simulator
                     sim.agents[strategic_agent_id] = agent
                     strategic_agent_id += 1
             
-            # Run the simulation
             sim.run()
             
-            # Get final values and profits
             values, melo_profits = sim.end_sim()
             
             # Collect results for this repetition
@@ -209,7 +204,6 @@ class MeloSimulator(Simulator):
                 cda_proportion = params["cda_proportion"]
                 melo_proportion = params["melo_proportion"]
                 
-                # Total payoff is weighted sum of payoffs from both mechanisms
                 total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
                 
                 results.append((player_id, strategy, total_payoff))

@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple, Any, Optional, Set, Union
 import torch
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
+from marketsim.egta.solvers.equilibria import replicator_dynamics
 
 
 class DPRScheduler(Scheduler):
@@ -66,7 +67,6 @@ class DPRScheduler(Scheduler):
             List of profiles
         """
         subgame_list = list(subgame)
-        
         # Generate all possible distributions of players among strategies
         profiles = []
         for counts in self._distribute_players(len(subgame_list), self.num_players):
@@ -109,7 +109,6 @@ class DPRScheduler(Scheduler):
         Returns:
             List of candidate equilibrium mixtures
         """
-        from marketsim.egta.solvers.equilibria import replicator_dynamics
         
         device = game.game.device
         strategy_mapping = {name: i for i, name in enumerate(game.strategy_names)}
@@ -190,8 +189,10 @@ class DPRScheduler(Scheduler):
     def get_next_batch(self, game: Optional[Game] = None) -> List[List[str]]:
         """
         Get the next batch of profiles to simulate.
+        
         Args:
             game: Optional game with existing data
+            
         Returns:
             List of strategy profiles
         """

@@ -11,7 +11,7 @@ import argparse
 import os
 import json
 from marketsim.egta.core.game import Game
-from marketsim.egta.solvers.equilibria import replicator_dynamics, fictitious_play, gain_descent, quiesce
+from marketsim.egta.solvers.equilibria import replicator_dynamics, fictitious_play, gain_descent, quiesce, quiesce_sync
 from marketsim.egta.visualization import (
     plot_equilibrium_payoffs, 
     plot_strategy_traces, 
@@ -241,16 +241,19 @@ def visualize_equilibrium_solver(game, solver_name, iters=1000):
     
     return final_mix, trace, regret
 
-def visualize_quiesce(game, num_iters=5, num_random_starts=10, solver='replicator'):
+def visualize_quiesce(game, num_iters=5, restricted_game_size=4, solver='replicator'):
     """Run QUIESCE algorithm and visualize the results."""
     print(f"\nRunning QUIESCE algorithm with {solver} solver...")
     
     # Run QUIESCE
-    equilibria = quiesce(
-        game, 
-        num_iters=num_iters, 
-        num_random_starts=num_random_starts, 
-        solver=solver, 
+    equilibria = quiesce_sync(
+        game=game, 
+        num_iters=num_iters,
+        regret_threshold=1e-4,
+        dist_threshold=1e-3,
+        restricted_game_size=restricted_game_size,
+        solver=solver,
+        solver_iters=1000,
         verbose=True
     )
     
@@ -309,7 +312,12 @@ def main():
     
     elif args.solver == 'quiesce':
         # Run QUIESCE
-        equilibria = visualize_quiesce(game, num_iters=5, solver='replicator')
+        equilibria = visualize_quiesce(
+            game,
+            num_iters=5,
+            restricted_game_size=min(4, len(game.strategy_names)),
+            solver='replicator'
+        )
         
         # Save results to JSON
         equilibria_dict = []
