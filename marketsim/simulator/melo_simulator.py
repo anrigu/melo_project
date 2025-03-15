@@ -1,12 +1,12 @@
 import random
-from agent.agent import Agent 
-from agent.hbl_agent import HBLAgent
-from fourheap.constants import BUY, SELL, MELO, CDA
-from market.market import Market
-from market.melo_market import MeloMarket
-from fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
-from agent.zero_intelligence_agent import ZIAgent
-from agent.melo_agent import MeloAgent
+from marketsim.agent.agent import Agent 
+from marketsim.agent.hbl_agent import HBLAgent
+from marketsim.fourheap.constants import BUY, SELL, MELO, CDA
+from marketsim.market.market import Market
+from marketsim.market.melo_market import MeloMarket
+from marketsim.fundamental.lazy_mean_reverting import LazyGaussianMeanReverting
+from marketsim.agent.zero_intelligence_agent import ZIAgent
+from marketsim.agent.melo_agent import MeloAgent
 import torch.distributions as dist
 import torch
 import math
@@ -21,6 +21,8 @@ class MELOSimulatorSampledArrival:
     def __init__(self,
                  num_background_agents: int,
                  sim_time: int,
+                 num_zi: int,
+                 num_hbl: int,
                  num_assets: int = 1,
                  lam: float = 0.1,
                  mean: float = 100,
@@ -29,7 +31,7 @@ class MELOSimulatorSampledArrival:
                  q_max: int = 10,
                  pv_var: float = 5e6,
                  shade=None,
-                 eta: float = 0.2,
+                 eta: float = 1.0,
                  hbl_agent: bool = False,
                  lam_r: float = None,
                  holding_period = 10,
@@ -66,8 +68,7 @@ class MELOSimulatorSampledArrival:
 
         self.agents = {}
         #Market is only passed in for access to fundamental. Melo doesn't care about that
-        num_melo_traders = 15
-        for agent_id in range(num_background_agents - num_melo_traders):
+        for agent_id in range(num_zi):
             self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
             self.arrival_index += 1
             self.agents[agent_id] = (
@@ -80,7 +81,20 @@ class MELOSimulatorSampledArrival:
                     eta=eta
                 ))
 
-        for agent_id in range(num_background_agents - num_melo_traders, num_background_agents + 1):
+        for agent_id in range(num_zi, num_zi + num_hbl):
+            self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+            self.arrival_index += 1
+            self.agents[agent_id] = (
+                ZIAgent(
+                    agent_id=agent_id,
+                    market=self.market,
+                    q_max=q_max,
+                    shade=shade,
+                    pv_var=pv_var,
+                    eta=eta
+                ))
+
+        for agent_id in range(num_zi + num_hbl, num_background_agents):
             self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(agent_id)
             self.arrival_index_melo += 1
             self.agents[agent_id] = (
@@ -89,7 +103,9 @@ class MELOSimulatorSampledArrival:
                     #Not important which market
                     market=self.market,
                     q_max=q_max,
-                    pv_var=pv_var
+                    pv_var=pv_var,
+                    cda_proportion=0,
+                    melo_proportion=1
                 ))
 
     def step(self):
@@ -100,69 +116,80 @@ class MELOSimulatorSampledArrival:
             self.meloMarket.event_queue.set_time(self.time)
             self.market.event_queue.set_time(self.time)
             
-            for agent_id in agents:
-                #Normal orderbook traders
-                agent = self.agents[agent_id]
-                self.market.withdraw_all(agent_id)
-                side = random.choice([BUY, SELL])
-                orders = agent.take_action(side)
-                self.market.add_orders(orders)
-                if self.arrival_index == self.arrivals_sampled:
-                    self.arrival_times = sample_arrivals(self.lam_r, self.arrivals_sampled)
-                    self.arrival_index = 0
-                self.arrivals[self.arrival_times[self.arrival_index].item() + 1 + self.time].append(agent_id)
-                self.arrival_index += 1
-                    
-                new_orders = self.market.step()
-                for matched_order in new_orders:
-                    agent_id = matched_order.order.agent_id
-                    quantity = matched_order.order.order_type*matched_order.order.quantity
-                    cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
-                    self.agents[agent_id].update_position(quantity, cash)
-
-            for agent_id in melo_agents:
-                agent: Agent = self.agents[agent_id]
-                self.meloMarket.withdraw_all(agent_id)
-                self.market.withdraw_all(agent_id)
-                #TODO: CHANGE BACK TO RANDOM.
-                # marketSelection = random.choice([MELO, CDA])
-                marketSelection = MELO
-                # marketSelection = MELO
-                side = random.choice([BUY, SELL])
-                if marketSelection == MELO:
-                    melo_placed = True
-                    #PLACE MELO
-                    orders = agent.take_action(side) 
-                    self.meloMarket.add_orders(orders)
-                else:
-                    #PLACE CDA ORDER
+            if agents:
+                for agent_id in agents:
+                    #Normal orderbook traders
+                    agent = self.agents[agent_id]
+                    self.market.withdraw_all(agent_id)
+                    side = random.choice([BUY, SELL])
                     orders = agent.take_action(side)
                     self.market.add_orders(orders)
+                    if self.arrival_index == self.arrivals_sampled:
+                        self.arrival_times = sample_arrivals(self.lam_r, self.arrivals_sampled)
+                        self.arrival_index = 0
+                    self.arrivals[self.arrival_times[self.arrival_index].item() + 1 + self.time].append(agent_id)
+                    self.arrival_index += 1
                     
-                if self.arrival_index_melo == self.arrivals_sampled:
-                    self.arrival_times_melo = sample_arrivals(self.lam_melo, self.arrivals_sampled)
-                    self.arrival_index_melo = 0
-                self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item() + 1 + self.time].append(agent_id)
-                self.arrival_index_melo += 1
+            if melo_agents:
+                melo_placed = True
+                for agent_id in melo_agents:
+                    agent = self.agents[agent_id]
+                    self.meloMarket.withdraw_all(agent_id)
+                    self.market.withdraw_all(agent_id)
+                    
+                    # Check if the agent is a MeloAgent with strategy parameters
+                    assert isinstance(agent, MeloAgent) and hasattr(agent, 'cda_proportion') and hasattr(agent, 'melo_proportion')
+                    # Use the strategy parameters to determine market selection
+                    if random.random() < agent.melo_proportion:
+                        marketSelection = MELO
+                    else:
+                        marketSelection = CDA
+                        
+                    side = random.choice([BUY, SELL])
+                    if marketSelection == MELO:
 
-            new_orders = self.meloMarket.step(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
-            if len(new_orders[0]) > 0:
-                for side_orders in new_orders:
-                    for matched_order in side_orders:
-                        #TODO: change to update the MELO position not the CDA position becasue PVs are different.
-                        agent_id = matched_order.order.agent_id
-                        current_agent: MeloAgent = self.agents[agent_id]
-                        current_agent.melo_record_trade(matched_order.order.order_type, matched_order.order.quantity, matched_order)
-                   
+                        #PLACE MELO
+                        orders = agent.take_action(side, marketSelection) 
+                        self.meloMarket.add_orders(orders)
+                    else:
+                        #PLACE CDA ORDER
+                        orders = agent.take_action(side, marketSelection)
+                        self.market.add_orders(orders)
+                            
+                    if self.arrival_index_melo == self.arrivals_sampled:
+                        self.arrival_times_melo = sample_arrivals(self.lam_melo, self.arrivals_sampled)
+                        self.arrival_index_melo = 0
+                    self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item() + 1 + self.time].append(agent_id)
+                    self.arrival_index_melo += 1
+
+                new_orders = self.meloMarket.step(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
+                if len(new_orders[0]) > 0:
+                    for side_orders in new_orders:
+                        for matched_order in side_orders:
+                            agent_id = matched_order.order.agent_id
+                            current_agent: MeloAgent = self.agents[agent_id]
+                            current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                            quantity = matched_order.order.order_type*matched_order.order.quantity
+                            cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                            current_agent.update_position(quantity, cash)
+                            # print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
+                            # print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
+                            # print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
+                        
             new_orders = self.market.step()
             for matched_order in new_orders:
                 agent_id = matched_order.order.agent_id
+                if isinstance(self.agents[agent_id], MeloAgent):
+                    current_agent: MeloAgent = self.agents[agent_id]
+                    current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+
                 quantity = matched_order.order.order_type*matched_order.order.quantity
                 cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
                 self.agents[agent_id].update_position(quantity, cash)
 
             
             if not melo_placed:
+                # This only matters for Melo Market trades. No need to check for CDA trades
                 #Default return type if no matches = [[], []]
                 melo_matched_orders = self.meloMarket.update_queues(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
                 if len(melo_matched_orders[0]) > 0:
@@ -170,27 +197,34 @@ class MELOSimulatorSampledArrival:
                         for matched_order in side_orders:
                             #TODO: change to update the MELO position not the CDA position becasue PVs are different.
                             agent_id = matched_order.order.agent_id
-                            current_agent: Agent = self.agents[agent_id]
-                            current_agent.melo_record_trade(matched_order.order.order_type, matched_order.order.quantity, matched_order)
+                            current_agent: MeloAgent = self.agents[agent_id]
+                            current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                            quantity = matched_order.order.order_type*matched_order.order.quantity
+                            cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                            self.agents[agent_id].update_position(quantity, cash)
         else:
             self.end_sim()
 
     def end_sim(self):
         fundamental_val = self.market.get_final_fundamental()
         values = {}
-        melo_profits = {}
+        # melo_profits = {}
         for agent_id in self.agents:
             agent = self.agents[agent_id]
-            values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
-            melo_profits[agent_id] = agent.meloProfit
-        print(f'At the end of the simulation we get {values}')
-        print(f'MELO_ At the end of the simulation we get {melo_profits}')
-        input()
-        return values
+            if isinstance(agent, MeloAgent):
+                values[agent_id] = agent.position*fundamental_val + agent.cash + sum(quantity * value for quantity, value in agent.melo_pv_history)
+            else:
+                values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
+            
+        # print(f'At the end of the simulation we get {values}')
+        # print(f'MELO_ At the end of the simulation we get {melo_profits}')
+        # input()
+        return values  # Return both CDA and MELO profits
 
     def run(self):
         for t in range(self.sim_time):
-            if self.arrivals[t]:
+            if self.arrivals[t] or self.arrivals_melo[t]:
+                # print("ENTERED TIMESTEP", t)
                 try:
                     # print(f'CALLING STEP at time {self.time}')
                     self.step()
@@ -198,13 +232,19 @@ class MELOSimulatorSampledArrival:
                     print(self.arrivals[self.time])
                     return self.market, self.meloMarket
             else:
+                # print("SKIPPEDA T TIMESTEP", t)
+                self.meloMarket.event_queue.set_time(self.time)
+                self.market.event_queue.set_time(self.time)
                 melo_matched_orders = self.meloMarket.update_queues()
                 if len(melo_matched_orders[0]) > 0:
-                    for matched_order in melo_matched_orders:
-                        agent_id = matched_order.order.agent_id
-                        quantity = matched_order.order.order_type*matched_order.order.quantity
-                        cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
-                        self.agents[agent_id].update_position(quantity, cash)
+                    for side_orders in melo_matched_orders:
+                        for matched_order in side_orders:
+                            agent_id = matched_order.order.agent_id
+                            current_agent: MeloAgent = self.agents[agent_id]
+                            current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                            quantity = matched_order.order.order_type*matched_order.order.quantity
+                            cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                            self.agents[agent_id].update_position(quantity, cash)
             self.time += 1
         self.step()
 

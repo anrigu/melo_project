@@ -1,53 +1,60 @@
+from collections import defaultdict
 from marketsim.simulator.melo_simulator import MELOSimulatorSampledArrival
 from tqdm import tqdm
 from agent.agent import Agent
 surpluses = []
 
-for _ in tqdm(range(10000)):
+cumulative_payoffs = defaultdict(float)
+
+for _ in tqdm(range(100)):
     sim = MELOSimulatorSampledArrival(num_background_agents=25, 
-                                  sim_time=12000, 
-                                  lam=5e-2, 
-                                  mean=1e5, 
-                                  r=0.05, 
-                                  shock_var=5e6, 
-                                  q_max=10,
-                                  pv_var=5e6,
-                                  shade=[500,1000])
+                                      sim_time=10000, 
+                                      lam=2e-2, 
+                                      mean=1e6, 
+                                      lam_melo=2e-2,
+                                      r=0.05, 
+                                      shock_var=1e2, 
+                                      q_max=10,
+                                      num_zi=15,
+                                      num_hbl=0,
+                                      pv_var=5e6,
+                                      shade=[10,30])
     sim.run()
-    fundamental_val = sim.market.get_final_fundamental()
-    print(f"Fundamental value: {fundamental_val}")
-    values = []
-    for agent_id in sim.agents:
-        agent = sim.agents[agent_id]
-        value = agent.get_pos_value() + agent.position * fundamental_val + agent.cash
-        # print(agent.cash, agent.position, agent.get_pos_value(), value)
-        values.append(value)
-    surpluses.append(sum(values)/len(values))
-print(sum(surpluses)/len(surpluses)*25)
+    payoffs = sim.end_sim()  # Dictionary {agent_id: payoff}
 
-positions = []
-values = []
-melo_profits = []
-fundamental_val = sim.market.get_final_fundamental()
+    # Accumulate payoffs for each agent
+    for agent_id, payoff in payoffs.items():
+        cumulative_payoffs[agent_id] += payoff
 
-for agent_id in sim.agents:
-    agent:Agent = sim.agents[agent_id]
-    value = agent.get_pos_value() + agent.position * fundamental_val + agent.cash
-    print(agent.cash, agent.position, agent.get_pos_value(), value)
-    positions.append(agent.position)
-    values.append(value)
-    melo_profits.append(agent.meloProfit)
+# Compute the average payoff for each agent
+average_payoffs = {agent_id: cumulative_payoffs[agent_id] / 100 for agent_id in cumulative_payoffs}
 
-import matplotlib.pyplot as plt
+# Print or use the results as needed
+print(average_payoffs)
 
-print(fundamental_val)
+# positions = []
+# values = []
+# melo_profits = []
+# fundamental_val = sim.market.get_final_fundamental()
 
-plt.scatter(positions, values)
-plt.xlabel('Position')
-plt.ylabel('Value')
-plt.title(f'Agent Position vs Value at fundamental {fundamental_val}')
-plt.show()
-sum(positions)
+# for agent_id in sim.agents:
+#     agent:Agent = sim.agents[agent_id]
+#     value = agent.get_pos_value() + agent.position * fundamental_val + agent.cash
+#     print(agent.cash, agent.position, agent.get_pos_value(), value)
+#     positions.append(agent.position)
+#     values.append(value)
+#     melo_profits.append(agent.melo_profit)
+
+# import matplotlib.pyplot as plt
+
+# # print(fundamental_val)
+
+# plt.scatter(positions, values)
+# plt.xlabel('Position')
+# plt.ylabel('Value')
+# plt.title(f'Agent Position vs Value at fundamental {fundamental_val}')
+# plt.show()
+# sum(positions)
 
 
 
