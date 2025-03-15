@@ -12,7 +12,7 @@ import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Tuple, Union, Optional
 from marketsim.game.symmetric_game import SymmetricGame
-from marketsim.math.simplex_operations import logmultinomial
+from marketsim.custom_math.simplex_operations import logmultinomial
 
 
 class Game:

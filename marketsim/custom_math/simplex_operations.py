@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from scipy.special import comb
 from itertools import combinations_with_replacement
-from marketsim.math.log_multimodal import logmultinomial, logmultinomial_torch
+from marketsim.custom_math.log_multimodal import logmultinomial, logmultinomial_torch
 '''
 original code from Bryce here: 
 https://github.com/Davidson-Game-Theory-Research/gameanalysis.jl/blob/master/SimplexOperations.jl

@@ -19,21 +19,25 @@ class MeloSimulator(Simulator):
     """
     
     def __init__(self, 
-                num_players: int = 10,
-                sim_time: int = 1000,
+                num_players: int = 25,
+                sim_time: int = 10000,
                 num_assets: int = 1,
-                lam: float = 0.1,
-                mean: float = 100,
+                lam: float = 5e-2,
+                mean: float = 1e6,
                 r: float = 0.05,
                 shock_var: float = 10,
-                q_max: int = 10,
+                q_max: int = 15,
                 pv_var: float = 5e6,
                 shade: Optional[List[float]] = None,
                 eta: float = 0.5,
                 lam_r: Optional[float] = None,
-                holding_period: int = 1,
-                lam_melo: float = 0.1,
-                reps: int = 5):
+                holding_period: int = 10,
+                lam_melo: float = 5e-1,
+                # Add these parameters
+                num_zi: int = 15,
+                num_hbl: int = 0,
+                # num_melo: int = 10,
+                reps: int = 2000):
         """
         Initialize the MELO simulator interface.
         
@@ -52,6 +56,8 @@ class MeloSimulator(Simulator):
             lam_r: Arrival rate for regular traders
             holding_period: Holding period
             lam_melo: Arrival rate for MELO traders
+            num_zi: Number of zero intelligence agents
+            num_hbl: Number of HBL agents
             reps: Number of simulation repetitions
         """
         self.num_players = num_players
@@ -68,6 +74,9 @@ class MeloSimulator(Simulator):
         self.lam_r = lam_r or lam
         self.holding_period = holding_period
         self.lam_melo = lam_melo
+        self.num_zi = num_zi
+        self.num_hbl = num_hbl
+        # self.num_melo = num_melo
         self.reps = reps
         self.order_quantity = 5  # Fixed order quantity as specified
         
@@ -75,18 +84,18 @@ class MeloSimulator(Simulator):
         # Format: "MELO_X_Y" where X is percentage in CDA and Y is percentage in MELO
         self.strategies = [
             "MELO_100_0",   # 100% CDA, 0% MELO
-            "MELO_75_25",   # 75% CDA, 25% MELO
-            "MELO_50_50",   # 50% CDA, 50% MELO
-            "MELO_25_75",   # 25% CDA, 75% MELO
+            # "MELO_75_25",   # 75% CDA, 25% MELO
+            # "MELO_50_50",   # 50% CDA, 50% MELO
+            # "MELO_25_75",   # 25% CDA, 75% MELO
             "MELO_0_100",   # 0% CDA, 100% MELO
         ]
         
         # Define strategy parameters - proportion of trades in each market
         self.strategy_params = {
             "MELO_100_0": {"cda_proportion": 1.0, "melo_proportion": 0.0},
-            "MELO_75_25": {"cda_proportion": 0.75, "melo_proportion": 0.25},
-            "MELO_50_50": {"cda_proportion": 0.5, "melo_proportion": 0.5},
-            "MELO_25_75": {"cda_proportion": 0.25, "melo_proportion": 0.75},
+            # "MELO_75_25": {"cda_proportion": 0.75, "melo_proportion": 0.25},
+            # "MELO_50_50": {"cda_proportion": 0.5, "melo_proportion": 0.5},
+            # "MELO_25_75": {"cda_proportion": 0.25, "melo_proportion": 0.75},
             "MELO_0_100": {"cda_proportion": 0.0, "melo_proportion": 1.0},
         }
     
@@ -129,6 +138,8 @@ class MeloSimulator(Simulator):
             market=market,
             meloMarket=meloMarket,
             q_max=self.q_max,
+            #TODO: Parameterize later
+            shade = [10,30],
             pv_var=self.pv_var,
             cda_proportion=params["cda_proportion"],
             melo_proportion=params["melo_proportion"],
@@ -152,14 +163,17 @@ class MeloSimulator(Simulator):
         all_results = []
         
         # Run multiple repetitions
-        for rep in range(self.reps):
+        for _ in range(self.reps):
             # Create a background population
-            num_background = self.num_players // 2  # Half the agents are background
-            
+            num_background = self.num_zi + self.num_hbl
+        
             # Initialize simulator
             sim = MELOSimulatorSampledArrival(
                 num_background_agents=num_background,
                 sim_time=self.sim_time,
+                num_zi=self.num_zi,
+                num_hbl=self.num_hbl,
+                # num_melo=self.num_melo,
                 num_assets=self.num_assets,
                 lam=self.lam,
                 mean=self.mean,
@@ -175,7 +189,7 @@ class MeloSimulator(Simulator):
             )
             
             # Replace some agents with strategic agents
-            strategic_agent_id = num_background + 1  # Start after background agents
+            strategic_agent_id = self.num_zi + self.num_hbl # Start after background agents
             for strategy in self.strategies:
                 count = strategy_counts[strategy]
                 for _ in range(count):
@@ -190,32 +204,32 @@ class MeloSimulator(Simulator):
                     # Replace the agent in the simulator
                     sim.agents[strategic_agent_id] = agent
                     strategic_agent_id += 1
-            
-            # Run the simulation
-            sim.run()
-            
-            # Get final values and profits
-            values, melo_profits = sim.end_sim()
-            
-            # Collect results for this repetition
-            results = []
-            player_id = 0
-            for strategy in profile:
-                # Get the agent ID for this player
-                agent_id = num_background + 1 + player_id
                 
-                # Calculate total payoff (combining CDA and MELO profits based on allocation)
-                params = self.strategy_params[strategy]
-                cda_proportion = params["cda_proportion"]
-                melo_proportion = params["melo_proportion"]
+                # Run the simulation
+                sim.run()
                 
-                # Total payoff is weighted sum of payoffs from both mechanisms
-                total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
+                # Get final values and profits
+                values, melo_profits = sim.end_sim()
                 
-                results.append((player_id, strategy, total_payoff))
-                player_id += 1
-            
-            all_results.append(results)
+                # Collect results for this repetition
+                results = []
+                player_id = 0
+                for strategy in profile:
+                    # Get the agent ID for this player
+                    agent_id = num_background + 1 + player_id
+                    
+                    # Calculate total payoff (combining CDA and MELO profits based on allocation)
+                    params = self.strategy_params[strategy]
+                    cda_proportion = params["cda_proportion"]
+                    melo_proportion = params["melo_proportion"]
+                    
+                    # Total payoff is weighted sum of payoffs from both mechanisms
+                    total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
+                    
+                    results.append((player_id, strategy, total_payoff))
+                    player_id += 1
+                
+                all_results.append(results)
         
         # Aggregate results across repetitions
         aggregated_results = []

@@ -7,7 +7,7 @@ from marketsim.agent.agent import Agent
 from marketsim.market.market import Market
 from marketsim.fourheap.order import Order
 from marketsim.private_values.private_values import PrivateValues
-from marketsim.fourheap.constants import BUY, SELL
+from marketsim.fourheap.constants import BUY, SELL, CDA, MELO
 from typing import List, Optional, Dict, Any, Tuple
 import torch
 import math
@@ -24,6 +24,7 @@ class MeloAgent(Agent):
                 meloMarket: Market = None,
                 q_max: int = 10,
                 pv_var: float = 5e6,
+                shade: List = [10,30],
                 cda_proportion: float = 0.5,
                 melo_proportion: float = 0.5,
                 order_quantity: int = 5):
@@ -42,6 +43,7 @@ class MeloAgent(Agent):
         """
         self.agent_id = agent_id
         self.market = market
+        self.shade = shade
         self.meloMarket = meloMarket
         self.q_max = q_max
         self.pv_var = pv_var
@@ -61,16 +63,18 @@ class MeloAgent(Agent):
         self.meloPV = 0
         self.position = 0
         self.meloPosition = 0
-        self.meloProfit = 0
-        self.melo_trades = []
+        self.melo_profit = 0
+        self.melo_pv_history = []
         self.pv = PrivateValues(q_max, pv_var)
 
     def generate_pv(self):
         #Generate new private values
-        self.pv = PrivateValues(self.q_max, self.pv_var)
+        # self.pv = PrivateValues(self.q_max, self.pv_var)
+        pass
 
     def generate_melo_pv(self):
-        self.meloPV = random.uniform(10, 100)
+        self.meloPV = torch.randn(1) * torch.sqrt(torch.tensor(self.pv_var))
+        # print("GENERATED PV is: ", self.meloPV)
 
     def get_id(self) -> int:
         return self.agent_id
@@ -87,9 +91,10 @@ class MeloAgent(Agent):
         return estimate
         # return estimate + np.random.normal(0, np.sqrt(3e5))
 
-    def take_action(self, side: bool) -> List[Order]:
+    def take_action(self, side: bool, market) -> List[Order]:
         t = self.market.get_time()
         self.generate_melo_pv()
+        # print("ACTION WAS TAKEN AT TIME ",t, " by agent, ", self.agent_id, "at PV: ", self.meloPV )
         if side == BUY:
             price = self.estimate_fundamental() + self.meloPV
             # price = midpoint + self.meloPv[0]
@@ -97,6 +102,14 @@ class MeloAgent(Agent):
             price = self.estimate_fundamental() - self.meloPV
             # price = midpoint - self.meloPv[0]
         
+        if market == CDA:
+            spread = self.shade[1] - self.shade[0]
+            valuation_offset = spread*random.random() + self.shade[0]
+            if side == BUY:
+                price -= valuation_offset
+            else:
+                price += valuation_offset
+
         order = Order(
             price=price,
             quantity=5,
@@ -107,18 +120,17 @@ class MeloAgent(Agent):
         )
         return [order]
 
-    def melo_record_trade(self, side, quantity, matched_order) -> None:
+    def record_trade(self, side, quantity) -> None:
+        # print("----------------------")
+        # print("Trade was done at ",self.market.get_time(), " by agent, ", self.agent_id, "at PV: ", self.meloPV)
+        # print("----------------------")
         if side == BUY:
-            #Reserve price - executed price
-            one_unit_profit = matched_order.order.price - matched_order.price
+            self.melo_pv_history.append((quantity,self.meloPV))
         else:
-            #executed price - reserve price
-            one_unit_profit = matched_order.price - matched_order.order.price
-        total_profit = one_unit_profit * quantity
-        self.melo_profit += total_profit
+            self.melo_pv_history.append((quantity, -self.meloPV))
 
     def update_position(self, q, p):
-        self.inventory += q
+        self.position += q
         self.cash += p
 
     def __str__(self):

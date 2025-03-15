@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Union, Optional, Callable
 import time
 from marketsim.egta.core.game import Game
-from marketsim.math.simplex_operations import simplex_normalize, simplex_projection
+from marketsim.custom_math.simplex_operations import simplex_normalize, simplex_projection
 
 
 def replicator_dynamics(game: Game, 

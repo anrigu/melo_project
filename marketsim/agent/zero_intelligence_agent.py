@@ -23,18 +23,16 @@ class ZIAgent(Agent):
         self.meloPosition = 0
         self.shade = shade
         self.cash = 0
-        self.meloProfit = 0
+        self.melo_profit = 0
         self.eta = eta
         self.melo_trades = []
-        self.q_max = q_max
-        self.pv_var = pv_var
 
     def generate_pv(self):
         #Generate new private values
         self.pv = PrivateValues(self.q_max, self.pv_var)
 
     def generate_melo_pv(self):
-        self.meloPV = random.uniform(10, 100)
+        pass
 
     def get_id(self) -> int:
         return self.agent_id
@@ -86,6 +84,7 @@ class ZIAgent(Agent):
         else:
             price = estimate + self.pv.value_for_exchange(self.position, SELL) + valuation_offset
 
+        # print("ACTION WAS TAKEN AT TIME ",t, " by agent, ", self.agent_id, "at price: ", price, "on side: ", side)
         if self.eta != 1.0:
             if side == BUY:
                 surplus = price - estimate

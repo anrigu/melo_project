@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from itertools import combinations_with_replacement
 from collections import Counter
 
-from marketsim.math.simplex_operations import logmultinomial, simplex_normalize
+from marketsim.custom_math.simplex_operations import logmultinomial, simplex_normalize
 from torch.nn.functional import pad
 from marketsim.game.abstract_game import AbstractGame, MINIMUM_PAYOFF, MAXIMUM_PAYOFF, F32_EPSILON, F64_EPSILON
 from tabulate import tabulate  

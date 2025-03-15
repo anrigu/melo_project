@@ -100,8 +100,8 @@ class SimulatorSampledArrival:
                 for agent_id in agents:
                     agent = self.agents[agent_id]
                     market.withdraw_all(agent_id)
-                    # side = random.choice([BUY, SELL])
-                    orders = agent.take_action()
+                    side = random.choice([BUY, SELL])
+                    orders = agent.take_action(side)
                     market.add_orders(orders)
                     if self.arrival_index == self.arrivals_sampled:
                         self.arrival_times = sample_arrivals(self.lam_r, self.arrivals_sampled)
