@@ -109,7 +109,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Create MELO simulator with default parameters
 simulator = MeloSimulator(
-    # num_players=1,  # Number of strategic MOBI agents
+    num_strategic=10,  # Number of strategic MOBI agents
     # sim_time=1000,   # Simulation time horizon
     # lam=0.1,         # Arrival rate
     # mean=100,        # Mean fundamental value

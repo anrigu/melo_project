@@ -23,6 +23,9 @@ class MELOSimulatorSampledArrival:
                  sim_time: int,
                  num_zi: int,
                  num_hbl: int,
+                 strategies = None,
+                 strategy_counts = None,
+                 strategy_params = None,
                  num_assets: int = 1,
                  lam: float = 0.1,
                  mean: float = 100,
@@ -36,6 +39,7 @@ class MELOSimulatorSampledArrival:
                  lam_r: float = None,
                  holding_period = 10,
                  lam_melo = 0.1,
+                 
                  ):
 
         if shade is None:
@@ -52,6 +56,9 @@ class MELOSimulatorSampledArrival:
         self.time = 0
         self.hbl_agent = hbl_agent
         self.holding_period = holding_period
+        self.strategies = strategies
+        self.strategy_counts = strategy_counts
+        self.strategy_params = strategy_params
 
         self.arrivals = defaultdict(list)
         self.arrivals_melo = defaultdict(list)
@@ -94,19 +101,41 @@ class MELOSimulatorSampledArrival:
                     eta=eta
                 ))
 
-        for agent_id in range(num_zi + num_hbl, num_background_agents):
-            self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(agent_id)
-            self.arrival_index_melo += 1
-            self.agents[agent_id] = (
-                MeloAgent(
-                    agent_id=agent_id,
-                    #Not important which market
-                    market=self.market,
-                    q_max=q_max,
-                    pv_var=pv_var,
-                    cda_proportion=0,
-                    melo_proportion=1
-                ))
+        if not self.strategies:
+            for agent_id in range(num_zi + num_hbl, num_background_agents):
+                self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(agent_id)
+                self.arrival_index_melo += 1
+                self.agents[agent_id] = (
+                    MeloAgent(
+                        agent_id=agent_id,
+                        #Not important which market
+                        market=self.market,
+                        q_max=q_max,
+                        pv_var=pv_var,
+                        cda_proportion=0,
+                        melo_proportion=1
+                    ))
+        else:
+            strategic_agent_id = num_zi + num_hbl
+            for strategy in self.strategies:
+                count = strategy_counts[strategy]
+                for _ in range(count):
+                    self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
+                    self.arrival_index_melo += 1
+                    params = self.strategy_params[strategy]
+
+                    self.agents[strategic_agent_id] = (
+                        MeloAgent(
+                            agent_id=strategic_agent_id,
+                            #Not important which market
+                            market=self.market,
+                            meloMarket=self.meloMarket,
+                            q_max=q_max,
+                            pv_var=pv_var,
+                            cda_proportion=params["cda_proportion"],
+                            melo_proportion=params["melo_proportion"],
+                        ))
+                    strategic_agent_id += 1            
 
     def step(self):
         agents = self.arrivals[self.time]
@@ -212,7 +241,10 @@ class MELOSimulatorSampledArrival:
         for agent_id in self.agents:
             agent = self.agents[agent_id]
             if isinstance(agent, MeloAgent):
-                values[agent_id] = agent.position*fundamental_val + agent.cash + sum(quantity * value for quantity, value in agent.melo_pv_history)
+                pvSum = sum(quantity * value for quantity, value in agent.melo_pv_history)
+                quantitySum = sum(quantity for quantity, _ in agent.melo_pv_history)
+                a = agent.position*fundamental_val + agent.cash + sum(quantity * value for quantity, value in agent.melo_pv_history)
+                values[agent_id] = a
             else:
                 values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
             

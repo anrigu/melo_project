@@ -6,12 +6,12 @@ surpluses = []
 
 cumulative_payoffs = defaultdict(float)
 
-for _ in tqdm(range(100)):
+for _ in tqdm(range(250)):
     sim = MELOSimulatorSampledArrival(num_background_agents=25, 
                                       sim_time=10000, 
-                                      lam=2e-2, 
+                                      lam=5e-3, 
                                       mean=1e6, 
-                                      lam_melo=2e-2,
+                                      lam_melo=5e-2,
                                       r=0.05, 
                                       shock_var=1e2, 
                                       q_max=10,
