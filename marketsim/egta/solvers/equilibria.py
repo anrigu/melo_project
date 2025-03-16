@@ -256,22 +256,18 @@ class MaximalSubgameCollection:
         Returns:
             True if the subgame was added, False otherwise
         """
-        # Check if the new subgame is contained in any existing one
         for existing in self.subgames:
             if support.issubset(existing):
                 return False
         
-        # Remove any existing subgames that are contained in this one
         self.subgames = [s for s in self.subgames if not s.issubset(support)]
         
-        # Add the new subgame
         self.subgames.append(support)
         return True
     
     def is_contained(self, support: Set[int]) -> bool:
         """
         Check if a support set is contained in any existing subgame.
-        
         Args:
             support: Set of strategy indices
             
@@ -538,7 +534,7 @@ async def quiesce(
                   f"gain: {gain:.6f}")
         
         # Get current support
-        current_support = set(torch.where(mixture > 1e-4)[0].cpu().numpy().tolist())
+        current_support = set(torch.where(mixture > 1e-8)[0].cpu().numpy().tolist())
         
         # Add deviating strategy
         new_support = current_support.union({strategy_idx})
