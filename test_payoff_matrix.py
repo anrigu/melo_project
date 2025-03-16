@@ -68,7 +68,6 @@ def main():
         # 2 playing each strategy
         [(0, 'MELO_100_0', 110), (1, 'MELO_100_0', 110), (2, 'MELO_0_100', 80), (3, 'MELO_0_100', 80)],
         
-        # 1 playing strategy 0, 3 playing strategy 1
         [(0, 'MELO_100_0', 120), (1, 'MELO_0_100', 90), (2, 'MELO_0_100', 90), (3, 'MELO_0_100', 90)],
         
         # All playing strategy 1
