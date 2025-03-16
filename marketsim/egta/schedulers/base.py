@@ -35,4 +35,4 @@ class Scheduler(ABC):
         Args:
             game: Game with updated data
         """
-        pass 
+        pass

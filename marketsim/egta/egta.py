@@ -11,8 +11,8 @@ from datetime import datetime
 
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
-from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.schedulers.dpr import DPRScheduler
+from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.simulators.base import Simulator
 from marketsim.egta.solvers.equilibria import quiesce_sync, replicator_dynamics, regret
 
