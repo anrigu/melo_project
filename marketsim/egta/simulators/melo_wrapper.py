@@ -84,18 +84,18 @@ class MeloSimulator(Simulator):
         # Format: "MELO_X_Y" where X is percentage in CDA and Y is percentage in MELO
         self.strategies = [
             "MELO_100_0",   # 100% CDA, 0% MELO
-            # "MELO_75_25",   # 75% CDA, 25% MELO
-            # "MELO_50_50",   # 50% CDA, 50% MELO
-            # "MELO_25_75",   # 25% CDA, 75% MELO
+            "MELO_75_25",   # 75% CDA, 25% MELO
+            "MELO_50_50",   # 50% CDA, 50% MELO
+            "MELO_25_75",   # 25% CDA, 75% MELO
             "MELO_0_100",   # 0% CDA, 100% MELO
         ]
         
         # Define strategy parameters - proportion of trades in each market
         self.strategy_params = {
             "MELO_100_0": {"cda_proportion": 1.0, "melo_proportion": 0.0},
-            # "MELO_75_25": {"cda_proportion": 0.75, "melo_proportion": 0.25},
-            # "MELO_50_50": {"cda_proportion": 0.5, "melo_proportion": 0.5},
-            # "MELO_25_75": {"cda_proportion": 0.25, "melo_proportion": 0.75},
+            "MELO_75_25": {"cda_proportion": 0.75, "melo_proportion": 0.25},
+            "MELO_50_50": {"cda_proportion": 0.5, "melo_proportion": 0.5},
+            "MELO_25_75": {"cda_proportion": 0.25, "melo_proportion": 0.75},
             "MELO_0_100": {"cda_proportion": 0.0, "melo_proportion": 1.0},
         }
     
