@@ -114,10 +114,18 @@ class EGTA:
                 # Print payoff data for debugging
                 print("\nPayoff data from simulation:")
                 for profile_data in new_data:
-                    profile_str = ", ".join([f"{strat}" for _, strat, _ in profile_data[:1]])
+                    # Extract all strategies in this profile
+                    all_strategies = [strat for _, strat, _ in profile_data]
+                    # Count occurrences of each strategy
+                    strategy_counts = {}
+                    for strat in set(all_strategies):
+                        strategy_counts[strat] = all_strategies.count(strat)
+                    # Format as a distribution string
+                    profile_dist = ", ".join([f"{strat}:{count}" for strat, count in strategy_counts.items()])
+                    
                     payoffs = [float(payoff) for _, _, payoff in profile_data]
                     avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
-                    print(f"  Profile: {profile_str}, Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
+                    print(f"  Profile: [{profile_dist}], Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
                 print()
             
             # Update payoff data
