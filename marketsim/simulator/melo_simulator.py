@@ -201,9 +201,9 @@ class MELOSimulatorSampledArrival:
                             quantity = matched_order.order.order_type*matched_order.order.quantity
                             cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
                             current_agent.update_position(quantity, cash)
-                            # print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
-                            # print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
-                            # print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
+                            print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
+                            print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
+                            print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
                         
             new_orders = self.market.step()
             for matched_order in new_orders:
