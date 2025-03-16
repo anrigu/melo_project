@@ -55,4 +55,8 @@ class Simulator(ABC):
         Returns:
             List of lists of (player_id, strategy, payoff) tuples
         """
-        return [self.simulate_profile(profile) for profile in profiles] 
+        return [self.simulate_profile(profile) for profile in profiles]   
+    
+
+
+        
