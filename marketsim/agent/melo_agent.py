@@ -95,11 +95,11 @@ class MeloAgent(Agent):
         t = self.market.get_time()
         self.generate_melo_pv()
         # print("ACTION WAS TAKEN AT TIME ",t, " by agent, ", self.agent_id, "at PV: ", self.meloPV )
-        if side == BUY:
-            price = self.estimate_fundamental() + self.meloPV
+        # if side == BUY:
+        price = self.estimate_fundamental() + self.meloPV
             # price = midpoint + self.meloPv[0]
-        else:
-            price = self.estimate_fundamental() - self.meloPV
+        # else:
+        #     price = self.estimate_fundamental() + self.meloPV
             # price = midpoint - self.meloPv[0]
         
         if market == CDA:
@@ -127,7 +127,7 @@ class MeloAgent(Agent):
         if side == BUY:
             self.melo_pv_history.append((quantity,self.meloPV))
         else:
-            self.melo_pv_history.append((quantity, -self.meloPV))
+            self.melo_pv_history.append((-quantity, self.meloPV))
 
     def update_position(self, q, p):
         self.position += q

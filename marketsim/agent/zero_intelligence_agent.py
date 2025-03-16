@@ -79,6 +79,9 @@ class ZIAgent(Agent):
         # estimate = self.estimate_fundamental() + np.random.normal(0, np.sqrt(1e6))
         spread = self.shade[1] - self.shade[0]
         valuation_offset = spread*random.random() + self.shade[0]
+        # a = self.pv.value_for_exchange(self.position, BUY)
+        # b = self.pv.value_for_exchange(self.position, SELL)
+
         if side == BUY:
             price = estimate + self.pv.value_for_exchange(self.position, BUY) - valuation_offset
         else:
