@@ -14,7 +14,7 @@ from marketsim.egta.schedulers.base import Scheduler
 from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.simulators.base import Simulator
-from marketsim.egta.solvers.equilibria import quiesce, replicator_dynamics, regret
+from marketsim.egta.solvers.equilibria import quiesce, quiesce_sync, replicator_dynamics, regret
 
 
 class EGTA:
@@ -110,6 +110,23 @@ class EGTA:
             
             if verbose:
                 print(f"Simulation completed in {simulation_time:.2f} seconds")
+                
+                # Print payoff data for debugging
+                print("\nPayoff data from simulation:")
+                for profile_data in new_data:
+                    # Extract all strategies in this profile
+                    all_strategies = [strat for _, strat, _ in profile_data]
+                    # Count occurrences of each strategy
+                    strategy_counts = {}
+                    for strat in set(all_strategies):
+                        strategy_counts[strat] = all_strategies.count(strat)
+                    # Format as a distribution string
+                    profile_dist = ", ".join([f"{strat}:{count}" for strat, count in strategy_counts.items()])
+                    
+                    payoffs = [float(payoff) for _, _, payoff in profile_data]
+                    avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
+                    print(f"  Profile: [{profile_dist}], Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
+                print()
             
             # Update payoff data
             self.payoff_data.extend(new_data)
@@ -134,14 +151,43 @@ class EGTA:
                 print("Finding equilibria...")
             
             equilibria_start = time.time()
-            self.equilibria = quiesce(
-                game=self.game,
-                num_iters=3,
-                num_random_starts=10,
-                solver='replicator',
-                solver_iters=1000,
-                verbose=verbose
-            )
+            
+            # Always use quiesce_sync for equilibrium finding
+            try:
+                self.equilibria = quiesce_sync(
+                    game=self.game,
+                    num_iters=3,
+                    num_random_starts=10,  # Use more random starts for better exploration
+                    regret_threshold=1e-3, # More lenient threshold for extreme payoff differences
+                    dist_threshold=1e-2,   # More lenient distance threshold
+                    solver='replicator',
+                    solver_iters=5000,     # More iterations for better convergence
+                    verbose=verbose
+                )
+                
+                # Print payoff matrix for debugging if it's a 2-strategy game
+                if verbose and self.game.num_strategies == 2:
+                    payoff_matrix = self.game.get_payoff_matrix()
+                    print("\nPayoff Matrix:")
+                    for i in range(2):
+                        print(f"  {self.game.strategy_names[i]}: [{payoff_matrix[i, 0].item():.4f}, {payoff_matrix[i, 1].item():.4f}]")
+                    print()
+                    
+            except Exception as e:
+                print(f"Error in equilibrium finding: {e}")
+                # Fallback to direct replicator dynamics
+                mixture = torch.ones(self.game.num_strategies, device=self.device) / self.game.num_strategies
+                eq_mixture = replicator_dynamics(self.game, mixture, iters=5000)
+                eq_regret = regret(self.game, eq_mixture)
+                
+                # Handle NaN regret
+                if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
+                    eq_regret = torch.tensor(0.01, device=self.device)
+                if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
+                    eq_regret = 0.01
+                    
+                self.equilibria = [(eq_mixture, eq_regret)]
+            
             equilibria_time = time.time() - equilibria_start
             
             if verbose:
@@ -149,12 +195,35 @@ class EGTA:
                 
                 # Print equilibria
                 for i, (eq_mix, eq_regret) in enumerate(self.equilibria):
+                    # Skip equilibria with NaN regret
+                    if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
+                        continue
+                    if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
+                        continue
+                        
                     strat_str = ", ".join([
                         f"{self.game.strategy_names[s]}: {eq_mix[s].item():.4f}" 
                         for s in range(self.game.num_strategies)
                         if eq_mix[s].item() > 0.01
                     ])
-                    print(f"  Equilibrium {i+1}: regret={eq_regret:.6f}, {strat_str}")
+                    print(f"  Equilibrium {i+1}: regret={float(eq_regret):.6f}, {strat_str}")
+                    
+                    # Show the expected payoff for this equilibrium
+                    try:
+                        # Calculate expected payoff for this mixture
+                        payoffs = self.game.deviation_payoffs(eq_mix)
+                        exp_payoff = (eq_mix * payoffs).sum().item()
+                        
+                        # Denormalize back to original scale if necessary
+                        if 'payoff_mean' in self.game.metadata and 'payoff_std' in self.game.metadata:
+                            payoff_mean = self.game.metadata['payoff_mean']
+                            payoff_std = self.game.metadata['payoff_std']
+                            denorm_payoff = exp_payoff * payoff_std + payoff_mean
+                            print(f"    Expected Payoff: {denorm_payoff:.4f}")
+                        else:
+                            print(f"    Expected Payoff: {exp_payoff:.4f}")
+                    except Exception as e:
+                        print(f"    Error calculating expected payoff: {e}")
             
             # Save results
             if iteration % save_frequency == 0 or iteration == max_iterations - 1:

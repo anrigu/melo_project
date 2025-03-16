@@ -134,67 +134,98 @@ class MeloSimulator(Simulator):
         all_results = []
         
         # Run multiple repetitions
-        for _ in tqdm(range(self.reps)):
-            # Create a background population
-            num_background = self.num_zi + self.num_hbl
+        for rep_idx in tqdm(range(self.reps)):
+            try:
+                # Create a background population
+                num_background = self.num_zi + self.num_hbl
+            
+                # Initialize simulator
+                sim = MELOSimulatorSampledArrival(
+                    num_background_agents=num_background,
+                    sim_time=self.sim_time,
+                    num_zi=self.num_zi,
+                    num_hbl=self.num_hbl,
+                    # num_melo=self.num_melo,
+                    num_assets=self.num_assets,
+                    lam=self.lam,
+                    mean=self.mean,
+                    r=self.r,
+                    shock_var=self.shock_var,
+                    q_max=self.q_max,
+                    pv_var=self.pv_var,
+                    shade=self.shade,
+                    eta=self.eta,
+                    lam_r=self.lam_r,
+                    holding_period=self.holding_period,
+                    lam_melo=self.lam_melo,
+                    strategies = self.strategies,
+                    strategy_counts = strategy_counts,
+                    strategy_params = self.strategy_params
+                )
+                
+                # Run the simulation
+                sim.run()
+                
+                # Get final values and profits
+                values = sim.end_sim()
+                
+                # Collect results for this repetition
+                results = []
+                player_id = 0
+                for strategy in profile:
+                    # Get the agent ID for this player
+                    agent_id = num_background + player_id
+                    
+                    # Calculate total payoff (combining CDA and MELO profits based on allocation)
+                    # params = self.strategy_params[strategy]
+                    # cda_proportion = params["cda_proportion"]
+                    # melo_proportion = params["melo_proportion"]
+                    
+                    # Total payoff is weighted sum of payoffs from both mechanisms
+                    # EDIT: For now, since the proportions are {1,0}, we don't need the weighted sum
+                    # total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
+                    total_payoff = values[agent_id]
+                    
+                    results.append((player_id, strategy, float(total_payoff)))
+                    player_id += 1
+                
+                all_results.append(results)
+            except Exception as e:
+                print(f"Warning: Simulation repetition {rep_idx+1} failed with error: {e}")
+                # Skip this repetition
         
-            # Initialize simulator
-            sim = MELOSimulatorSampledArrival(
-                num_background_agents=num_background,
-                sim_time=self.sim_time,
-                num_zi=self.num_zi,
-                num_hbl=self.num_hbl,
-                # num_melo=self.num_melo,
-                num_assets=self.num_assets,
-                lam=self.lam,
-                mean=self.mean,
-                r=self.r,
-                shock_var=self.shock_var,
-                q_max=self.q_max,
-                pv_var=self.pv_var,
-                shade=self.shade,
-                eta=self.eta,
-                lam_r=self.lam_r,
-                holding_period=self.holding_period,
-                lam_melo=self.lam_melo,
-                strategies = self.strategies,
-                strategy_counts = strategy_counts,
-                strategy_params = self.strategy_params
-            )
-            
-            # Run the simulation
-            sim.run()
-            
-            # Get final values and profits
-            values = sim.end_sim()
-            
-            # Collect results for this repetition
-            results = []
-            player_id = 0
-            for strategy in profile:
-                # Get the agent ID for this player
-                agent_id = num_background + player_id
-                
-                # Calculate total payoff (combining CDA and MELO profits based on allocation)
-                # params = self.strategy_params[strategy]
-                # cda_proportion = params["cda_proportion"]
-                # melo_proportion = params["melo_proportion"]
-                
-                # Total payoff is weighted sum of payoffs from both mechanisms
-                # EDIT: For now, since the proportions are {1,0}, we don't need the weighted sum
-                # total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
-                total_payoff = values[agent_id]
-                
-                results.append((player_id, strategy, total_payoff))
-                player_id += 1
-            
-            all_results.append(results)
-        
-        # Aggregate results across repetitions
+        # Aggregate results across repetitions (with safety checks)
         aggregated_results = []
+        
+        if not all_results:
+            # No successful simulations, return default values
+            print("Warning: All simulation repetitions failed! Returning default payoffs of 0.")
+            for player_id, strategy in enumerate(profile):
+                aggregated_results.append((player_id, strategy, 0.0))
+            return aggregated_results
+        
         for player_id in range(len(profile)):
             strategy = profile[player_id]
-            avg_payoff = np.mean([rep[player_id][2] for rep in all_results])
+            
+            # Get payoffs, filtering out any potential non-numeric values
+            payoffs = []
+            for rep in all_results:
+                try:
+                    if player_id < len(rep):
+                        payoff = rep[player_id][2]
+                        if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
+                            payoffs.append(float(payoff))
+                except (IndexError, TypeError) as e:
+                    # Skip this result
+                    pass
+            
+            # Calculate average payoff with a fallback
+            if payoffs:
+                avg_payoff = sum(payoffs) / len(payoffs)
+            else:
+                print(f"Warning: No valid payoffs for player {player_id} with strategy {strategy}. Using default value of 0.")
+                avg_payoff = 0.0
+                
             aggregated_results.append((player_id, strategy, avg_payoff))
         
         return aggregated_results

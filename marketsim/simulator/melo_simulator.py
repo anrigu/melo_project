@@ -200,10 +200,21 @@ class MELOSimulatorSampledArrival:
                             current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
                             quantity = matched_order.order.order_type*matched_order.order.quantity
                             cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                            
+                            # Update position and cash
                             current_agent.update_position(quantity, cash)
-                            # print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
-                            # print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
-                            # print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
+                            
+                            # Update MELO profit based on trade direction
+                            print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
+                            print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
+                            
+                            # Update the MELO profit: BUY (1) decreases profit, SELL (-1) increases profit
+                            if matched_order.order.order_type == 1:  # BUY
+                                current_agent.melo_profit -= float(matched_order.price) * matched_order.order.quantity
+                            else:  # SELL
+                                current_agent.melo_profit += float(matched_order.price) * matched_order.order.quantity
+                            
+                            print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
                         
             new_orders = self.market.step()
             for matched_order in new_orders:
@@ -230,7 +241,7 @@ class MELOSimulatorSampledArrival:
                             current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
                             quantity = matched_order.order.order_type*matched_order.order.quantity
                             cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
-                            self.agents[agent_id].update_position(quantity, cash)
+                            current_agent.update_position(quantity, cash)
         else:
             self.end_sim()
 

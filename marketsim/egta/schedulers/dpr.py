@@ -24,15 +24,18 @@ class DPRScheduler(Scheduler):
                 num_players: int, 
                 subgame_size: int = 3,
                 batch_size: int = 10,
+                reduction_size: Optional[int] = None,
                 seed: Optional[int] = None):
         """
         Initialize a DPR scheduler.
         
         Args:
             strategies: List of strategy names
-            num_players: Number of players
+            num_players: Number of players in the full game (N)
             subgame_size: Size of subgames to explore
             batch_size: Number of profiles to return per batch
+            reduction_size: Number of players in the reduced game (n)
+                If None, uses the full num_players (no reduction)
             seed: Random seed
         """
         self.strategies = strategies
@@ -42,6 +45,15 @@ class DPRScheduler(Scheduler):
         self.rand = random.Random(seed)
         self.game = None
         
+        # Set reduction size (n) - the number of players in the reduced game
+        self.reduction_size = reduction_size if reduction_size is not None else num_players
+        
+        # Calculate the DPR scaling factor: (N-1)/(n-1)
+        if self.reduction_size < self.num_players:
+            self.scaling_factor = (self.num_players - 1) / (self.reduction_size - 1)
+        else:
+            self.scaling_factor = 1.0
+            
         # Track profiles we've seen and scheduled
         self.scheduled_profiles: Set[Tuple[str, ...]] = set()
         self.requested_subgames: List[Set[str]] = []
@@ -68,8 +80,9 @@ class DPRScheduler(Scheduler):
         subgame_list = list(subgame)
         
         # Generate all possible distributions of players among strategies
+        # Use the reduction_size instead of full num_players to reduce profile count
         profiles = []
-        for counts in self._distribute_players(len(subgame_list), self.num_players):
+        for counts in self._distribute_players(len(subgame_list), self.reduction_size):
             profile = []
             for i, count in enumerate(counts):
                 profile.extend([subgame_list[i]] * count)
@@ -148,6 +161,22 @@ class DPRScheduler(Scheduler):
         
         return candidates
     
+    def scale_payoffs(self, payoffs: torch.Tensor) -> torch.Tensor:
+        """
+        Apply DPR scaling to convert reduced game payoffs to full game payoffs.
+        Uses the (N-1)/(n-1) scaling factor.
+        
+        Args:
+            payoffs: Payoffs from the reduced game
+        
+        Returns:
+            Scaled payoffs for the full game
+        """
+        if self.scaling_factor == 1.0:
+            return payoffs
+            
+        return payoffs * self.scaling_factor
+    
     def _select_deviating_strategies(self, game: Game, mixture: np.ndarray, num_deviations: int = 2) -> Set[str]:
         """
         Select strategies with highest deviation payoff.
@@ -164,9 +193,12 @@ class DPRScheduler(Scheduler):
         device = game.game.device
         mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
         
-        payoffs = game.deviation_payoffs(mixture_tensor).cpu().numpy()
+        # Get deviation payoffs and apply scaling
+        payoffs = game.deviation_payoffs(mixture_tensor)
+        scaled_payoffs = self.scale_payoffs(payoffs)
         
-        sorted_indices = np.argsort(-payoffs) 
+        # Sort by scaled payoffs
+        sorted_indices = np.argsort(-scaled_payoffs.cpu().numpy())
         
         deviating_indices = sorted_indices[:num_deviations]
         
@@ -198,6 +230,7 @@ class DPRScheduler(Scheduler):
         if game is None:
             profiles_to_simulate = []
             for subgame in self.requested_subgames:
+                # Generate profiles using the reduced player count
                 profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         else:
             self.game = game
@@ -208,6 +241,7 @@ class DPRScheduler(Scheduler):
             for candidate in candidates:
                 support_strategies = self._select_support_strategies(game, candidate)
                 
+                # Strategies with highest scaled deviation payoffs
                 deviating_strategies = self._select_deviating_strategies(game, candidate)
                 
                 new_subgame = support_strategies.union(deviating_strategies)
@@ -221,6 +255,7 @@ class DPRScheduler(Scheduler):
             
             profiles_to_simulate = []
             for subgame in new_subgames:
+                # Generate profiles using the reduced player count
                 profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         
         new_profiles = []
@@ -242,4 +277,18 @@ class DPRScheduler(Scheduler):
         Args:
             game: Game with updated data
         """
-        self.game = game 
+        self.game = game
+        
+    def get_scaling_info(self) -> Dict[str, float]:
+        """
+        Get information about the current DPR reduction and scaling.
+        
+        Returns:
+            Dictionary with scaling information
+        """
+        return {
+            "full_game_players": self.num_players,
+            "reduced_game_players": self.reduction_size,
+            "scaling_factor": self.scaling_factor,
+            "is_reduced": self.num_players != self.reduction_size
+        } 
