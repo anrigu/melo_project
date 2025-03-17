@@ -13,7 +13,9 @@ import math
 from collections import defaultdict
 
 def sample_arrivals(p, num_samples):
-    geometric_dist = dist.Geometric(torch.tensor([p]))
+    # Ensure p is a float tensor - this fixes the torch.finfo error
+    p_tensor = torch.tensor([float(p)], dtype=torch.float32)
+    geometric_dist = dist.Geometric(p_tensor)
     return geometric_dist.sample((num_samples,)).squeeze()  # Returns a tensor of 10000 sampled time steps
 
 
@@ -293,5 +295,7 @@ class MELOSimulatorSampledArrival:
 
 
 def sample_arrivals(p, num_samples):
-    geometric_dist = dist.Geometric(torch.tensor([p]))
+    # Ensure p is a float tensor - this fixes the torch.finfo error 
+    p_tensor = torch.tensor([float(p)], dtype=torch.float32)
+    geometric_dist = dist.Geometric(p_tensor)
     return geometric_dist.sample((num_samples,)).squeeze()  # Returns a tensor of 1000 sampled time steps
