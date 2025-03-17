@@ -550,7 +550,7 @@ def quiesce_sync(
     regret_threshold=1e-3,
     dist_threshold=0.05,
     restricted_game_size=4,
-    solver="fictitious_play",
+    solver="replicator_dynamics",
     solver_iters=1000,
     verbose=False
 ):

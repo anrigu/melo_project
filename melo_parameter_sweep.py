@@ -10,7 +10,7 @@ import time
 import json
 from tqdm import tqdm
 
-def run_single_experiment(params, num_players=2, reps=10):
+def run_single_experiment(params, num_players=10, reps=10):
     """Run a single experiment with the given parameters."""
     simulator = MeloSimulator(
         num_strategic=num_players,
