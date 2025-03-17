@@ -78,7 +78,7 @@ class MeloSimulator(Simulator):
         self.num_hbl = num_hbl
         # self.num_melo = num_melo
         self.reps = reps
-        self.order_quantity = 5  # Fixed order quantity as specified
+        self.order_quantity = 10  # Fixed order quantity as specified
         
         # Define strategies as allocation proportions between CDA and MELO
         # Format: "MELO_X_Y" where X is percentage in CDA and Y is percentage in MELO
@@ -145,7 +145,7 @@ class MeloSimulator(Simulator):
                     sim_time=self.sim_time,
                     num_zi=self.num_zi,
                     num_hbl=self.num_hbl,
-                    # num_melo=self.num_melo,
+                    num_strategic=self.num_strategic,
                     num_assets=self.num_assets,
                     lam=self.lam,
                     mean=self.mean,

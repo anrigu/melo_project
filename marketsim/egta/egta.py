@@ -15,6 +15,7 @@ from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.simulators.base import Simulator
 from marketsim.egta.solvers.equilibria import quiesce, quiesce_sync, replicator_dynamics, regret
+from marketsim.game.symmetric_game import SymmetricGame
 
 
 class EGTA:
@@ -92,8 +93,15 @@ class EGTA:
             if verbose:
                 print(f"\nIteration {iteration+1}/{max_iterations}")
             
-            # Get next batch of profiles to simulate
-            profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+            # FIXED SECTION: Always generate profiles for the full game, not reduced game
+            if isinstance(self.scheduler, DPRScheduler):
+                original_reduction_size = self.scheduler.reduction_size
+                self.scheduler.reduction_size = self.scheduler.num_players
+                profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+                self.scheduler.reduction_size = original_reduction_size
+            else:
+                # For non-DPR schedulers, proceed as normal
+                profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
             
             if not profiles_to_simulate:
                 if verbose:
@@ -135,7 +143,7 @@ class EGTA:
             # Create or update game
             if self.game is None:
                 # Create new game
-                self.game = Game.from_payoff_data(
+                self.game = Game.from_payoff_data( #builds full game
                     payoff_data=self.payoff_data,
                     device=self.device
                 )
@@ -152,11 +160,22 @@ class EGTA:
             
             equilibria_start = time.time()
             
+            # Check if we're using DPR and create reduced game if so
+            if isinstance(self.scheduler, DPRScheduler):
+                if verbose:
+                    print(f"Using DPR: Creating reduced game with {self.scheduler.reduction_size} players...")
+                reduced_game = self._create_reduced_game(self.game, self.scheduler.reduction_size)
+                
+                if verbose:
+                    print(f"Solving equilibria on reduced game (scaling factor: {self.scheduler.scaling_factor:.2f})")
+            else:
+                reduced_game = self.game
+            
             # Always use quiesce_sync for equilibrium finding
             try:
                 self.equilibria = quiesce_sync(
-                    game=self.game,
-                    num_iters=3,
+                    game=reduced_game,  # Use reduced game for equilibrium finding
+                    num_iters=100,
                     num_random_starts=10,  # Use more random starts for better exploration
                     regret_threshold=1e-3, # More lenient threshold for extreme payoff differences
                     dist_threshold=1e-2,   # More lenient distance threshold
@@ -166,19 +185,19 @@ class EGTA:
                 )
                 
                 # Print payoff matrix for debugging if it's a 2-strategy game
-                if verbose and self.game.num_strategies == 2:
-                    payoff_matrix = self.game.get_payoff_matrix()
-                    print("\nPayoff Matrix:")
+                if verbose and reduced_game.num_strategies == 2:
+                    payoff_matrix = reduced_game.get_payoff_matrix()
+                    print("\nReduced Game Payoff Matrix:")
                     for i in range(2):
-                        print(f"  {self.game.strategy_names[i]}: [{payoff_matrix[i, 0].item():.4f}, {payoff_matrix[i, 1].item():.4f}]")
+                        print(f"  {reduced_game.strategy_names[i]}: [{payoff_matrix[i, 0].item():.4f}, {payoff_matrix[i, 1].item():.4f}]")
                     print()
                     
             except Exception as e:
                 print(f"Error in equilibrium finding: {e}")
                 # Fallback to direct replicator dynamics
-                mixture = torch.ones(self.game.num_strategies, device=self.device) / self.game.num_strategies
-                eq_mixture = replicator_dynamics(self.game, mixture, iters=5000)
-                eq_regret = regret(self.game, eq_mixture)
+                mixture = torch.ones(reduced_game.num_strategies, device=self.device) / reduced_game.num_strategies
+                eq_mixture = replicator_dynamics(reduced_game, mixture, iters=5000)
+                eq_regret = regret(reduced_game, eq_mixture)
                 
                 # Handle NaN regret
                 if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
@@ -210,18 +229,34 @@ class EGTA:
                     
                     # Show the expected payoff for this equilibrium
                     try:
-                        # Calculate expected payoff for this mixture
-                        payoffs = self.game.deviation_payoffs(eq_mix)
-                        exp_payoff = (eq_mix * payoffs).sum().item()
+                        # Is this a DPR reduced game?
+                        is_dpr = isinstance(self.scheduler, DPRScheduler)
                         
-                        # Denormalize back to original scale if necessary
-                        if 'payoff_mean' in self.game.metadata and 'payoff_std' in self.game.metadata:
-                            payoff_mean = self.game.metadata['payoff_mean']
-                            payoff_std = self.game.metadata['payoff_std']
-                            denorm_payoff = exp_payoff * payoff_std + payoff_mean
-                            print(f"    Expected Payoff: {denorm_payoff:.4f}")
+                        # Calculate expected payoff based on the appropriate game
+                        if is_dpr:
+                            # Show both reduced and full game payoffs
+                            reduced_payoffs = reduced_game.deviation_payoffs(eq_mix)
+                            reduced_exp_payoff = (eq_mix * reduced_payoffs).sum().item()
+                            
+                            # Calculate full game expected payoff by scaling
+                            scaling_factor = self.scheduler.scaling_factor
+                            full_exp_payoff = reduced_exp_payoff * scaling_factor
+                            
+                            print(f"    Expected Payoff (Reduced Game): {reduced_exp_payoff:.4f}")
+                            print(f"    Expected Payoff (Full Game): {full_exp_payoff:.4f}")
                         else:
-                            print(f"    Expected Payoff: {exp_payoff:.4f}")
+                            # Regular game
+                            payoffs = self.game.deviation_payoffs(eq_mix)
+                            exp_payoff = (eq_mix * payoffs).sum().item()
+                            
+                            # Denormalize if necessary
+                            if 'payoff_mean' in self.game.metadata and 'payoff_std' in self.game.metadata:
+                                payoff_mean = self.game.metadata['payoff_mean']
+                                payoff_std = self.game.metadata['payoff_std']
+                                denorm_payoff = exp_payoff * payoff_std + payoff_mean
+                                print(f"    Expected Payoff: {denorm_payoff:.4f}")
+                            else:
+                                print(f"    Expected Payoff: {exp_payoff:.4f}")
                     except Exception as e:
                         print(f"    Error calculating expected payoff: {e}")
             
@@ -336,3 +371,41 @@ class EGTA:
                 print(f"  {strat}: {freq:.4f}")
         
         return results 
+
+    def _create_reduced_game(self, full_game, reduction_size):
+        """
+        Create a reduced game with fewer players for DPR.
+        
+        Args:
+            full_game: The full game with original number of players
+            reduction_size: Number of players in the reduced game
+            
+        Returns:
+            Reduced game with rescaled payoffs
+        """
+        if not isinstance(self.scheduler, DPRScheduler):
+            return full_game
+            
+        # Calculate the scaling factor: (n-1)/(r-1)
+        scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
+        
+        # Create a new SymmetricGame with reduced player count
+        reduced_sym_game = SymmetricGame(
+            num_players=reduction_size,
+            num_actions=full_game.game.num_actions,
+            config_table=full_game.game.config_table.clone(),
+            payoff_table=full_game.game.payoff_table.clone() / scaling_factor,  # Rescale payoffs
+            strategy_names=full_game.game.strategy_names,
+            device=full_game.game.device,
+            offset=full_game.game.offset,
+            scale=full_game.game.scale
+        )
+        
+        # Create metadata for the reduced game
+        metadata = {**full_game.metadata} if full_game.metadata else {}
+        metadata['dpr_reduced'] = True
+        metadata['original_players'] = full_game.num_players
+        metadata['reduced_players'] = reduction_size
+        metadata['scaling_factor'] = scaling_factor
+        
+        return Game(reduced_sym_game, metadata) 

@@ -25,6 +25,7 @@ class MELOSimulatorSampledArrival:
                  sim_time: int,
                  num_zi: int,
                  num_hbl: int,
+                 num_strategic: int,
                  strategies = None,
                  strategy_counts = None,
                  strategy_params = None,
@@ -207,8 +208,8 @@ class MELOSimulatorSampledArrival:
                             current_agent.update_position(quantity, cash)
                             
                             # Update MELO profit based on trade direction
-                            print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
-                            print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
+                            ##print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
+                            ##print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
                             
                             # Update the MELO profit: BUY (1) decreases profit, SELL (-1) increases profit
                             if matched_order.order.order_type == 1:  # BUY
@@ -216,7 +217,7 @@ class MELOSimulatorSampledArrival:
                             else:  # SELL
                                 current_agent.melo_profit += float(matched_order.price) * matched_order.order.quantity
                             
-                            print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
+                            ##print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
                         
             new_orders = self.market.step()
             for matched_order in new_orders:
