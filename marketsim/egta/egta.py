@@ -71,7 +71,8 @@ class EGTA:
            max_iterations: int = 10, 
            profiles_per_iteration: int = 10,
            save_frequency: int = 1,
-           verbose: bool = True) -> Game:
+           verbose: bool = True,
+           quiesce_kwargs: Optional[Dict] = None) -> Game:
         """
         Run the EGTA process.
         
@@ -80,12 +81,38 @@ class EGTA:
             profiles_per_iteration: Number of profiles to simulate per iteration
             save_frequency: How often to save results (in iterations)
             verbose: Whether to print progress
+            quiesce_kwargs: Optional dictionary of parameters to pass to quiesce_sync
             
         Returns:
             The final game
         """
         total_profiles = 0
         start_time = time.time()
+        
+        # Set default quiesce parameters if not provided
+        if quiesce_kwargs is None:
+            quiesce_kwargs = {
+                'num_iters': 100,
+                'num_random_starts': 10,
+                'regret_threshold': 1e-3,
+                'dist_threshold': 1e-2,
+                'solver': 'replicator',
+                'solver_iters': 5000
+            }
+        else:
+            # Ensure all required parameters are present
+            default_quiesce_kwargs = {
+                'num_iters': 100,
+                'num_random_starts': 10,
+                'regret_threshold': 1e-3,
+                'dist_threshold': 1e-2,
+                'solver': 'replicator',
+                'solver_iters': 5000
+            }
+            # Fill in any missing parameters with defaults
+            for key, value in default_quiesce_kwargs.items():
+                if key not in quiesce_kwargs:
+                    quiesce_kwargs[key] = value
         
         for iteration in range(max_iterations):
             iteration_start = time.time()
@@ -175,12 +202,12 @@ class EGTA:
             try:
                 self.equilibria = quiesce_sync(
                     game=reduced_game,  # Use reduced game for equilibrium finding
-                    num_iters=100,
-                    num_random_starts=10,  # Use more random starts for better exploration
-                    regret_threshold=1e-3, # More lenient threshold for extreme payoff differences
-                    dist_threshold=1e-2,   # More lenient distance threshold
-                    solver='replicator',
-                    solver_iters=5000,     # More iterations for better convergence
+                    num_iters=quiesce_kwargs['num_iters'],
+                    num_random_starts=quiesce_kwargs['num_random_starts'],
+                    regret_threshold=quiesce_kwargs['regret_threshold'],
+                    dist_threshold=quiesce_kwargs['dist_threshold'],
+                    solver=quiesce_kwargs['solver'],
+                    solver_iters=quiesce_kwargs['solver_iters'],
                     verbose=verbose
                 )
                 
