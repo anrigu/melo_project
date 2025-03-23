@@ -109,9 +109,8 @@ class MeloAgent(Agent):
                 price -= valuation_offset
             else:
                 price += valuation_offset
-
         order = Order(
-            price=price,
+            price=price.item(),
             quantity=5,
             agent_id=self.get_id(),
             time=t,

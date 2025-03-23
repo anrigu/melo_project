@@ -9,14 +9,15 @@ cumulative_payoffs = defaultdict(float)
 for _ in tqdm(range(250)):
     sim = MELOSimulatorSampledArrival(num_background_agents=25, 
                                       sim_time=10000, 
-                                      lam=5e-3, 
+                                      lam=6e-3, 
                                       mean=1e6, 
-                                      lam_melo=5e-2,
+                                      num_strategic=10,
+                                      lam_melo=1e-3,
                                       r=0.05, 
                                       shock_var=1e2, 
                                       q_max=10,
-                                      num_zi=15,
-                                      num_hbl=0,
+                                      num_zi=14,
+                                      num_hbl=1,
                                       pv_var=5e6,
                                       shade=[10,30])
     sim.run()

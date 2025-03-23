@@ -95,13 +95,14 @@ class MELOSimulatorSampledArrival:
             self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
             self.arrival_index += 1
             self.agents[agent_id] = (
-                ZIAgent(
+                HBLAgent(
                     agent_id=agent_id,
                     market=self.market,
                     q_max=q_max,
                     shade=shade,
                     pv_var=pv_var,
-                    eta=eta
+                    L=4,
+                    arrival_rate=self.lam
                 ))
 
         if not self.strategies:
@@ -150,6 +151,7 @@ class MELOSimulatorSampledArrival:
             
             if agents:
                 for agent_id in agents:
+
                     #Normal orderbook traders
                     agent = self.agents[agent_id]
                     self.market.withdraw_all(agent_id)

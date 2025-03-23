@@ -16,13 +16,18 @@ from marketsim.fourheap.constants import BUY, SELL
 class MeloSimulator(Simulator):
     """
     Interface to the MELO simulator for EGTA.
+    Shock, holding period, add an hbl
+    15 - 8
+    10 - 4
+    graph payoffs 
+    (N+1 - k)! / 15!
     """
     
     def __init__(self, 
                 num_strategic: int = 10,
                 sim_time: int = 10000,
                 num_assets: int = 1,
-                lam: float = 5e-2,
+                lam: float = 6e-3,
                 mean: float = 1e6,
                 r: float = 0.05,
                 shock_var: float = 10,
@@ -31,14 +36,17 @@ class MeloSimulator(Simulator):
                 shade: Optional[List[float]] = None,
                 eta: float = 0.5,
                 lam_r: Optional[float] = None,
-                holding_period: int = 10,
-                lam_melo: float = 5e-1,
+                holding_period: int = 100,
+                lam_melo: float = 1e-3,
                 # Add these parameters
                 num_zi: int = 15,
                 num_hbl: int = 0,
                 # num_melo: int = 10,
-                reps: int = 100):
+                reps: int = 50):
         """
+        Starting points of rd
+        5-10 arrivals 
+
         Initialize the MELO simulator interface.
         
         Args:
@@ -135,63 +143,63 @@ class MeloSimulator(Simulator):
         
         # Run multiple repetitions
         for rep_idx in tqdm(range(self.reps)):
-            try:
-                # Create a background population
-                num_background = self.num_zi + self.num_hbl
+            # try:
+            # Create a background population
+            num_background = self.num_zi + self.num_hbl
+        
+            # Initialize simulator
+            sim = MELOSimulatorSampledArrival(
+                num_background_agents=num_background,
+                sim_time=self.sim_time,
+                num_zi=self.num_zi,
+                num_hbl=self.num_hbl,
+                num_strategic=self.num_strategic,
+                num_assets=self.num_assets,
+                lam=self.lam,
+                mean=self.mean,
+                r=self.r,
+                shock_var=self.shock_var,
+                q_max=self.q_max,
+                pv_var=self.pv_var,
+                shade=self.shade,
+                eta=self.eta,
+                lam_r=self.lam_r,
+                holding_period=self.holding_period,
+                lam_melo=self.lam_melo,
+                strategies = self.strategies,
+                strategy_counts = strategy_counts,
+                strategy_params = self.strategy_params
+            )
             
-                # Initialize simulator
-                sim = MELOSimulatorSampledArrival(
-                    num_background_agents=num_background,
-                    sim_time=self.sim_time,
-                    num_zi=self.num_zi,
-                    num_hbl=self.num_hbl,
-                    num_strategic=self.num_strategic,
-                    num_assets=self.num_assets,
-                    lam=self.lam,
-                    mean=self.mean,
-                    r=self.r,
-                    shock_var=self.shock_var,
-                    q_max=self.q_max,
-                    pv_var=self.pv_var,
-                    shade=self.shade,
-                    eta=self.eta,
-                    lam_r=self.lam_r,
-                    holding_period=self.holding_period,
-                    lam_melo=self.lam_melo,
-                    strategies = self.strategies,
-                    strategy_counts = strategy_counts,
-                    strategy_params = self.strategy_params
-                )
+            # Run the simulation
+            sim.run()
+            
+            # Get final values and profits
+            values = sim.end_sim()
+            
+            # Collect results for this repetition
+            results = []
+            player_id = 0
+            for strategy in profile:
+                # Get the agent ID for this player
+                agent_id = num_background + player_id
                 
-                # Run the simulation
-                sim.run()
+                # Calculate total payoff (combining CDA and MELO profits based on allocation)
+                # params = self.strategy_params[strategy]
+                # cda_proportion = params["cda_proportion"]
+                # melo_proportion = params["melo_proportion"]
                 
-                # Get final values and profits
-                values = sim.end_sim()
+                # Total payoff is weighted sum of payoffs from both mechanisms
+                # EDIT: For now, since the proportions are {1,0}, we don't need the weighted sum
+                # total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
+                total_payoff = values[agent_id]
                 
-                # Collect results for this repetition
-                results = []
-                player_id = 0
-                for strategy in profile:
-                    # Get the agent ID for this player
-                    agent_id = num_background + player_id
-                    
-                    # Calculate total payoff (combining CDA and MELO profits based on allocation)
-                    # params = self.strategy_params[strategy]
-                    # cda_proportion = params["cda_proportion"]
-                    # melo_proportion = params["melo_proportion"]
-                    
-                    # Total payoff is weighted sum of payoffs from both mechanisms
-                    # EDIT: For now, since the proportions are {1,0}, we don't need the weighted sum
-                    # total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
-                    total_payoff = values[agent_id]
-                    
-                    results.append((player_id, strategy, float(total_payoff)))
-                    player_id += 1
-                
-                all_results.append(results)
-            except Exception as e:
-                print(f"Warning: Simulation repetition {rep_idx+1} failed with error: {e}")
+                results.append((player_id, strategy, float(total_payoff)))
+                player_id += 1
+            
+            all_results.append(results)
+            # except Exception as e:
+            #     print(f"Warning: Simulation repetition {rep_idx+1} failed with error: {e}")
                 # Skip this repetition
         
         # Aggregate results across repetitions (with safety checks)

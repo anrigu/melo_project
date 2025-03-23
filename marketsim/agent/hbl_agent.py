@@ -341,7 +341,7 @@ class HBLAgent(Agent):
                         # (I.e. function is piecewise continuous)
                         if spline_interp_objects[1][i][0] <= price <= spline_interp_objects[1][i][1]:
                             return -((estimate + private_value - price) * spline_interp_objects[0][i](price))
-                    
+
                     if price < np.min(np.array(spline_interp_objects[1])[:, 0]):
                         return -((price - (estimate + private_value)) * spline_interp_objects[0][np.argmin(np.array(spline_interp_objects[1])[:, 0])](price))
                     elif price > np.max(np.array(spline_interp_objects[1])[:, 1]): #delta error
@@ -358,7 +358,8 @@ class HBLAgent(Agent):
                 point_surpluses = vOptimize(test_points)
                 min_index = np.argmin(point_surpluses)
                 min_survey = test_points[min_index]
-                
+                if isinstance(min_survey, np.ndarray):
+                    min_survey = min_survey[0]
                 max_x = sp.optimize.minimize(vOptimize, min_survey, bounds=[[lb, ub]])
                 
                 return max_x.x.item(), -max_x.fun
@@ -505,10 +506,7 @@ class HBLAgent(Agent):
                 point_surpluses = vOptimize(test_points)
                 min_index = np.argmin(point_surpluses)
                 min_survey = test_points[min_index]
-                if min_survey <= lb:
-                    min_survey += 0.01
-                elif min_survey >= ub:
-                    min_survey -= 0.01
+                
                 # max_x = min_survey, -np.min(point_surpluses)
                 #REINSTATE AFTER
                 max_x = sp.optimize.minimize(vOptimize, min_survey, bounds=[[lb, ub]])
@@ -646,11 +644,11 @@ class HBLAgent(Agent):
             Behavior reverts to ZI agent if L > total num of trades executed.
         """
         t = self.market.get_time()
-        random.seed(t + seed)
+        # random.seed(t + seed)
         # estimate = self.estimate_fundamental() + np.random.normal(0, 7e4)
         estimate = self.estimate_fundamental()
         spread = self.shade[1] - self.shade[0]
-        if len(self.market.matched_orders) >= 2 * self.L and self.market.order_book.buy_unmatched.peek_order() != None and self.market.order_book.sell_unmatched.peek_order() != None:
+        if len(self.market.matched_orders) >= 2 * self.L and self.market.order_book.buy_unmatched.peek_order_id() != None and self.market.order_book.sell_unmatched.peek_order_id() != None:
             opt_price, opt_price_est_surplus = self.determine_optimal_price(side, estimate)
     
             order = Order(
