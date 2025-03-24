@@ -335,6 +335,10 @@ class HBLAgent(Agent):
                     Returns:
                         Returns expected surplus of price p.
                     """
+                    # If price is an array (like when called with np.vectorize), use the first element
+                    if hasattr(price, "__len__") and not isinstance(price, str):
+                        price = float(price[0])
+                        
                     for i in range(len(spline_interp_objects[0])):
                         # Spline interpolation objects is an array of interpolations over the entire domain. 
                         # There's a different interpolation function for each continuous partition of the domain. 
@@ -360,7 +364,12 @@ class HBLAgent(Agent):
                 min_survey = test_points[min_index]
                 if isinstance(min_survey, np.ndarray):
                     min_survey = min_survey[0]
-                max_x = sp.optimize.minimize(vOptimize, min_survey, bounds=[[lb, ub]])
+                
+                # Wrap the optimize function to handle scalar values properly
+                def scalar_optimize(x):
+                    return optimize(float(x))
+                    
+                max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
                 
                 return max_x.x.item(), -max_x.fun
 
@@ -491,6 +500,10 @@ class HBLAgent(Agent):
                     Sell version of the same function above in BUY. 
                     @TODO: Merge the two
                     """
+                    # If price is an array (like when called with np.vectorize), use the first element
+                    if hasattr(price, "__len__") and not isinstance(price, str):
+                        price = float(price[0])
+                        
                     for i in range(len(spline_interp_objects[0])):
                         if spline_interp_objects[1][i][0] <= price <= spline_interp_objects[1][i][1]:
                             return -((price - (estimate + private_value)) * spline_interp_objects[0][i](price))
@@ -507,9 +520,12 @@ class HBLAgent(Agent):
                 min_index = np.argmin(point_surpluses)
                 min_survey = test_points[min_index]
                 
-                # max_x = min_survey, -np.min(point_surpluses)
+                # Wrap the optimize function to handle scalar values properly
+                def scalar_optimize(x):
+                    return optimize(float(x))
+                
                 #REINSTATE AFTER
-                max_x = sp.optimize.minimize(vOptimize, min_survey, bounds=[[lb, ub]])
+                max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
                 # max_x = sp.optimize.differential_evolution(vOptimize, x0=min_survey, bounds=[[lb,ub]])
                     # import pdb; pdb.set_trace()
                 # plt.plot(test_points, point_surpluses, marker='o', linestyle='-',color="cyan")
