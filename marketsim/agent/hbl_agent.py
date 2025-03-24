@@ -369,9 +369,12 @@ class HBLAgent(Agent):
                 def scalar_optimize(x):
                     return optimize(float(x))
                     
-                max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
-                
-                return max_x.x.item(), -max_x.fun
+                try:
+                    max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
+                    return max_x.x.item(), -max_x.fun
+                except:
+                    print("ERROR", lb, ub, test_points)            
+                    return (0,0)
 
             buy_high = float(buy_orders_memory[-1].price)
             buy_high_belief = self.belief_function(buy_high, BUY, last_L_orders)
@@ -457,7 +460,8 @@ class HBLAgent(Agent):
             
             #Assertion check
             if optimal_price == (0,0):
-                raise Exception("Optimal price not found in buy calculation.")
+                print("Optimal price not found in buy calculation.")
+                return estimate + private_value, -1
 
             # For edge case: If a lot of orders have expected surplus of 0 (meaning belief of 0),
             # at least submit order that doesn't lose agent money in the edge case
@@ -524,21 +528,12 @@ class HBLAgent(Agent):
                 def scalar_optimize(x):
                     return optimize(float(x))
                 
-                #REINSTATE AFTER
-                max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
-                # max_x = sp.optimize.differential_evolution(vOptimize, x0=min_survey, bounds=[[lb,ub]])
-                    # import pdb; pdb.set_trace()
-                # plt.plot(test_points, point_surpluses, marker='o', linestyle='-',color="cyan")
-                # plt.scatter(max_x.x.item(), max_x.fun, color="black", s= 15, zorder=3)
-                # plt.scatter(estimate, 0, color="blue", s=15, zorder=3)
-                # plt.scatter(estimate + private_value, 0, color="green", s=15, zorder=2)
-                # plt.xlabel('Test Points')
-                # plt.ylabel('Points')
-                # plt.title('Surplus v Test Points - SELL')
-                # plt.grid(True)
-                # plt.show()
-                # return max_x
-                return max_x.x.item(), -max_x.fun
+                try:
+                    max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
+                    return max_x.x.item(), -max_x.fun
+                except:
+                    print("ERROR", lb, ub, test_points)            
+                    return (0,0)
 
             if best_buy > sell_low:
                 sell_low = best_buy
@@ -626,11 +621,13 @@ class HBLAgent(Agent):
                     # upper_bound = sell_high + 100
                     interpolate(sell_high, upper_bound, sell_high_belief, 0)
                     pass
+            
             optimal_price = expected_surplus_max()
 
             if optimal_price == (0,0):
-                raise Exception("Error in finding optimal price on sell side.")
-            
+                print("Optimal price not found in sell calculation.")
+                return estimate + private_value, 0     
+
             # x = self.belief_function(best_ask + 1,SELL, last_L_orders)
             # z = self.belief_function(min(sell_low, best_ask) + 3/4 * abs(sell_low - best_ask), SELL, last_L_orders)
             # for i in range(len(spline_interp_objects[0])):
