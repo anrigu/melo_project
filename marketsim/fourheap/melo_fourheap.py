@@ -142,10 +142,15 @@ class MELOFourHeap(FourHeap):
             while self.buy_active_queue and self.sell_active_queue: 
                 # Revalidate order queues before processing matches
                 while self.buy_active_queue and self.midpoint > self.buy_active_queue[0].price:
-                    self.buy_cancelled.append(self.buy_active_queue.popleft())
+                    current_order = self.buy_active_queue.popleft()
+                    self.buy_eligibility_queue.add_order(current_order)
+                    #For tracking purposes
+                    self.buy_cancelled.append(current_order)
 
                 while self.sell_active_queue and self.midpoint < self.sell_active_queue[0].price:
-                    self.sell_cancelled.append(self.sell_active_queue.popleft())
+                    current_order = self.sell_active_queue.popleft()
+                    self.sell_eligibility_queue.add_order(current_order)
+                    self.sell_cancelled.append(current_order)
 
                 # If after cancellations there are no matching orders, exit
                 if not self.buy_active_queue or not self.sell_active_queue:
