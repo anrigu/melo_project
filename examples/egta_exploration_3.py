@@ -97,21 +97,48 @@ plt.rcParams['font.size'] = 12
 output_dir = 'results/egta_notebook'
 os.makedirs(output_dir, exist_ok=True)
 
+HOLDING_PERIOD = 320
+SHOCK_VAR = 1e4
+R = 0.01
+NUM_ZI = 15
+NUM_HBL = 0
+
+print("HOLDING PERIOD", HOLDING_PERIOD)
+print("SHOCK=", SHOCK_VAR)
+print("R=", R)
+print("NUM ZI=", NUM_ZI)
+print("NUM HBL=", NUM_HBL)
+
 
 # Create MELO simulator with default parameters
 simulator = MeloSimulator(
-    num_strategic=15,  # Number of strategic MOBI agents
+    num_strategic=10,  # Number of strategic MOBI agents
     # sim_time=100,  # Simulation time horizon
-    # lam=0.01,         # Arrival rate
+    # lam=0.01,         # Arrival ratec
     # mean=100,        # Mean fundamental value
     # r=.9,          # Mean reversion rate
     # q_max=10,        # Maximum inventory
-    holding_period=100, # MELO holding period
-    reps=100,
-    num_zi=24,
-    num_hbl=6
-                      # Number of simulation repetitions per profile
+    holding_period=HOLDING_PERIOD, # MELO holding period
+    reps=10000,
+    r=R,
+    shock_var=SHOCK_VAR,
+    num_zi=NUM_ZI,
+    num_hbl=NUM_HBL                     # Number of simulation repetitions per profile
 )
+
+# simulator = MeloSimulator(
+#     num_strategic=10,  # Number of strategic MOBI agents
+#     # sim_time=100,  # Simulation time horizon
+#     # lam=0.01,         # Arrival ratec
+#     # mean=100,        # Mean fundamental value
+#     # r=.9,          # Mean reversion rate
+#     # q_max=10,        # Maximum inventory
+#     holding_period=HOLDING_PERIOD, # MELO holding period
+#     reps=6000,
+#     shock_var=1e1,
+#     num_zi=15,
+#     num_hbl=0                     # Number of simulation repetitions per profile
+# )
 
 # Get available strategies
 strategies = simulator.get_strategies()
@@ -128,9 +155,9 @@ for strategy in strategies:
 scheduler = DPRScheduler(
     strategies=strategies,
     num_players=10,           # Full game has 10 players (N)
-    reduction_size=8,         # Reduced game has 4 players (n)
+    reduction_size=4,         # Reduced game has 4 players (n)
     subgame_size=min(2, len(strategies)),
-    batch_size=10,
+    batch_size=11,
     seed=42
 )
 
@@ -187,7 +214,8 @@ plt.title('Strategy Frequencies Across Equilibria')
 plt.ylabel('Frequency')
 plt.tight_layout()
 plt.show()  
-plt.savefig('./examples/graphs/1hbl.jpg')
+plt.savefig('./examples/paperResults/15zi_r001_10/{}.jpg'.format(HOLDING_PERIOD))
+# plt.savefig('./examples/new_graphs/supplemental_15/{}.jpg'.format(HOLDING_PERIOD))
 
 # 
 

@@ -116,8 +116,8 @@ class MELOSimulatorSampledArrival:
                         market=self.market,
                         q_max=q_max,
                         pv_var=pv_var,
-                        cda_proportion=0,
-                        melo_proportion=1
+                        cda_proportion=1,
+                        melo_proportion=0
                     ))
         else:
             strategic_agent_id = num_zi + num_hbl
