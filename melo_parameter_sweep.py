@@ -28,7 +28,7 @@ def run_single_experiment(params, num_players=10, reps=10):
     
     profiles = [
 
-        ["MELO_100_0"] * num_players,
+        #["MELO_100_0"] * num_players,
    
         ["MELO_0_100"] * num_players
     ]
@@ -37,9 +37,43 @@ def run_single_experiment(params, num_players=10, reps=10):
     print(f"Simulating profiles with parameters: {params}")
     results = simulator.simulate_profiles(profiles)
     
-    # Calculate average payoffs for each strategy
+    # --- Add accounting print statements --- 
+    if hasattr(simulator, 'last_sim_instance') and simulator.last_sim_instance and hasattr(simulator.last_sim_instance, 'meloMarket'): 
+        market = simulator.last_sim_instance.meloMarket
+        order_book = market.order_book
+
+        if hasattr(market, 'get_placed_count') and \
+           hasattr(order_book, 'get_withdrawn_count') and \
+           hasattr(order_book, 'get_unexecuted_info'):
+            
+            placed_count = market.get_placed_count()
+           
+            matched_qty = sum(mo.order.quantity for mo in market.matched_orders)
+            withdrawn_count = order_book.get_withdrawn_count()
+            unexecuted_info = order_book.get_unexecuted_info()
+            unexecuted_qty = unexecuted_info['unexecuted_qty']
+            unexecuted_count = unexecuted_info['unexecuted_count'] #number of distinct orders unexecuted
+
+            print("--- Simulation Accounting (MELO Market) ---") #clarify scope
+            print(f"  Orders Placed (in MELO): {placed_count}")
+            matched_order_count = order_book.get_matched_order_count()
+            print(f"  Orders Fully Matched (in MELO): {matched_order_count}") 
+            print(f"  Total Quantity Matched (in MELO): {matched_qty}") #still print total quantity
+            print(f"  Orders Withdrawn (from MELO): {withdrawn_count}")
+            print(f"  Unexecuted Orders Remaining (in MELO): {unexecuted_count}")
+            print(f"  Unexecuted Quantity Remaining (in MELO): {unexecuted_qty}")
+            
+            if placed_count != (matched_order_count + withdrawn_count + unexecuted_count):
+                print(f"ACCOUNTING CHECK FAILED: Placed ({placed_count}) != Matched ({matched_order_count}) + Withdrawn ({withdrawn_count}) + Unexecuted ({unexecuted_count})")
+            else:
+                print(f"ACCOUNTING CHECK PASSED: Placed ({placed_count}) == Matched ({matched_order_count}) + Withdrawn ({withdrawn_count}) + Unexecuted ({unexecuted_count})")
+        else:
+            print("Accounting Warning: MeloMarket or its OrderBook missing required counting methods ---")
+    else:
+        print("Accounting Warning: Could not access simulator.last_sim_instance.meloMarket object ---") # Updated warning
+
     cda_payoffs = [payoff for _, strat, payoff in results[0] if strat == "MELO_100_0"]
-    melo_payoffs = [payoff for _, strat, payoff in results[1] if strat == "MELO_0_100"]
+    melo_payoffs = [payoff for _, strat, payoff in results[0] if strat == "MELO_0_100"]
     
     cda_avg = sum(cda_payoffs) / len(cda_payoffs) if cda_payoffs else 0
     melo_avg = sum(melo_payoffs) / len(melo_payoffs) if melo_payoffs else 0
@@ -57,13 +91,13 @@ def run_single_experiment(params, num_players=10, reps=10):
 
 def main():
     param_grid = {
-        "sim_time": [1000],
-        "lam": [0.05, 0.1],
-        "lam_melo": [0.2, 0.5, 1.0],
+        "sim_time": [100],
+        "lam": [0.1],
+        "lam_melo": [0.2],
         "mean": [1e6],
-        "r": [0.01, 0.05],
+        "r": [0.01],
         "q_max": [15],
-        "holding_period": [5, 10, 20]
+        "holding_period": [5]
     }
     
     param_keys = list(param_grid.keys())
@@ -118,3 +152,9 @@ def main():
 
 if __name__ == "__main__":
     main() 
+
+
+ # calculate matched quantity specifically from the MeloMarket's matched_orders
+            # Note: This assumes matched_orders only contains MELO matches. If CDA matches need 
+            # to be included, we'd need to access simulator.last_sim_instance.market.matched_orders too.
+            # Sum the quantity from the nested Order object within MatchedOrder

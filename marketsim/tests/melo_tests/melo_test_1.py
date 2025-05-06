@@ -1,7 +1,13 @@
+import sys
+import os
+
+# Add the project root directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
 from collections import defaultdict
 from marketsim.simulator.melo_simulator import MELOSimulatorSampledArrival
 from tqdm import tqdm
-from agent.agent import Agent
+from marketsim.agent.agent import Agent
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
@@ -23,7 +29,7 @@ for _ in tqdm(range(REPS)):
                                       mean=1e6, 
                                       num_strategic=9,
                                       lam_melo=1e-3,
-                                      r=0.05, 
+                                      r=0.01, 
                                       shock_var=1e1, 
                                       q_max=10,
                                       num_zi=30,

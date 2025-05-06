@@ -220,8 +220,7 @@ def run_egta_experiment(args):
         strat_probs.sort(key=lambda x: x[1], reverse=True)
         # Print all strategies with non-zero probability
         for strat, prob in strat_probs:
-            if prob > 0.001:  # Only show strategies with meaningful probability
-                print(f"  {strat}: {prob:.4f}")
+            print(f"  {strat}: {prob:.4f}")
     
     # Print top strategies
     print("\nTop strategies by frequency across all equilibria:")
@@ -343,7 +342,6 @@ def run_parameter_sweep(args):
         exp_dir = f"{sweep_dir}/h{holding_period}_lam{lam}"
         os.makedirs(exp_dir, exist_ok=True)
         
-        # Create simulator with specific parameters
         sim_args = argparse.Namespace(**vars(args))
         sim_args.holding_period = holding_period
         sim_args.lam = lam
@@ -624,10 +622,8 @@ def main():
     # Run main EGTA experiment
     egta, game, analysis = run_egta_experiment(args)
     
-    # Run parameter sweep if requested
     run_parameter_sweep(args)
     
-    # Run holding period sweep if requested
     run_holding_period_sweep(args)
     
     print(f"\nAll experiments completed. Results saved to {args.output_dir}")

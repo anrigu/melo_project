@@ -184,7 +184,7 @@ class SymmetricGame(AbstractGame):
         
         # [num_configs, num_mixtures], log probs
         log_mixture = torch.log(mixture + self.epsilon)
-        log_config_probs = self.config_table @ log_mixture  # Matrix multiplication
+        log_config_probs = self.config_table @ log_mixture
         
         # calculate deviation payoffs for each action
         # Shape: [num_actions, num_mixtures] (num actions is the same as num stratergies, im just stupid)

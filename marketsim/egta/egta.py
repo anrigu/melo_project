@@ -256,7 +256,7 @@ class EGTA:
                     
                     # Show the expected payoff for this equilibrium
                     try:
-                        # Is this a DPR reduced game?
+                        
                         is_dpr = isinstance(self.scheduler, DPRScheduler)
                         
                         # Calculate expected payoff based on the appropriate game

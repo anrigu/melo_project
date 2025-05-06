@@ -85,7 +85,7 @@ def test_dpr_profile_generation():
     """Test that the DPR scheduler generates profiles correctly."""
     strategies = ["A", "B", "C"]
     num_players = 10
-    reduction_size = 4  # Gives scaling factor (10-1)/(4-1) = 9/3 = 3 (integer)
+    reduction_size = 4  
     
     scheduler = DPRScheduler(
         strategies=strategies, 
@@ -102,11 +102,8 @@ def test_dpr_profile_generation():
     print(f"Number of profiles generated: {len(profiles)}")
     print(f"Example profiles: {profiles[:3]}")
     
-    # For 3 strategies and 4 players, we get 15 profiles
-    # Using the multiset coefficient formula: (n+s-1)! / ((s-1)! * n!) = (4+3-1)! / ((3-1)! * 4!) = 15
     assert len(profiles) == 15
     
-    # Check that each profile has the correct length (reduction_size)
     for profile in profiles:
         assert len(profile) == reduction_size
         assert all(s in strategies for s in profile)

@@ -116,8 +116,8 @@ class MELOSimulatorSampledArrival:
                         market=self.market,
                         q_max=q_max,
                         pv_var=pv_var,
-                        cda_proportion=1,
-                        melo_proportion=0
+                        cda_proportion=0, #TODO switch back
+                        melo_proportion=1
                     ))
         else:
             strategic_agent_id = num_zi + num_hbl
@@ -174,14 +174,13 @@ class MELOSimulatorSampledArrival:
                     # Check if the agent is a MeloAgent with strategy parameters
                     assert isinstance(agent, MeloAgent) and hasattr(agent, 'cda_proportion') and hasattr(agent, 'melo_proportion')
                     # Use the strategy parameters to determine market selection
-                    if random.random() < agent.melo_proportion:
+                    if random.random() < agent.melo_proportion: 
                         marketSelection = MELO
                     else:
                         marketSelection = CDA
                         
                     side = random.choice([BUY, SELL])
                     if marketSelection == MELO:
-
                         #PLACE MELO
                         orders = agent.take_action(side, marketSelection) 
                         self.meloMarket.add_orders(orders)
@@ -197,29 +196,34 @@ class MELOSimulatorSampledArrival:
                     self.arrival_index_melo += 1
 
                 new_orders = self.meloMarket.step(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
-                if len(new_orders[0]) > 0:
+                if len(new_orders[0]) > 0 or len(new_orders[1]) > 0: # Check if there are any matches
+                    print(f"[DEBUG step] Processing {len(new_orders[0]) + len(new_orders[1])} M-ELO matches from meloMarket.step() at time {self.time}") # DEBUG
                     for side_orders in new_orders:
                         for matched_order in side_orders:
                             agent_id = matched_order.order.agent_id
-                            current_agent: MeloAgent = self.agents[agent_id]
-                            current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
-                            quantity = matched_order.order.order_type*matched_order.order.quantity
-                            cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
-                            
-                            # Update position and cash
-                            current_agent.update_position(quantity, cash)
-                            
-                            # Update MELO profit based on trade direction
-                            ##print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
-                            ##print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
-                            
-                            # Update the MELO profit: BUY (1) decreases profit, SELL (-1) increases profit
-                            if matched_order.order.order_type == 1:  # BUY
-                                current_agent.melo_profit -= float(matched_order.price) * matched_order.order.quantity
-                            else:  # SELL
-                                current_agent.melo_profit += float(matched_order.price) * matched_order.order.quantity
-                            
-                            ##print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
+                            print(f"  [DEBUG step] Match for Agent ID: {agent_id}") # DEBUG
+                            if agent_id in self.agents and isinstance(self.agents[agent_id], MeloAgent):
+                                current_agent: MeloAgent = self.agents[agent_id]
+                                print(f"    [DEBUG step] Agent {agent_id} state BEFORE: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}") # DEBUG
+                                current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                                quantity = matched_order.order.order_type*matched_order.order.quantity
+                                cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                                
+                                # Update position and cash
+                                current_agent.update_position(quantity, cash)
+                                print(f"    [DEBUG step] Agent {agent_id} state AFTER update_pos: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}") # DEBUG
+                                
+                                # Update MELO profit based on trade direction
+                                ##print(f"MELO Trade: Agent {agent_id}, Side {matched_order.order.order_type}, Quantity {matched_order.order.quantity}, Price {matched_order.price}")
+                                ##print(f"Agent {agent_id} MELO Profit before trade: {current_agent.melo_profit}")
+                                
+                                # Update the MELO profit: BUY (1) decreases profit, SELL (-1) increases profit
+                                if matched_order.order.order_type == 1:  # BUY
+                                    current_agent.melo_profit -= float(matched_order.price) * matched_order.order.quantity
+                                else:  # SELL
+                                    current_agent.melo_profit += float(matched_order.price) * matched_order.order.quantity
+                                
+                                ##print(f"Agent {agent_id} MELO Profit after trade: {current_agent.melo_profit}")
                         
             new_orders = self.market.step()
             for matched_order in new_orders:
@@ -237,29 +241,55 @@ class MELOSimulatorSampledArrival:
                 # This only matters for Melo Market trades. No need to check for CDA trades
                 #Default return type if no matches = [[], []]
                 melo_matched_orders = self.meloMarket.update_queues(self.market.order_book.get_best_bid(), self.market.order_book.get_best_ask())
-                if len(melo_matched_orders[0]) > 0:
+                if len(melo_matched_orders[0]) > 0 or len(melo_matched_orders[1]) > 0: # Check if there are any matches
+                    print(f"[DEBUG step] Processing {len(melo_matched_orders[0]) + len(melo_matched_orders[1])} M-ELO matches from update_queues (no melo placed) at time {self.time}") # DEBUG
                     for side_orders in melo_matched_orders:
                         for matched_order in side_orders:
                             #TODO: change to update the MELO position not the CDA position becasue PVs are different.
                             agent_id = matched_order.order.agent_id
-                            current_agent: MeloAgent = self.agents[agent_id]
-                            current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
-                            quantity = matched_order.order.order_type*matched_order.order.quantity
-                            cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
-                            current_agent.update_position(quantity, cash)
+                            print(f"  [DEBUG step] Match for Agent ID: {agent_id}") # DEBUG
+                            if agent_id in self.agents and isinstance(self.agents[agent_id], MeloAgent):
+                                current_agent: MeloAgent = self.agents[agent_id]
+                                print(f"    [DEBUG step] Agent {agent_id} state BEFORE: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}") # DEBUG
+                                current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                                quantity = matched_order.order.order_type*matched_order.order.quantity
+                                cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                                current_agent.update_position(quantity, cash)
+                                print(f"    [DEBUG step] Agent {agent_id} state AFTER update_pos: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}") # DEBUG
         else:
             self.end_sim()
 
     def end_sim(self):
+        final_matches = self.meloMarket.order_book.buy_matched_orders + self.meloMarket.order_book.sell_matched_orders
+        processed_in_end_sim = set() 
+        if final_matches:
+            print(f"[DEBUG end_sim] Processing {len(final_matches)} matches found directly in meloMarket.order_book")
+            for matched_order in final_matches:
+                match_key = (matched_order.order.order_id, matched_order.time, matched_order.price)
+                if match_key in processed_in_end_sim:
+                    continue
+                processed_in_end_sim.add(match_key)
+
+                agent_id = matched_order.order.agent_id
+                print(f"  [DEBUG end_sim] Final match processing for Agent ID: {agent_id}")
+                if agent_id in self.agents and isinstance(self.agents[agent_id], MeloAgent):
+                    current_agent: MeloAgent = self.agents[agent_id]
+                    print(f"    [DEBUG end_sim] Agent {agent_id} state BEFORE final update: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}")
+                    current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                    quantity = matched_order.order.order_type*matched_order.order.quantity
+                    cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                    current_agent.update_position(quantity, cash)
+                    print(f"    [DEBUG end_sim] Agent {agent_id} state AFTER final update: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}")
+
         fundamental_val = self.market.get_final_fundamental()
         values = {}
         # melo_profits = {}
         for agent_id in self.agents:
             agent = self.agents[agent_id]
             if isinstance(agent, MeloAgent):
-                pvSum = sum(quantity * value for quantity, value in agent.melo_pv_history)
-                quantitySum = sum(quantity for quantity, _ in agent.melo_pv_history)
-                a = agent.position*fundamental_val + agent.cash + sum(quantity * value for quantity, value in agent.melo_pv_history)
+                pv_sum = sum(quantity * value for quantity, value in agent.melo_pv_history)
+                a = agent.position*fundamental_val + agent.cash + pv_sum
+                print(f"[DEBUG end_sim] MeloAgent {agent_id}: pos={agent.position}, cash={agent.cash:.2f}, pv_hist_len={len(agent.melo_pv_history)}, pv_sum={pv_sum}, final_val={a}") # DEBUG PRINT ADDED
                 values[agent_id] = a
             else:
                 values[agent_id] = agent.get_pos_value() + agent.position*fundamental_val + agent.cash
@@ -267,7 +297,13 @@ class MELOSimulatorSampledArrival:
         # print(f'At the end of the simulation we get {values}')
         # print(f'MELO_ At the end of the simulation we get {melo_profits}')
         # input()
-        return values  # Return both CDA and MELO profits
+        '''
+        - Expect 50% to be in the activation queue 
+        - Make midpoint more volatile
+        - More than 50% eligible 
+        - 
+        '''
+        return values
 
     def run(self):
         for t in range(self.sim_time):
@@ -281,18 +317,22 @@ class MELOSimulatorSampledArrival:
                     return self.market, self.meloMarket
             else:
                 # print("SKIPPEDA T TIMESTEP", t)
-                self.meloMarket.event_queue.set_time(self.time)
                 self.market.event_queue.set_time(self.time)
                 melo_matched_orders = self.meloMarket.update_queues()
-                if len(melo_matched_orders[0]) > 0:
+                if len(melo_matched_orders[0]) > 0 or len(melo_matched_orders[1]) > 0:
+                    print(f"[DEBUG run] Processing {len(melo_matched_orders[0]) + len(melo_matched_orders[1])} M-ELO matches from update_queues (skipped step) at time {self.time}") # DEBUG ADDED
                     for side_orders in melo_matched_orders:
                         for matched_order in side_orders:
                             agent_id = matched_order.order.agent_id
-                            current_agent: MeloAgent = self.agents[agent_id]
-                            current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
-                            quantity = matched_order.order.order_type*matched_order.order.quantity
-                            cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
-                            self.agents[agent_id].update_position(quantity, cash)
+                            print(f"  [DEBUG run] Match for Agent ID: {agent_id}") # DEBUG ADDED
+                            if agent_id in self.agents and isinstance(self.agents[agent_id], MeloAgent):
+                                current_agent: MeloAgent = self.agents[agent_id]
+                                print(f"    [DEBUG run] Agent {agent_id} state BEFORE: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}") # DEBUG ADDED
+                                current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                                quantity = matched_order.order.order_type*matched_order.order.quantity
+                                cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
+                                self.agents[agent_id].update_position(quantity, cash)
+                                print(f"    [DEBUG run] Agent {agent_id} state AFTER update_pos: pos={current_agent.position}, cash={current_agent.cash:.2f}, pv_hist_len={len(current_agent.melo_pv_history)}") # DEBUG ADDED
             self.time += 1
         self.step()
 

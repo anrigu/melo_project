@@ -1,7 +1,7 @@
 """
 Simple test script to verify that the updated MeloSimulator class works correctly.
 """
-from marketsim.egta.simulators.melo_simulator import MeloSimulator
+from marketsim.egta.simulators.melo_wrapper import MeloSimulator
 
 def test_simulator():
     """Test the MeloSimulator class."""
@@ -24,7 +24,6 @@ def test_simulator():
         print(f"  {strategy}: CDA={params['cda_proportion']:.2f}, MELO={params['melo_proportion']:.2f}")
     
     print("\nSimulating a simple profile (this may take some time)...")
-    # Simulate a simple profile with all agents using the same strategy
     profile = [strategies[0]] * simulator.get_num_players()
     try:
         results = simulator.simulate_profile(profile)

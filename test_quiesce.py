@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import asyncio
 from typing import List, Tuple, Set, Optional
+import nest_asyncio
 
 from marketsim.egta.core.game import Game
 from marketsim.egta.solvers.equilibria import (
@@ -9,6 +10,8 @@ from marketsim.egta.solvers.equilibria import (
     quiesce_sync,
     DeviationPriorityQueue
 )
+
+nest_asyncio.apply()
 
 # Define our own SubgameCandidate for testing
 class SubgameCandidate:
@@ -296,13 +299,19 @@ class TestQuiesceAlgorithm:
 if __name__ == "__main__":
     test = TestQuiesceAlgorithm()
     
-    # Run the synchronous test directly
+    # Run the synchronous tests directly
     test.test_deviation_priority_queue()
     test.test_quiesce_sync()
     
-    # Run the async tests with asyncio
-    asyncio.run(test.test_beneficial_deviations())
-    asyncio.run(test.test_quiesce_finds_equilibrium())
-    asyncio.run(test.test_subgame_candidate_exploration())
+    # Create a new event loop and set it as the default
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
-    print("All QUIESCE tests passed!") 
+    # Run each async test individually with the same loop
+    try:
+        loop.run_until_complete(test.test_beneficial_deviations())
+        loop.run_until_complete(test.test_quiesce_finds_equilibrium())
+        loop.run_until_complete(test.test_subgame_candidate_exploration())
+        print("All QUIESCE tests passed!")
+    finally:
+        loop.close() 

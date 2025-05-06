@@ -149,11 +149,10 @@ class DPRScheduler(Scheduler):
             
             # Add to candidates
             candidates.append(eq_mixture.cpu().numpy())
+
+            
         
-        # Add uniform mixture if we have no candidates
-        if not candidates:
-            mixture = np.ones(len(game.strategy_names)) / len(game.strategy_names)
-            candidates.append(mixture)
+        
         
         # Limit number of candidates
         if len(candidates) > max_candidates:

@@ -87,6 +87,7 @@ class MeloSimulator(Simulator):
         # self.num_melo = num_melo
         self.reps = reps
         self.order_quantity = 10  # Fixed order quantity as specified
+        self.last_sim_instance = None # Store the last simulator instance
         
         # Define strategies as allocation proportions between CDA and MELO
         # Format: "MELO_X_Y" where X is percentage in CDA and Y is percentage in MELO
@@ -173,6 +174,9 @@ class MeloSimulator(Simulator):
             
             # Run the simulation
             sim.run()
+            
+            # Store the instance for later access
+            self.last_sim_instance = sim 
             
             # Get final values and profits
             values = sim.end_sim()
