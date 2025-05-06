@@ -15,34 +15,34 @@ class MeloMarket(Market):
         self.matched_orders += new_orders
         return new_orders
 
-    def withdraw_all(self, agent_id: int):
-        self.order_book.withdraw_all(agent_id)
+    def withdraw_all(self, agent_id: int, order_tracker):
+        self.order_book.withdraw_all(agent_id, order_tracker)
 
-    def step(self, best_bid, best_ask):
+    def step(self, best_bid, best_ask, order_tracker):
         # TODO Need to figure out how to handle ties for price and time
         orders = self.event_queue.step()
         for order in orders:
             if order.quantity <= 0:
                 continue
             # print(f"EventQueue INSERTING orders at time {self.get_time()}: {[o.order_id for o in orders]}")
-            self.order_book.insert(order)
+            self.order_book.insert(order, order_tracker)
             self.order_book.update_best_bid(best_bid)
             self.order_book.update_best_ask(best_ask)
             self.order_book._update_midpoint()
-        self.order_book.update_eligiblity_queue(self.get_time() - 1)
-        self.order_book.update_active_queue(self.get_time() - 1)
-        new_orders = self.order_book.matching_orders(self.get_time() - 1)
+        self.order_book.update_eligiblity_queue(self.get_time() - 1, order_tracker)
+        self.order_book.update_active_queue(self.get_time() - 1, order_tracker)
+        new_orders = self.order_book.matching_orders(self.get_time() - 1, order_tracker)
 
         return new_orders
 
-    def update_queues(self, best_bid=None, best_ask=None):
+    def update_queues(self, best_bid=None, best_ask=None, order_tracker={}):
         if best_bid or best_ask:
             self.order_book.update_best_bid(best_bid)
             self.order_book.update_best_ask(best_ask)
             self.order_book._update_midpoint()
-        self.order_book.update_eligiblity_queue(self.get_time())
-        self.order_book.update_active_queue(self.get_time())
-        return self.order_book.matching_orders(self.get_time())
+        self.order_book.update_eligiblity_queue(self.get_time(), order_tracker)
+        self.order_book.update_active_queue(self.get_time(), order_tracker)
+        return self.order_book.matching_orders(self.get_time(), order_tracker)
         
     def get_midprices(self):
         return self.order_book.midprices

@@ -62,7 +62,12 @@ class MELOFourHeap(FourHeap):
         self.buy_eligibility_queue = OrderQueue(is_max_heap=True)
         self.sell_eligibility_queue = OrderQueue(is_max_heap=False)
 
-    def insert(self, order: Order):
+        #TODO: DELETE AFTER. THIS IS JUST FOR DATA TRACKING
+        self.removed_eligibility = 0
+        self.removed_activation = 0
+        self.removed_active = 0
+
+    def insert(self, order: Order, order_tracker: dict):
         """
         Insert a new order into the appropriate queue based on its price relative to midpoint.
         
@@ -77,32 +82,41 @@ class MELOFourHeap(FourHeap):
         if order.order_type == constants.BUY:
             if not math.isnan(self.midpoint) and order.price >= self.midpoint:
                 self.buy_activation_queue.append((order, order.time))
+                order_tracker[order.order_id] = "activation"
             else:
                 self.buy_eligibility_queue.add_order(order)
+                order_tracker[order.order_id] = "eligibility"
         else:
             if not math.isnan(self.midpoint) and order.price <= self.midpoint:
                 self.sell_activation_queue.append((order, order.time))
+                order_tracker[order.order_id] = "activation"
             else:
                 self.sell_eligibility_queue.add_order(order)
+                order_tracker[order.order_id] = "eligibility"
     
-    def update_active_queue(self, curr_time):
+    def update_active_queue(self, curr_time, order_tracker):
         """
         Move orders from activation queues to active queues if they've completed their holding period.
         Orders are processed in FIFO order within each queue.
         """
         # print("CALLED AT THIS TIMESTEP", curr_time)
         while self.buy_activation_queue and curr_time - self.buy_activation_queue[0][1] >= self.holding_period:
-            self.buy_active_queue.append(self.buy_activation_queue.popleft()[0])
+            order = self.buy_activation_queue.popleft()
+            self.buy_active_queue.append(order[0])
+            order_tracker[order[0].order_id] = "active"
         
         while self.sell_activation_queue and curr_time - self.sell_activation_queue[0][1] >= self.holding_period:
-            self.sell_active_queue.append(self.sell_activation_queue.popleft()[0])
+            order = self.sell_activation_queue.popleft()
+            self.sell_active_queue.append(order[0])
+            order_tracker[order[0].order_id] = "active"
 
-    def withdraw_all(self, agent_id: int):
+    def withdraw_all(self, agent_id: int, order_tracker):
         for order_id in self.agent_id_map[agent_id]:
             self.remove(order_id)
+            order_tracker[order_id] += " withdrawn"
         self.agent_id_map[agent_id] = []
 
-    def update_eligiblity_queue(self, curr_time):
+    def update_eligiblity_queue(self, curr_time, order_tracker):
         """
         Check orders in eligibility queues and move them to activation queues if they cross midpoint.
         """
@@ -113,6 +127,7 @@ class MELOFourHeap(FourHeap):
                     break
                 if peek_value >= self.midpoint:
                     self.buy_activation_queue.append((self.buy_eligibility_queue.peek_order(), curr_time))
+                    order_tracker[self.buy_eligibility_queue.peek_order().order_id] = "activation"
                     self.buy_eligibility_queue.remove(self.buy_eligibility_queue.peek_order_id())
                 else:
                     break
@@ -123,12 +138,13 @@ class MELOFourHeap(FourHeap):
                     break
                 if peek_value <= self.midpoint:
                     self.sell_activation_queue.append((self.sell_eligibility_queue.peek_order(), curr_time))
+                    order_tracker[self.sell_eligibility_queue.peek_order().order_id] = "activation"
                     self.sell_eligibility_queue.remove(self.sell_eligibility_queue.peek_order_id())
                 else:
                     break
 
         
-    def matching_orders(self, curr_time):
+    def matching_orders(self, curr_time, order_tracker):
         """
         Match compatible orders from buy and sell active queues.
         
@@ -145,22 +161,27 @@ class MELOFourHeap(FourHeap):
                     current_order = self.buy_active_queue.popleft()
                     self.buy_eligibility_queue.add_order(current_order)
                     #For tracking purposes
+                    order_tracker[current_order.order_id] = "cancelled"
                     self.buy_cancelled.append(current_order)
 
                 while self.sell_active_queue and self.midpoint < self.sell_active_queue[0].price:
                     current_order = self.sell_active_queue.popleft()
                     self.sell_eligibility_queue.add_order(current_order)
                     self.sell_cancelled.append(current_order)
+                    order_tracker[current_order.order_id] = "cancelled"
 
                 # If after cancellations there are no matching orders, exit
                 if not self.buy_active_queue or not self.sell_active_queue:
                     break
 
                 buy_match_order = copy.deepcopy(self.buy_active_queue[0])
+                order_tracker[buy_match_order.order_id] = "matched"
                 sell_match_order = copy.deepcopy(self.sell_active_queue[0])
+                order_tracker[sell_match_order.order_id] = "matched"
                 matched_quantity = min(self.buy_active_queue[0].quantity, self.sell_active_queue[0].quantity)
                 self.buy_active_queue[0].quantity -= matched_quantity
                 self.sell_active_queue[0].quantity -= matched_quantity
+                
 
                 # Handle fully matched buy order
                 if self.buy_active_queue[0].quantity == 0:
@@ -187,29 +208,35 @@ class MELOFourHeap(FourHeap):
         for order in self.buy_active_queue:
             if order.order_id == order_id:
                 self.buy_active_queue.remove(order)
+                self.removed_active += 1
                 return
         
         for order in self.sell_active_queue:
             if order.order_id == order_id:
                 self.sell_active_queue.remove(order)
+                self.removed_active += 1
                 return
         
         for order_tuple in self.buy_activation_queue:
             if order_tuple[0].order_id == order_id:
                 self.buy_activation_queue.remove(order_tuple)
+                self.removed_activation += 1
                 return
         
         for order_tuple in self.sell_activation_queue:
             if order_tuple[0].order_id == order_id:
                 self.sell_activation_queue.remove(order_tuple)
+                self.removed_activation += 1
                 return
         
         if self.buy_eligibility_queue.contains(order_id):
             self.buy_eligibility_queue.remove(order_id)
+            self.removed_eligibility += 1
             return
         
         if self.sell_eligibility_queue.contains(order_id):
             self.sell_eligibility_queue.remove(order_id)
+            self.removed_eligibility += 1
             return
 
     def market_clear(self):
