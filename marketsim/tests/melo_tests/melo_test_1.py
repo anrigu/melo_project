@@ -33,7 +33,7 @@ for _ in tqdm(range(REPS)):
                                       mean=1e6, 
                                       num_strategic=MOBI,
                                       lam_melo=1e-3,
-                                      r=0.01, 
+                                      r=0.0001, 
                                       shock_var=1e6, 
                                       q_max=10,
                                       num_zi=30,

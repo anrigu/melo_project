@@ -20,7 +20,7 @@ class FourHeap:
 
         self.heaps = [self.buy_matched, self.buy_unmatched, self.sell_matched, self.sell_unmatched]
         self.agent_id_map = defaultdict(list)
-        self.midprices = []
+        self.midprice = math.nan
 
 
     def handle_new_order(self, order):
@@ -153,17 +153,16 @@ class FourHeap:
     def get_best_ask(self) -> float:
         return self.sell_unmatched.peek()
 
-    def update_midprice(self, lookback=14):
+    def update_midprice(self):
         best_ask = self.get_best_ask()
         best_bid = self.get_best_bid()
-
-        if math.isinf(best_ask) or math.isinf(best_bid):
-            if len(self.midprices) < lookback and len(self.midprices) > 0:
-                self.midprices.append(np.mean(self.midprices))
-            elif len(self.midprices) >= lookback:
-                self.midprices.append(np.mean(self.midprices[-lookback:]))
+        
+        midprice = (best_ask + best_bid) / 2
+        
+        if midprice == float('inf') or midprice == float('-inf'):
+            self.midprice = math.nan
         else:
-            self.midprices.append((best_ask + best_bid) / 2)
+            self.midprice = midprice
 
 
     def observe(self) -> str:

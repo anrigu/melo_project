@@ -48,7 +48,7 @@ class Market:
             self.order_book.insert(order)
         new_orders = self.clear_market()
 
-        # self.order_book.update_midprice()
+        self.order_book.update_midprice()
         return new_orders
 
     def get_midprices(self):

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from marketsim.event.event_queue import EventQueue
 from marketsim.fourheap.fourheap import FourHeap
 from marketsim.fundamental.fundamental_abc import Fundamental
@@ -18,35 +19,22 @@ class MeloMarket(Market):
     def withdraw_all(self, agent_id: int, order_tracker):
         self.order_book.withdraw_all(agent_id, order_tracker)
 
-    def step(self, best_bid, best_ask, order_tracker):
-        # TODO Need to figure out how to handle ties for price and time
+    def step(self, order_tracker, midprice):
+        current_time = self.get_time()
         orders = self.event_queue.step()
+        
+        return_val = -1
+        # Process new orders
         for order in orders:
             if order.quantity <= 0:
                 continue
-            # print(f"EventQueue INSERTING orders at time {self.get_time()}: {[o.order_id for o in orders]}")
-            self.order_book.insert(order, order_tracker)
-            self.order_book.update_best_bid(best_bid)
-            self.order_book.update_best_ask(best_ask)
-            self.order_book._update_midpoint()
-        self.order_book.update_eligiblity_queue(self.get_time() - 1, order_tracker)
-        self.order_book.update_active_queue(self.get_time() - 1, order_tracker)
-        new_orders = self.order_book.matching_orders(self.get_time() - 1, order_tracker)
+            order_placement = self.order_book.insert(order, order_tracker, current_time, midprice)
+            if order_placement == 1:
+                return_val = current_time
 
-        return new_orders
-
-    def update_queues(self, best_bid=None, best_ask=None, order_tracker={}):
-        if best_bid or best_ask:
-            self.order_book.update_best_bid(best_bid)
-            self.order_book.update_best_ask(best_ask)
-            self.order_book._update_midpoint()
-        self.order_book.update_eligiblity_queue(self.get_time(), order_tracker)
-        self.order_book.update_active_queue(self.get_time(), order_tracker)
-        return self.order_book.matching_orders(self.get_time(), order_tracker)
+        #TODO: REMOVE AS LONG AS THE ASSERT DOESN'T FAIL
+        return return_val
         
-    def get_midprices(self):
-        return self.order_book.midprices
-
     def reset(self, fundamental=None):
         self.order_book = FourHeap()
         self.matched_orders = []
