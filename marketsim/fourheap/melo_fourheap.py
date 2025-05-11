@@ -36,15 +36,12 @@ class MELOFourHeap(FourHeap):
             holding_period (int): Mandatory waiting period before orders become eligible
         """
         super().__init__(plus_one)
-        self.curr_best_bid = -math.inf
-        self.curr_best_ask = math.inf 
-        self.midpoint = 1e5
         self.order_timestamps = {}
         self.holding_period = holding_period
 
         #cancelled_queues due to midpoint rise during holding
-        self.buy_cancelled: List[CancelledOrder] = []
-        self.sell_cancelled: List[CancelledOrder] = []
+        self.buy_cancelled: List[(CancelledOrder, float)] = []
+        self.sell_cancelled: List[(CancelledOrder, float)] = []
 
         #matched_queues
         self.buy_matched_orders: List[MatchedOrder] = []
@@ -67,32 +64,37 @@ class MELOFourHeap(FourHeap):
         self.removed_activation = 0
         self.removed_active = 0
 
-    def insert(self, order: Order, order_tracker: dict):
+
+    def insert(self, order: Order, order_tracker: dict, current_time: int, midprice: float):
         """
         Insert a new order into the appropriate queue based on its price relative to midpoint.
         
         Args:
             order (Order): The order to be inserted
+            order_tracker (dict): Dictionary to track order status
+            current_time (int): Current simulation time
         """
-        # print(f"Inserting order {order.order_id} at time {order.time}")  # Add this debug line
-        #TODO: REMOVE OLD ORDER -> Maybe this is done in market?
         self.agent_id_map[order.agent_id].append(order.order_id)
 
         #If crosses midpoint on placement
         if order.order_type == constants.BUY:
-            if not math.isnan(self.midpoint) and order.price >= self.midpoint:
-                self.buy_activation_queue.append((order, order.time))
+            if not math.isnan(midprice) and order.price >= midprice:
+                self.buy_activation_queue.append((order, current_time))
                 order_tracker[order.order_id] = "activation"
+                return 1
             else:
                 self.buy_eligibility_queue.add_order(order)
                 order_tracker[order.order_id] = "eligibility"
+                return 0
         else:
-            if not math.isnan(self.midpoint) and order.price <= self.midpoint:
-                self.sell_activation_queue.append((order, order.time))
+            if not math.isnan(midprice) and order.price <= midprice:
+                self.sell_activation_queue.append((order, current_time))
                 order_tracker[order.order_id] = "activation"
+                return 1
             else:
                 self.sell_eligibility_queue.add_order(order)
                 order_tracker[order.order_id] = "eligibility"
+                return 0
     
     def update_active_queue(self, curr_time, order_tracker):
         """
@@ -113,22 +115,26 @@ class MELOFourHeap(FourHeap):
     def withdraw_all(self, agent_id: int, order_tracker):
         for order_id in self.agent_id_map[agent_id]:
             self.remove(order_id)
+            if order_tracker[order_id] == "active":
+                a = "hello"
             order_tracker[order_id] += " withdrawn"
         self.agent_id_map[agent_id] = []
 
-    def update_eligiblity_queue(self, curr_time, order_tracker):
+    def update_eligiblity_queue(self, curr_time, order_tracker, midprice):
         """
         Check orders in eligibility queues and move them to activation queues if they cross midpoint.
         """
-        if not math.isnan(self.midpoint):
+        order_moved = -1
+        if not math.isnan(midprice):
             while True:
                 peek_value = self.buy_eligibility_queue.peek()
                 if peek_value == float('inf') or peek_value == float('-inf'):
                     break
-                if peek_value >= self.midpoint:
+                if peek_value >= midprice:
                     self.buy_activation_queue.append((self.buy_eligibility_queue.peek_order(), curr_time))
                     order_tracker[self.buy_eligibility_queue.peek_order().order_id] = "activation"
                     self.buy_eligibility_queue.remove(self.buy_eligibility_queue.peek_order_id())
+                    order_moved = curr_time
                 else:
                     break
 
@@ -136,15 +142,17 @@ class MELOFourHeap(FourHeap):
                 peek_value = self.sell_eligibility_queue.peek()
                 if peek_value == float('inf') or peek_value == float('-inf'):
                     break
-                if peek_value <= self.midpoint:
+                if peek_value <= midprice:
                     self.sell_activation_queue.append((self.sell_eligibility_queue.peek_order(), curr_time))
                     order_tracker[self.sell_eligibility_queue.peek_order().order_id] = "activation"
                     self.sell_eligibility_queue.remove(self.sell_eligibility_queue.peek_order_id())
+                    order_moved = curr_time
                 else:
                     break
+        return order_moved
 
         
-    def matching_orders(self, curr_time, order_tracker):
+    def matching_orders(self, curr_time, order_tracker, midprice):
         """
         Match compatible orders from buy and sell active queues.
         
@@ -154,20 +162,20 @@ class MELOFourHeap(FourHeap):
         """
         #NOTE: The matched orders get split up by quantities so that the orders in the same indices of the matched_queue are matched.
         new_matched = [[], []]
-        if not math.isnan(self.midpoint):
+        if not math.isnan(midprice):
             while self.buy_active_queue and self.sell_active_queue: 
                 # Revalidate order queues before processing matches
-                while self.buy_active_queue and self.midpoint > self.buy_active_queue[0].price:
+                while self.buy_active_queue and midprice > self.buy_active_queue[0].price:
                     current_order = self.buy_active_queue.popleft()
                     self.buy_eligibility_queue.add_order(current_order)
                     #For tracking purposes
                     order_tracker[current_order.order_id] = "cancelled"
-                    self.buy_cancelled.append(current_order)
+                    self.buy_cancelled.append((current_order, midprice))
 
-                while self.sell_active_queue and self.midpoint < self.sell_active_queue[0].price:
+                while self.sell_active_queue and midprice < self.sell_active_queue[0].price:
                     current_order = self.sell_active_queue.popleft()
                     self.sell_eligibility_queue.add_order(current_order)
-                    self.sell_cancelled.append(current_order)
+                    self.sell_cancelled.append((current_order, midprice))
                     order_tracker[current_order.order_id] = "cancelled"
 
                 # If after cancellations there are no matching orders, exit
@@ -185,19 +193,19 @@ class MELOFourHeap(FourHeap):
 
                 # Handle fully matched buy order
                 if self.buy_active_queue[0].quantity == 0:
-                    new_matched[0].append(MatchedOrder(self.midpoint, curr_time, buy_match_order))
+                    new_matched[0].append(MatchedOrder(midprice, curr_time, buy_match_order))
                     self.buy_active_queue.popleft()
                 else:
                     buy_match_order.quantity = matched_quantity
-                    new_matched[0].append(MatchedOrder(self.midpoint, curr_time, buy_match_order))
+                    new_matched[0].append(MatchedOrder(midprice, curr_time, buy_match_order))
 
                 # Handle fully matched sell order
                 if self.sell_active_queue[0].quantity == 0:
-                    new_matched[1].append(MatchedOrder(self.midpoint, curr_time, sell_match_order))
+                    new_matched[1].append(MatchedOrder(midprice, curr_time, sell_match_order))
                     self.sell_active_queue.popleft()
                 else:
                     sell_match_order.quantity = matched_quantity
-                    new_matched[1].append(MatchedOrder(self.midpoint, curr_time, sell_match_order))
+                    new_matched[1].append(MatchedOrder(midprice, curr_time, sell_match_order))
 
             self.buy_matched_orders.extend(new_matched[0])
             self.sell_matched_orders.extend(new_matched[1])
@@ -239,35 +247,11 @@ class MELOFourHeap(FourHeap):
             self.removed_eligibility += 1
             return
 
+        super().remove(order_id)
+
     def market_clear(self):
         matched_orders = self.buy_matched_orders + self.sell_matched_orders
         return matched_orders
-    
-    
-    def update_best_bid(self, new_best_bid):
-        """
-        Update the best bid price and recalculate midpoint.
-        
-        Args:
-            new_best_bid (float): New best bid price
-        """
-        self.curr_best_bid = new_best_bid
-    
-    def update_best_ask(self, new_best_ask):
-        """
-        Update the best ask price and recalculate midpoint.
-        
-        Args:
-            new_best_ask (float): New best ask price
-        """
-        self.curr_best_ask = new_best_ask
-
-    def _update_midpoint(self):
-        """Calculate and update the midpoint price based on current best bid and ask."""
-        self.midpoint = (self.curr_best_bid + self.curr_best_ask) / 2
-        if self.midpoint == float('inf') or self.midpoint == float('-inf'):
-            self.midpoint = math.nan
-        
 
     def observe(self) -> str:
         """
