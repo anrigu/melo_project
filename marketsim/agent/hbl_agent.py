@@ -357,19 +357,20 @@ class HBLAgent(Agent):
                 # Because function (when graphed) is well defined to be unimodal, we select 
                 # many test points and then local optimize based on best point. 
                 # Saves time as opposed to global optimizing.
-                test_points = np.linspace(lb, ub, 40)
-                vOptimize = np.vectorize(optimize)
-                point_surpluses = vOptimize(test_points)
-                min_index = np.argmin(point_surpluses)
-                min_survey = test_points[min_index]
-                if isinstance(min_survey, np.ndarray):
-                    min_survey = min_survey[0]
-                
-                # Wrap the optimize function to handle scalar values properly
-                def scalar_optimize(x):
-                    return optimize(float(x))
-                    
                 try:
+                    test_points = np.linspace(lb, ub, 40)
+                    vOptimize = np.vectorize(optimize)
+                    point_surpluses = vOptimize(test_points)
+                    min_index = np.argmin(point_surpluses)
+                    min_survey = test_points[min_index]
+                    if isinstance(min_survey, np.ndarray):
+                        min_survey = min_survey[0]
+                    
+                    # Wrap the optimize function to handle scalar values properly
+                    def scalar_optimize(x):
+                        return optimize(float(x))
+                        
+
                     max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
                     return max_x.x.item(), -max_x.fun
                 except:
@@ -491,7 +492,7 @@ class HBLAgent(Agent):
                 if bound2 > 1e10:
                     print(bound2)
                     print(bound1)
-                    input("ERROR")
+                    # input("ERROR")
                 spline_interp_objects[1].append((bound1, bound2))
                 
             def expected_surplus_max():
@@ -518,17 +519,16 @@ class HBLAgent(Agent):
                 lb = min(spline_interp_objects[1], key=lambda bound_pair: bound_pair[0])[0]
                 ub = max(spline_interp_objects[1], key=lambda bound_pair: bound_pair[1])[1]
                 test_points = np.linspace(lb, ub, 40)
-                # try:
-                vOptimize = np.vectorize(optimize)
-                point_surpluses = vOptimize(test_points)
-                min_index = np.argmin(point_surpluses)
-                min_survey = test_points[min_index]
-                
-                # Wrap the optimize function to handle scalar values properly
-                def scalar_optimize(x):
-                    return optimize(float(x))
-                
                 try:
+                    vOptimize = np.vectorize(optimize)
+                    point_surpluses = vOptimize(test_points)
+                    min_index = np.argmin(point_surpluses)
+                    min_survey = test_points[min_index]
+                    
+                    # Wrap the optimize function to handle scalar values properly
+                    def scalar_optimize(x):
+                        return optimize(float(x))
+                    
                     max_x = sp.optimize.minimize(scalar_optimize, min_survey, bounds=[[lb, ub]])
                     return max_x.x.item(), -max_x.fun
                 except:
