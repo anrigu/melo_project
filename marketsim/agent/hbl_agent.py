@@ -8,7 +8,7 @@ from marketsim.agent.agent import Agent
 from marketsim.market.market import Market
 from marketsim.fourheap.order import Order
 from marketsim.private_values.private_values import PrivateValues
-from marketsim.fourheap.constants import BUY, SELL
+from marketsim.fourheap.constants import BUY, SELL, CDA
 from typing import List
 from fastcubicspline import FCS
 from scipy.interpolate import CubicSpline
@@ -646,7 +646,7 @@ class HBLAgent(Agent):
             
             return optimal_price[0], optimal_price[1]
 
-    def take_action(self, side, seed = 0):
+    def take_action(self, side, market = CDA, seed = 0):
         """
         Submits order to market for HBL.
 
