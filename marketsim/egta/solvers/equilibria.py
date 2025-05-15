@@ -79,27 +79,144 @@ class DeviationPriorityQueue:
 
 
 def replicator_dynamics(game: Game, 
-                       mixture: torch.Tensor, 
+                       mixture: Optional[torch.Tensor] = None,
                        iters: int = 1000, 
                        offset: float = 0,
                        converge_threshold: float = 1e-10,
-                       return_trace: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+                       return_trace: bool = False,
+                       use_multiple_starts: bool = True,
+                       num_random_starts: int = 50,
+                       epsilon: float = 1e-6,
+                       similarity_threshold: float = 0.05) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
     """
     Find equilibria using replicator dynamics.
     
     Args:
         game: Game to analyze
-        mixture: Initial mixture (or batch of mixtures)
+        mixture: Initial mixture (or batch of mixtures). If None and use_multiple_starts=True,
+                multiple starting points will be generated.
         iters: Maximum number of iterations
         offset: Offset used in the update rule
         converge_threshold: Convergence threshold for early stopping
         return_trace: Whether to return the trace of mixtures
+        use_multiple_starts: Whether to use multiple starting points
+        num_random_starts: Number of random starting points to generate
+        epsilon: Small value for numerical stability
+        similarity_threshold: Threshold for considering two mixtures as the same equilibrium
         
     Returns:
         Final mixture(s) or tuple of (final_mixture, trace) if return_trace is True
     """
+    device = game.game.device
+    num_strategies = game.num_strategies
+    
+    # Generate multiple starting points if requested
+    if mixture is None and use_multiple_starts:
+        starting_mixtures = []
+        
+        # 1. Uniform mixture
+        uniform_mixture = torch.ones(num_strategies, device=device) / num_strategies
+        starting_mixtures.append(uniform_mixture)
+        
+        # 2. 80% on each strategy, 20% uniform across others
+        for s in range(num_strategies):
+            skewed_mixture = torch.ones(num_strategies, device=device) * 0.2 / (num_strategies - 1) if num_strategies > 1 else torch.ones(1, device=device)
+            if num_strategies > 1:
+                skewed_mixture[s] = 0.8
+            starting_mixtures.append(skewed_mixture)
+        
+        # 3. Random points
+        for _ in range(num_random_starts):
+            random_mixture = torch.rand(num_strategies, device=device)
+            random_mixture = random_mixture / random_mixture.sum()
+            starting_mixtures.append(random_mixture)
+        
+       
+        equilibria = []  
+        basin_counts = []  
+        
+        for start_mixture in starting_mixtures:
+            if return_trace:
+                result_mixture, result_trace = replicator_dynamics(
+                    game=game,
+                    mixture=start_mixture,
+                    iters=iters,
+                    offset=offset,
+                    converge_threshold=converge_threshold,
+                    return_trace=True,
+                    use_multiple_starts=False,
+                    epsilon=epsilon
+                )
+            else:
+                result_mixture = replicator_dynamics(
+                    game=game,
+                    mixture=start_mixture,
+                    iters=iters,
+                    offset=offset,
+                    converge_threshold=converge_threshold,
+                    return_trace=False,
+                    use_multiple_starts=False,
+                    epsilon=epsilon
+                )
+                result_trace = None
+            
+            # Calculate regret
+            current_regret = regret(game, result_mixture)
+            if torch.is_tensor(current_regret):
+                current_regret = current_regret.item()
+            
+            try:
+                dev_payoffs = game.deviation_payoffs(result_mixture)
+                expected_utility = torch.sum(result_mixture * dev_payoffs).item()
+            except:
+                expected_utility = 0.0
+            
+            found_match = False
+            for i, (existing_mixture, existing_regret, _) in enumerate(equilibria):
+                distance = torch.norm(existing_mixture - result_mixture, p=1).item()
+                if distance < similarity_threshold:
+                    basin_counts[i] += 1
+                    found_match = True
+                    break
+            
+            if not found_match:
+                equilibria.append((result_mixture, current_regret, expected_utility))
+                basin_counts.append(1)
+        
+        # Find equilibrium with largest basin
+        if equilibria:
+            max_basin_size = max(basin_counts)
+            candidates = [eq for i, eq in enumerate(equilibria) if basin_counts[i] == max_basin_size]
+            
+            candidates.sort(key=lambda x: x[1])
+            
+            # Return the best candidate
+            best_mixture, best_regret, _ = candidates[0]
+            best_trace = None  
+            
+            if return_trace: #TODO make more efficient
+                best_mixture, best_trace = replicator_dynamics(
+                    game=game,
+                    mixture=best_mixture,
+                    iters=iters,
+                    offset=offset,
+                    converge_threshold=converge_threshold,
+                    return_trace=True,
+                    use_multiple_starts=False,
+                    epsilon=epsilon
+                )
+                return best_mixture, best_trace
+            if best_regret <= 1e-6:
+                return best_mixture
+        
+        return uniform_mixture
+    
+    # Default to uniform mixture if none provided
+    if mixture is None:
+        mixture = torch.ones(num_strategies, device=device) / num_strategies
+
     if not torch.is_tensor(mixture):
-        mixture = torch.tensor(mixture, dtype=torch.float32, device=game.game.device)
+        mixture = torch.tensor(mixture, dtype=torch.float32, device=device)
     
     is_vector = len(mixture.shape) == 1
     if is_vector:
@@ -128,8 +245,8 @@ def replicator_dynamics(game: Game,
     
     if return_trace:
         return mixture, trace
+    
     return mixture
-
 
 def fictitious_play(game: Game, 
                    mixture: torch.Tensor, 
@@ -307,11 +424,11 @@ async def quiesce(
     num_iters: int = 10,
     num_random_starts: int = 10,  # Adding parameter for random starts
     regret_threshold: float = 1e-3,  # More lenient threshold (was 1e-4)
-    dist_threshold: float = 1e-2,    # More lenient threshold (was 1e-3)
+    dist_threshold: float = 1e-4,    # More lenient threshold (was 1e-3)
     restricted_game_size: int = 4,
     solver: str = 'replicator',
     solver_iters: int = 5000,        # More iterations (was 1000)
-    verbose: bool = True,
+    verbose: bool = True, 
     maximal_subgames: Set[frozenset] = None
 ) -> List[Tuple[torch.Tensor, float]]:
     """
@@ -336,16 +453,13 @@ async def quiesce(
     """
     start_time = time.time()
     
-    # Initialize data structures
     confirmed_eq = []
     unconfirmed_candidates = []
     deviation_queue = DeviationPriorityQueue()
     
-    # Add a maximal subgames collection to track explored subgames
     if maximal_subgames is None:
-        maximal_subgames = set()  # Set of frozensets of strategy indices
+        maximal_subgames = set() 
     
-    # Add pure strategy restrictions to queue
     for s in range(game.num_strategies):
         # Create pure strategy mixture
         pure_mixture = torch.zeros(game.num_strategies, device=game.game.device)
@@ -395,16 +509,13 @@ async def quiesce(
         )
         unconfirmed_candidates.append(rand_candidate)
         
-        # Add to maximal subgames if appropriate
         if len(support) <= restricted_game_size:
-            # Check if this subgame is contained in any existing maximal subgame
             support_set = frozenset(support)
             is_contained = False
             for maximal_set in list(maximal_subgames):
                 if support_set.issubset(maximal_set):
                     is_contained = True
                     break
-                # If this new set contains an existing maximal set, remove the smaller one
                 if maximal_set.issubset(support_set):
                     maximal_subgames.remove(maximal_set)
             
@@ -421,13 +532,11 @@ async def quiesce(
         if not unconfirmed_candidates and deviation_queue.is_empty():
             break
             
-        # Test all unconfirmed candidates
         new_unconfirmed = []
         for candidate in unconfirmed_candidates:
             is_eq, _ = await test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames, verbose)
             
             if is_eq:
-                # Check if this equilibrium is distinct from confirmed ones
                 is_distinct = True
                 for eq_mixture, _ in confirmed_eq:
                     dist = torch.norm(candidate.mixture - eq_mixture, p=1).item()
@@ -438,44 +547,34 @@ async def quiesce(
                 if is_distinct:
                     confirmed_eq.append((candidate.mixture.clone(), candidate.regret))
             else:
-                # Keep candidates that aren't equilibria for further exploration
                 new_unconfirmed.append(candidate)
                 
         unconfirmed_candidates = new_unconfirmed
         
-        # Explore deviations with highest gain
         if not deviation_queue.is_empty():
-            # Get highest-gain deviation
             gain, strategy, base_mixture = deviation_queue.pop()
             
             if verbose:
                 print(f"  Exploring deviation to {game.strategy_names[strategy]} with gain {gain:.6f}")
                 
-            # Get support of base mixture
             support = set([i for i, p in enumerate(base_mixture) if p > 0.01])
             
-            # Add deviated strategy to support
             new_support = support.union({strategy})
             
-            # Create restriction
             restriction = list(new_support)
             restriction_set = frozenset(restriction)
             
-            # Check if this subgame is contained in an existing maximal subgame
             is_contained = False
             for maximal_set in maximal_subgames:
                 if restriction_set.issubset(maximal_set):
                     is_contained = True
                     break
             
-            # If not contained or if it's a new maximal subgame, update the collection
             if not is_contained:
-                # Remove any existing maximal subgames that are subsets of this one
                 for maximal_set in list(maximal_subgames):
                     if maximal_set.issubset(restriction_set):
                         maximal_subgames.remove(maximal_set)
                 
-                # Add this new subgame to the maximal subgames collection
                 if len(restriction) <= restricted_game_size:
                     maximal_subgames.add(restriction_set)
                     if verbose:
@@ -560,50 +659,46 @@ def quiesce_sync(
     nest_asyncio.apply()
     
     # 2-strategy game fallback using direct computation
-    if game.num_strategies == 2:
-        try:
+    #if game.num_strategies == 2:
+       # try:
             # Use get_payoff_matrix method instead of payoff_matrix
-            payoff_matrix = game.get_payoff_matrix()
+         #   payoff_matrix = game.get_payoff_matrix()
             
             # Handle pathological payoff values for 2x2 games
-            if (torch.isnan(payoff_matrix).any() or 
-                torch.isinf(payoff_matrix).any() or 
-                torch.max(torch.abs(payoff_matrix)) > 1e6):
+         #   if (torch.isnan(payoff_matrix).any() or 
+          #      torch.isinf(payoff_matrix).any() or 
+         #       torch.max(torch.abs(payoff_matrix)) > 1e6):
                 # Set NaN/Inf values to zero
-                payoff_matrix = torch.nan_to_num(payoff_matrix, nan=0.0, posinf=10.0, neginf=-10.0)
+         #       payoff_matrix = torch.nan_to_num(payoff_matrix, nan=0.0, posinf=10.0, neginf=-10.0)
                 # Clip to reasonable range
-                payoff_matrix = torch.clamp(payoff_matrix, min=-10.0, max=10.0)
+        #        payoff_matrix = torch.clamp(payoff_matrix, min=-10.0, max=10.0)
             
-            # Solve 2x2 game directly - use local replicator dynamics
-            eq, steps = replicator_dynamics(
-                game,
-                torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies,
-                iters=solver_iters,
-                return_trace=True
-            )
+         #   eq, steps = replicator_dynamics(
+         #       game,
+         #       torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies,
+         #       iters=solver_iters,
+         #       return_trace=True
+         #   )
             
-            regret_val = game.regret(eq).item() if torch.is_tensor(game.regret(eq)) else game.regret(eq)
+         #   regret_val = game.regret(eq).item() if torch.is_tensor(game.regret(eq)) else game.regret(eq)
             
-            if verbose:
-                print(f"Using direct 2x2 calculation. Found equilibrium: {format_mixture(eq, game.strategy_names)}")
-                print(f"Equilibrium regret: {regret_val:.6f}")
+         #   if verbose:
+         #       print(f"Using direct 2x2 calculation. Found equilibrium: {format_mixture(eq, game.strategy_names)}")
+          #      print(f"Equilibrium regret: {regret_val:.6f}")
             
-            return [(eq, regret_val)]
+          #  return [(eq, regret_val)]
             
-        except Exception as e:
+       # except Exception as e:
             # Fallback to QUIESCE if direct calculation fails
-            if verbose:
-                print(f"Direct 2x2 calculation failed: {e}. Falling back to QUIESCE.")
+            #if verbose:
+                #print(f"Direct 2x2 calculation failed: {e}. Falling back to QUIESCE.")
     
     try:
-        # Create and run the QUIESCE event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # Initialize maximal subgames collection
         maximal_subgames = set()
         
-        # Call the async quiesce function with our current loop
         equilibria = loop.run_until_complete(quiesce(
             game=game,
             num_iters=num_iters,
@@ -624,24 +719,17 @@ def quiesce_sync(
         if verbose:
             print(f"QUIESCE failed: {e}")
         
-        # Last resort: Use replicator dynamics on full game
         try:
             if verbose:
                 print("Attempting replicator dynamics on full game as last resort.")
             
-            # Use local replicator dynamics implementation
-            # Start with uniform mixture
             init_mixture = torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies
             
-            # Get payoff matrix for full game
             try:
-                # Try with get_payoff_matrix method
                 payoff_matrix = game.get_payoff_matrix()
-                # Handle pathological values
                 payoff_matrix = torch.nan_to_num(payoff_matrix, nan=0.0, posinf=10.0, neginf=-10.0)
                 payoff_matrix = torch.clamp(payoff_matrix, min=-10.0, max=10.0)
                 
-                # Use local replicator dynamics on the payoff matrix
                 eq, _ = replicator_dynamics(
                     game,
                     init_mixture,
@@ -649,7 +737,6 @@ def quiesce_sync(
                     return_trace=True
                 )
             except:
-                # If we can't get full payoff matrix, just use replicator directly on game
                 eq, _ = replicator_dynamics(
                     game,
                     init_mixture,
@@ -677,7 +764,7 @@ async def test_deviations(
     game, 
     mixture, 
     deviation_queue, 
-    regret_threshold=1e-3, 
+    regret_threshold=1e-6, 
     restricted_game_size=4, 
     maximal_subgames=None,
     verbose=False
@@ -693,7 +780,7 @@ async def test_deviations(
         # Replace with safer values
         dev_payoffs = torch.nan_to_num(dev_payoffs, nan=0.0, posinf=10.0, neginf=-10.0)
         # Apply clipping for stability
-        dev_payoffs = torch.clamp(dev_payoffs, min=-10.0, max=10.0)
+        #dev_payoffs = torch.clamp(dev_payoffs, min=-10.0, max=10.0)
         
     # Calculate expected payoff for the mixture - safely
     expected_payoff_values = mixture * dev_payoffs
@@ -705,8 +792,7 @@ async def test_deviations(
     
     # Calculate gains from deviation - with safety checks
     gains = dev_payoffs - expected_payoff
-    # Apply clipping to gains for stability
-    gains = torch.clamp(gains, min=-10.0, max=10.0)
+    #gains = torch.clamp(gains, min=-10.0, max=10.0)
     
     # Find beneficial deviations
     has_beneficial = False
@@ -742,7 +828,6 @@ async def test_deviations(
                 should_explore = True
                 if maximal_subgames is not None:
                     new_support_set = frozenset(new_support)
-                    # Check if this subgame is already contained in a maximal subgame
                     for maximal_set in maximal_subgames:
                         if new_support_set.issubset(maximal_set):
                             # Skip if the subgame is already contained
@@ -834,7 +919,7 @@ def format_mixture(mixture, strategy_names, threshold=0.01):
     
     Args:
         mixture: Strategy mixture
-        strategy_names: List of strategy names
+        strategy_names: List https://www.notion.so/MELO-Project-1ec6ce8fce1980b5898ed44329a5c769?pvs=4of strategy names
         threshold: Threshold for including strategies in the output
         
     Returns:
@@ -843,7 +928,6 @@ def format_mixture(mixture, strategy_names, threshold=0.01):
     if not torch.is_tensor(mixture):
         mixture = torch.tensor(mixture)
     
-    # Find strategies with non-negligible probability
     significant_idxs = (mixture > threshold).nonzero().flatten().cpu().numpy()
     
     if len(significant_idxs) == 0:

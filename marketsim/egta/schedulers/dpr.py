@@ -45,14 +45,14 @@ class DPRScheduler(Scheduler):
         self.rand = random.Random(seed)
         self.game = None
         
-        # Set reduction size (n) - the number of players in the reduced game
         self.reduction_size = reduction_size if reduction_size is not None else num_players
         
         # Calculate the DPR scaling factor: (N-1)/(n-1)
         if self.reduction_size < self.num_players:
             self.scaling_factor = (self.num_players - 1) / (self.reduction_size - 1)
-        else:
+        else: 
             self.scaling_factor = 1.0
+
             
         # Track profiles we've seen and scheduled
         self.scheduled_profiles: Set[Tuple[str, ...]] = set()
@@ -111,7 +111,7 @@ class DPRScheduler(Scheduler):
         
         return result
     
-    def _select_equilibrium_candidates(self, game: Game, max_candidates: int = 3) -> List[np.ndarray]:
+    def _select_equilibrium_candidates(self, game: Game, max_candidates: int = 10) -> List[np.ndarray]:
         """
         Select candidate equilibria from the game.
         
@@ -144,18 +144,14 @@ class DPRScheduler(Scheduler):
            
             mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
             
-            # Run replicator dynamics
             eq_mixture = replicator_dynamics(game, mixture_tensor, iters=1000)
             
-            # Add to candidates
             candidates.append(eq_mixture.cpu().numpy())
         
-        # Add uniform mixture if we have no candidates
         if not candidates:
             mixture = np.ones(len(game.strategy_names)) / len(game.strategy_names)
             candidates.append(mixture)
         
-        # Limit number of candidates
         if len(candidates) > max_candidates:
             candidates = self.rand.sample(candidates, max_candidates)
         
