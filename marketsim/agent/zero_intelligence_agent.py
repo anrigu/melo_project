@@ -11,7 +11,8 @@ import math
 
 
 class ZIAgent(Agent):
-    def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, pv_var: float, eta: float = 1.0):
+    def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, pv_var: float, eta: float = 1.0, cda_proportion=1,
+                            melo_proportion=0):
         self.agent_id = agent_id
         self.market = market
         self.q_max = q_max
@@ -26,6 +27,10 @@ class ZIAgent(Agent):
         self.melo_profit = 0
         self.eta = eta
         self.melo_trades = []
+
+        #In case we want the agent to act different based on the market
+        self.cda_proportion = cda_proportion
+        self.melo_proportion = melo_proportion
 
     def generate_pv(self):
         #Generate new private values

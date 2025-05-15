@@ -16,7 +16,8 @@ from scipy.interpolate import CubicSpline
 
 class HBLAgent(Agent):
     def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, L: int, pv_var: float,
-                 arrival_rate: float):
+                 arrival_rate: float, cda_proportion=1,
+                    melo_proportion=0):
         self.agent_id = agent_id
         self.market = market
         self.pv = PrivateValues(q_max, pv_var)
@@ -42,6 +43,8 @@ class HBLAgent(Agent):
         self.sell_after_spoofer = []
         self.sell_count = [0,0]
         self.buy_count = [0,0]
+        self.cda_proportion = cda_proportion
+        self.melo_proportion = melo_proportion
 
         self.q_max = q_max
         self.pv_var = pv_var
