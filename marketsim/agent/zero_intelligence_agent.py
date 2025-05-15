@@ -4,7 +4,7 @@ from marketsim.agent.agent import Agent
 from marketsim.market.market import Market
 from marketsim.fourheap.order import Order
 from marketsim.private_values.private_values import PrivateValues
-from marketsim.fourheap.constants import BUY, SELL
+from marketsim.fourheap.constants import BUY, SELL, CDA, MELO
 from typing import List
 import torch
 import math
@@ -77,7 +77,7 @@ class ZIAgent(Agent):
         return estimate
         # return estimate + np.random.normal(0, np.sqrt(3e5))
 
-    def take_action(self, side, seed = 0):
+    def take_action(self, side, market = CDA, seed = 0):
         t = self.market.get_time()
         # random.seed(t + seed)
         estimate = self.estimate_fundamental() 
