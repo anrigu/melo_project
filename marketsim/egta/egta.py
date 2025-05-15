@@ -103,8 +103,8 @@ class EGTA:
             # Ensure all required parameters are present
             default_quiesce_kwargs = {
                 'num_iters': 100,
-                'num_random_starts': 10,
-                'regret_threshold': 1e-3,
+                'num_random_starts': 60,
+                'regret_threshold': 1e-2,
                 'dist_threshold': 1e-2,
                 'solver': 'replicator',
                 'solver_iters': 5000
@@ -127,7 +127,6 @@ class EGTA:
                 profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
                 self.scheduler.reduction_size = original_reduction_size
             else:
-                # For non-DPR schedulers, proceed as normal
                 profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
             
             if not profiles_to_simulate:
@@ -163,25 +162,19 @@ class EGTA:
                     print(f"  Profile: [{profile_dist}], Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
                 print()
             
-            # Update payoff data
             self.payoff_data.extend(new_data)
             total_profiles += len(new_data)
             
-            # Create or update game
             if self.game is None:
-                # Create new game
                 self.game = Game.from_payoff_data( #builds full game
                     payoff_data=self.payoff_data,
                     device=self.device
                 )
             else:
-                # Update existing game
                 self.game.update_with_new_data(new_data)
             
-            # Update scheduler
             self.scheduler.update(self.game)
             
-            # Find equilibria
             if verbose:
                 print("Finding equilibria...")
             
@@ -363,14 +356,12 @@ class EGTA:
         
         for eq_mix, _ in self.equilibria:
             # Count strategies in support
-            support = sum(1 for x in eq_mix if x.item() > 0.01)
+            support = sum(1 for x in eq_mix if x.item() > 0.001)
             support_sizes.append(support)
             
-            # Add to strategy frequencies
             for i, name in enumerate(self.game.strategy_names):
                 strategy_frequencies[name] += eq_mix[i].item() / len(self.equilibria)
         
-        # Find most common strategies
         sorted_strategies = sorted(
             strategy_frequencies.items(),
             key=lambda x: x[1],
@@ -413,7 +404,6 @@ class EGTA:
         if not isinstance(self.scheduler, DPRScheduler):
             return full_game
             
-        # Calculate the scaling factor: (n-1)/(r-1)
         scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
         
         # Create a new SymmetricGame with reduced player count

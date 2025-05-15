@@ -86,7 +86,7 @@ class MeloSimulator(Simulator):
         self.num_hbl = num_hbl
         # self.num_melo = num_melo
         self.reps = reps
-        self.order_quantity = 10  # Fixed order quantity as specified
+        self.order_quantity = 5  # Fixed order quantity of 5 for MOBI traders as specified in the paper
         
         # Define strategies as allocation proportions between CDA and MELO
         # Format: "MELO_X_Y" where X is percentage in CDA and Y is percentage in MELO
@@ -175,7 +175,8 @@ class MeloSimulator(Simulator):
             sim.run()
             
             # Get final values and profits
-            values = sim.end_sim()
+            sim_results = sim.end_sim()
+            values = sim_results[0]  # First element is the dictionary of agent values
             
             # Collect results for this repetition
             results = []
@@ -192,9 +193,13 @@ class MeloSimulator(Simulator):
                 # Total payoff is weighted sum of payoffs from both mechanisms
                 # EDIT: For now, since the proportions are {1,0}, we don't need the weighted sum
                 # total_payoff = (values[agent_id] * cda_proportion) + (melo_profits[agent_id] * melo_proportion)
-                total_payoff = values[agent_id]
+                if agent_id in values:
+                    total_payoff = float(values[agent_id])
+                else:
+                    print(f"Warning: Agent {agent_id} not found in values. Using default payoff.")
+                    total_payoff = 0.0
                 
-                results.append((player_id, strategy, float(total_payoff)))
+                results.append((player_id, strategy, total_payoff))
                 player_id += 1
             
             all_results.append(results)
