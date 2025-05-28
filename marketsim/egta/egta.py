@@ -191,7 +191,6 @@ class EGTA:
             else:
                 reduced_game = self.game
             
-            # Always use quiesce_sync for equilibrium finding
             try:
                 self.equilibria = quiesce_sync(
                     game=reduced_game,  # Use reduced game for equilibrium finding

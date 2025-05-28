@@ -1,0 +1,225 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gameanalysis.learning module &#8212; Game Analysis 8.1.0 documentation</title>
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gameanalysis.matgame module" href="gameanalysis.matgame.html" />
+    <link rel="prev" title="gameanalysis.gamereader module" href="gameanalysis.gamereader.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.matgame.html" title="gameanalysis.matgame module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.gamereader.html" title="gameanalysis.gamereader module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" accesskey="U">gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.learning module</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-gameanalysis.learning">
+<span id="gameanalysis-learning-module"></span><h1>gameanalysis.learning module<a class="headerlink" href="#module-gameanalysis.learning" title="Permalink to this headline">¶</a></h1>
+<p>Package for learning complete games from data</p>
+<p>The API of this individual module is still unstable and may change as
+improvements or refinements are made.</p>
+<p>There are two general game types in this module: learned games and deviation
+games. Learned games vary by the method, but generally expose methods for
+computing payoffs and may other features. Deviation games use learned games and
+different functions to compute deviation payoffs via various methods.</p>
+<dl class="py function">
+<dt id="gameanalysis.learning.neighbor">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">neighbor</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">num_neighbors</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#neighbor"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.neighbor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a neighbor game from a model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>game</strong> (<em>RsGame</em>) – If this is a payoff model it will be used to take samples, if this is
+an existing deviation game, then this will use it’s underlying model.</p></li>
+<li><p><strong>num_neighbors</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of deviations to explore out.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.neighbor_json">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">neighbor_json</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">json</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#neighbor_json"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.neighbor_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read neighbor game from json</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.nngame_train">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">nngame_train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">epochs</span><span class="o">=</span><span class="default_value">100</span></em>, <em class="sig-param"><span class="n">layer_sizes</span><span class="o">=</span><span class="default_value">32, 32</span></em>, <em class="sig-param"><span class="n">dropout</span><span class="o">=</span><span class="default_value">0.2</span></em>, <em class="sig-param"><span class="n">verbosity</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">optimizer</span><span class="o">=</span><span class="default_value">'sgd'</span></em>, <em class="sig-param"><span class="n">loss</span><span class="o">=</span><span class="default_value">'mean_squared_error'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#nngame_train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.nngame_train" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train a neural network regression model</p>
+<p>This mostly exists as a proof of concept, individual testing should be done
+to make sure it is working sufficiently. This API will likely change to
+support more general architectures and training.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.point">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">point</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#point"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.point" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a point game from a model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>game</strong> (<em>RsGame</em>) – If this is a payoff model it will be used to take samples, if this is
+an existing deviation game, then this will use it’s underlying model.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.point_json">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">point_json</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">json</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#point_json"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.point_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read point game from json</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.rbfgame_json">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">rbfgame_json</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">json</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#rbfgame_json"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.rbfgame_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read an rbf game from json</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.rbfgame_train">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">rbfgame_train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">num_restarts</span><span class="o">=</span><span class="default_value">3</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#rbfgame_train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.rbfgame_train" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train a regression game with an RBF Gaussian process</p>
+<p>This model is somewhat well tests and has a few added benefits over
+standard regression models due the nature of its functional form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>game</strong> (<em>RsGame</em>) – The game to learn. Must have at least one payoff per strategy.</p></li>
+<li><p><strong>num_restarts</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of random restarts to make with the optimizer. Higher
+numbers will give a better fit (in expectation), but will take
+longer.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.sample">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">sample</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">num_samples</span><span class="o">=</span><span class="default_value">100</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.sample" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a sample game from a model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>game</strong> (<em>RsGame</em>) – If this is a payoff model it will be used to take samples, if this is
+an existing deviation game, then this will use it’s underlying model.</p></li>
+<li><p><strong>num_samples</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of samples to take.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.sample_json">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">sample_json</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">json</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#sample_json"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.sample_json" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read sample game from json</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.learning.sklgame_train">
+<code class="sig-prename descclassname">gameanalysis.learning.</code><code class="sig-name descname">sklgame_train</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">estimator</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/learning.html#sklgame_train"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.learning.sklgame_train" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a regression game from an arbitrary sklearn estimator</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>game</strong> (<em>RsGame</em>) – The game to learn, must have at least one payoff per strategy.</p></li>
+<li><p><strong>estimator</strong> (<em>sklearn estimator</em>) – An estimator that supports clone, fit, and predict via the stand
+scikit-learn estimator API.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="gameanalysis.gamereader.html"
+                        title="previous chapter">gameanalysis.gamereader module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="gameanalysis.matgame.html"
+                        title="next chapter">gameanalysis.matgame module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/gameanalysis.learning.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.matgame.html" title="gameanalysis.matgame module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.gamereader.html" title="gameanalysis.gamereader module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" >gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.learning module</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, Strategic Reasoning Group.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.2.1.
+    </div>
+  </body>
+</html>

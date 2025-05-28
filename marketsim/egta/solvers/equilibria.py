@@ -55,7 +55,6 @@ class DeviationPriorityQueue:
             strategy: Strategy index
             mixture: Base strategy mixture
         """
-        # Negate gain for max-heap (heapq is a min-heap)
         heapq.heappush(self.queue, (-gain, strategy, mixture))
         
     def pop(self) -> Tuple[float, int, torch.Tensor]:
@@ -103,33 +102,50 @@ def replicator_dynamics(game: Game,
         num_random_starts: Number of random starting points to generate
         epsilon: Small value for numerical stability
         similarity_threshold: Threshold for considering two mixtures as the same equilibrium
-        
     Returns:
         Final mixture(s) or tuple of (final_mixture, trace) if return_trace is True
     """
     device = game.game.device
     num_strategies = game.num_strategies
     
-    # Generate multiple starting points if requested
     if mixture is None and use_multiple_starts:
         starting_mixtures = []
         
-        # 1. Uniform mixture
         uniform_mixture = torch.ones(num_strategies, device=device) / num_strategies
         starting_mixtures.append(uniform_mixture)
         
-        # 2. 80% on each strategy, 20% uniform across others
         for s in range(num_strategies):
             skewed_mixture = torch.ones(num_strategies, device=device) * 0.2 / (num_strategies - 1) if num_strategies > 1 else torch.ones(1, device=device)
             if num_strategies > 1:
                 skewed_mixture[s] = 0.8
             starting_mixtures.append(skewed_mixture)
         
-        # 3. Random points
+        if hasattr(game, 'strategy_names') and game.strategy_names:
+            melo_indices = []
+            non_melo_indices = []
+            
+            for idx, strategy_name in enumerate(game.strategy_names):
+                if "MELO" in strategy_name or "melo" in strategy_name:
+                    melo_indices.append(idx)
+                else:
+                    non_melo_indices.append(idx)
+            
+            if melo_indices:
+                pure_melo = torch.zeros(num_strategies, device=device)
+                pure_melo[melo_indices] = 1.0 / len(melo_indices)
+                starting_mixtures.append(pure_melo)
+            
+            if non_melo_indices:
+                pure_non_melo = torch.zeros(num_strategies, device=device)
+                pure_non_melo[non_melo_indices] = 1.0 / len(non_melo_indices)
+                starting_mixtures.append(pure_non_melo)
+        
         for _ in range(num_random_starts):
             random_mixture = torch.rand(num_strategies, device=device)
             random_mixture = random_mixture / random_mixture.sum()
             starting_mixtures.append(random_mixture)
+        
+
         
        
         equilibria = []  
@@ -183,7 +199,7 @@ def replicator_dynamics(game: Game,
                 equilibria.append((result_mixture, current_regret, expected_utility))
                 basin_counts.append(1)
         
-        # Find equilibrium with largest basin
+        
         if equilibria:
             max_basin_size = max(basin_counts)
             candidates = [eq for i, eq in enumerate(equilibria) if basin_counts[i] == max_basin_size]
@@ -422,18 +438,18 @@ def regret(game: Game, mixture: torch.Tensor) -> torch.Tensor:
 async def quiesce(
     game: Game, 
     num_iters: int = 10,
-    num_random_starts: int = 10,  # Adding parameter for random starts
-    regret_threshold: float = 1e-3,  # More lenient threshold (was 1e-4)
-    dist_threshold: float = 1e-4,    # More lenient threshold (was 1e-3)
+    num_random_starts: int = 10, 
+    regret_threshold: float = 1e-3,  
+    dist_threshold: float = 1e-4,    
     restricted_game_size: int = 4,
     solver: str = 'replicator',
-    solver_iters: int = 5000,        # More iterations (was 1000)
+    solver_iters: int = 5000,       
     verbose: bool = True, 
     maximal_subgames: Set[frozenset] = None
 ) -> List[Tuple[torch.Tensor, float]]:
     """
     find all equilibria of a game using the QUIESCE algorithm.
-    This implementation follows the formal algorithm as outlined in
+    this implementation follows the formal algorithm as outlined in
     Erik Brinkman's work. 
     
     Args:
@@ -487,19 +503,71 @@ async def quiesce(
     )
     unconfirmed_candidates.append(uniform_candidate)
     
-    # Add the full game to maximal subgames collection
+    # Add pure MELO and pure non-MELO starting points
+    if hasattr(game, 'strategy_names') and game.strategy_names:
+        # Identify MELO strategies (those containing "MELO" in their name)
+        melo_indices = []
+        non_melo_indices = []
+        
+        for idx, strategy_name in enumerate(game.strategy_names):
+            if "MELO" in strategy_name or "melo" in strategy_name:
+                melo_indices.append(idx)
+            else:
+                non_melo_indices.append(idx)
+        
+        if melo_indices:
+            pure_melo_mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            pure_melo_mixture[melo_indices] = 1.0 / len(melo_indices)
+            pure_melo_candidate = SubgameCandidate(
+                support=set(melo_indices),
+                restriction=melo_indices,
+                mixture=pure_melo_mixture
+            )
+            unconfirmed_candidates.append(pure_melo_candidate)
+            
+            if verbose:
+                print(f"Added pure MELO starting point with {len(melo_indices)} MELO strategies")
+            
+            if len(melo_indices) <= restricted_game_size:
+                maximal_subgames.add(frozenset(melo_indices))
+        
+        if non_melo_indices:
+            pure_non_melo_mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            pure_non_melo_mixture[non_melo_indices] = 1.0 / len(non_melo_indices)
+            pure_non_melo_candidate = SubgameCandidate(
+                support=set(non_melo_indices),
+                restriction=non_melo_indices,
+                mixture=pure_non_melo_mixture
+            )
+            unconfirmed_candidates.append(pure_non_melo_candidate)
+            
+            if verbose:
+                print(f"Added pure non-MELO starting point with {len(non_melo_indices)} non-MELO strategies")
+            
+            if len(non_melo_indices) <= restricted_game_size:
+                maximal_subgames.add(frozenset(non_melo_indices))
+    
     if len(game.strategy_names) <= restricted_game_size:
         maximal_subgames.add(frozenset(range(game.num_strategies)))
     
-    # Add random starting points to increase exploration
     for i in range(num_random_starts):
-        # Generate random mixture
         rand_mixture = torch.rand(game.num_strategies, device=game.game.device)
+        
+        if hasattr(game, 'strategy_names') and game.strategy_names and i < num_random_starts // 3:
+            melo_mask = torch.zeros(game.num_strategies, dtype=torch.bool, device=game.game.device)
+            for idx, strategy_name in enumerate(game.strategy_names):
+                if "MELO" in strategy_name or "melo" in strategy_name:
+                    melo_mask[idx] = True
+            
+            if i % 2 == 0 and melo_mask.any():
+                rand_mixture[melo_mask] *= 10.0
+            elif (~melo_mask).any():
+                rand_mixture[~melo_mask] *= 10.0
+        
         rand_mixture = rand_mixture / rand_mixture.sum()
         
-        # Create support set (include strategies with significant probability)
         support = set([s for s in range(game.num_strategies) if rand_mixture[s] > 0.05])
-        if len(support) == 0:  # Ensure at least one strategy in support
+        if len(support) == 0:  
             support = {torch.argmax(rand_mixture).item()}
             
         rand_candidate = SubgameCandidate(
@@ -553,7 +621,7 @@ async def quiesce(
         
         if not deviation_queue.is_empty():
             gain, strategy, base_mixture = deviation_queue.pop()
-            
+
             if verbose:
                 print(f"  Exploring deviation to {game.strategy_names[strategy]} with gain {gain:.6f}")
                 
@@ -578,7 +646,7 @@ async def quiesce(
                 if len(restriction) <= restricted_game_size:
                     maximal_subgames.add(restriction_set)
                     if verbose:
-                        print(f"  Added new maximal subgame: {restriction}")
+                        print(f"Added new maximal subgame: {restriction}")
             
             # Create restricted game
             restricted_game = game.restrict(restriction)
@@ -588,17 +656,13 @@ async def quiesce(
             for i, s in enumerate(restriction):
                 if s in support:
                     idx = list(support).index(s)
-                    # Copy probability from base mixture, but leave some for the new strategy
                     init_restricted[i] = base_mixture[s] * 0.8
             
-            # Add probability for the new strategy
             new_idx = restriction.index(strategy)
-            init_restricted[new_idx] = 0.2  # Start with some weight on the beneficial deviation
+            init_restricted[new_idx] = 0.2 
             
-            # Normalize
             init_restricted = init_restricted / init_restricted.sum()
             
-            # Run solver on restricted game to find equilibrium
             solver_start = time.time()
             if solver == 'replicator':
                 equilibrium = replicator_dynamics(restricted_game, init_restricted, iters=solver_iters)
@@ -615,10 +679,8 @@ async def quiesce(
             for i, s in enumerate(restriction):
                 full_mixture[s] = equilibrium[i]
             
-            # Get regret in full game
             regret_val = game.regret(full_mixture).item()
             
-            # Create candidate
             candidate = SubgameCandidate(
                 support=new_support,
                 restriction=restriction,
@@ -629,10 +691,8 @@ async def quiesce(
             if verbose:
                 print(f"  Solver completed in {solver_time:.4f} seconds with regret {regret_val:.6f}")
                 
-            # Add to unconfirmed candidates
             unconfirmed_candidates.append(candidate)
     
-    # Sort equilibria by regret
     confirmed_eq.sort(key=lambda x: x[1])
     
     if verbose:
@@ -653,7 +713,6 @@ def quiesce_sync(
     solver_iters=1000,
     verbose=False
 ):
-    """Synchronous wrapper for quiesce - finds all equilibria of a game using QUIESCE."""
     # Import and apply nest_asyncio to handle nested event loops
     import nest_asyncio
     nest_asyncio.apply()

@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gameanalysis.reduction.identity module &#8212; Game Analysis 8.1.0 documentation</title>
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gameanalysis.reduction.twins module" href="gameanalysis.reduction.twins.html" />
+    <link rel="prev" title="gameanalysis.reduction.hierarchical module" href="gameanalysis.reduction.hierarchical.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.reduction.twins.html" title="gameanalysis.reduction.twins module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.reduction.hierarchical.html" title="gameanalysis.reduction.hierarchical module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" >gameanalysis package</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="gameanalysis.reduction.html" accesskey="U">gameanalysis.reduction package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.reduction.identity module</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-gameanalysis.reduction.identity">
+<span id="gameanalysis-reduction-identity-module"></span><h1>gameanalysis.reduction.identity module<a class="headerlink" href="#module-gameanalysis.reduction.identity" title="Permalink to this headline">¶</a></h1>
+<p>Identity reduction</p>
+<p>This is the same as not reducing a game.</p>
+<dl class="py function">
+<dt id="gameanalysis.reduction.identity.expand_deviation_profiles">
+<code class="sig-prename descclassname">gameanalysis.reduction.identity.</code><code class="sig-name descname">expand_deviation_profiles</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">full_game</span></em>, <em class="sig-param"><span class="n">rest</span></em>, <em class="sig-param"><span class="n">red_players</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">role_index</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/reduction/identity.html#expand_deviation_profiles"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.reduction.identity.expand_deviation_profiles" title="Permalink to this definition">¶</a></dt>
+<dd><p>Expand all deviation profiles from a restriction</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>full_game</strong> (<em>Game</em>) – The game the deviations profiles will be valid for.</p></li>
+<li><p><strong>rest</strong> (<em>[</em><em>bool</em><em>]</em>) – The restriction to get deviations from.</p></li>
+<li><p><strong>red_players</strong> (<em>[</em><em>int</em><em>]</em><em>, </em><em>optional</em>) – The number of players in each role in the reduced game.IF
+specified, it must match the number for full_game.</p></li>
+<li><p><strong>role_index</strong> (<em>int</em><em>, </em><em>optional</em>) – If specified , only expand deviations for the role selected.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.reduction.identity.expand_profiles">
+<code class="sig-prename descclassname">gameanalysis.reduction.identity.</code><code class="sig-name descname">expand_profiles</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">full_game</span></em>, <em class="sig-param"><span class="n">profiles</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/reduction/identity.html#expand_profiles"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.reduction.identity.expand_profiles" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return input profiles</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>full_game</strong> (<em>Game</em>) – Game that all profiles must be valid for.</p></li>
+<li><p><strong>profiles</strong> (<em>ndarray-like</em>) – The profiles.</p></li>
+<li><p><strong>axis</strong> (<em>int</em><em>, </em><em>optional</em>) – The axis the profiles lie on.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.reduction.identity.reduce_game">
+<code class="sig-prename descclassname">gameanalysis.reduction.identity.</code><code class="sig-name descname">reduce_game</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">full_game</span></em>, <em class="sig-param"><span class="n">red_players</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/reduction/identity.html#reduce_game"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.reduction.identity.reduce_game" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return original game</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>full_game</strong> (<em>Game</em>) – The game to reduce.</p></li>
+<li><p><strong>red_players</strong> (<em>ndarray-like</em><em>, </em><em>optional</em>) – If specified, this must match the number of players per role in
+full_game.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.reduction.identity.reduce_profiles">
+<code class="sig-prename descclassname">gameanalysis.reduction.identity.</code><code class="sig-name descname">reduce_profiles</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">red_game</span></em>, <em class="sig-param"><span class="n">profiles</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/reduction/identity.html#reduce_profiles"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.reduction.identity.reduce_profiles" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return original profiles</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>red_game</strong> (<em>Game</em>) – Game that all profiles must be valid for.</p></li>
+<li><p><strong>profiles</strong> (<em>ndarray-like</em>) – The profiles.</p></li>
+<li><p><strong>axis</strong> (<em>int</em><em>, </em><em>optional</em>) – The axis the profiles are on.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="gameanalysis.reduction.hierarchical.html"
+                        title="previous chapter">gameanalysis.reduction.hierarchical module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="gameanalysis.reduction.twins.html"
+                        title="next chapter">gameanalysis.reduction.twins module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/gameanalysis.reduction.identity.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.reduction.twins.html" title="gameanalysis.reduction.twins module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.reduction.hierarchical.html" title="gameanalysis.reduction.hierarchical module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" >gameanalysis package</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="gameanalysis.reduction.html" >gameanalysis.reduction package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.reduction.identity module</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, Strategic Reasoning Group.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.2.1.
+    </div>
+  </body>
+</html>

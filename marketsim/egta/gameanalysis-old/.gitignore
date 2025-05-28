@@ -1,0 +1,44 @@
+# Python #
+##########
+*.pyc
+*.ipynb*
+/.coverage
+/.coverage.*
+/.cache
+/test/.cache
+/.eggs
+/*.egg-info
+/dist
+/build
+/.pytest_cache
+__pycache__
+
+# Editors #
+###########
+*.swp
+*~
+\#*\#
+
+# Venv #
+########
+/bin
+/include
+/lib
+/lib64
+/man
+/share
+/pip-selfcheck.json
+/pyvenv.cfg
+/src
+/site-packages
+
+# LaTeX #
+#########
+*.aux
+*.log
+*.pdf
+*.out
+
+# Misc #
+########
+.DS_Store

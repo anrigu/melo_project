@@ -1,0 +1,167 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gameanalysis.fixedpoint module &#8212; Game Analysis 8.1.0 documentation</title>
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gameanalysis.gambit module" href="gameanalysis.gambit.html" />
+    <link rel="prev" title="gameanalysis.dominance module" href="gameanalysis.dominance.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.gambit.html" title="gameanalysis.gambit module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.dominance.html" title="gameanalysis.dominance module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" accesskey="U">gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.fixedpoint module</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-gameanalysis.fixedpoint">
+<span id="gameanalysis-fixedpoint-module"></span><h1>gameanalysis.fixedpoint module<a class="headerlink" href="#module-gameanalysis.fixedpoint" title="Permalink to this headline">¶</a></h1>
+<p>Module for finding fixed points of functions on a simplex</p>
+<dl class="py function">
+<dt id="gameanalysis.fixedpoint.fixed_point">
+<code class="sig-prename descclassname">gameanalysis.fixedpoint.</code><code class="sig-name descname">fixed_point</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">func</span></em>, <em class="sig-param"><span class="n">init</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/fixedpoint.html#fixed_point"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.fixedpoint.fixed_point" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute an approximate fixed point of a function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<em>ndarray -&gt; ndarray</em>) – A continuous function mapping from the d-simplex to itself.</p></li>
+<li><p><strong>init</strong> (<em>ndarray</em>) – An initial guess for the fixed point. Since many may exist, the choice
+of starting point will affect the solution.</p></li>
+<li><p><strong>kwargs</strong> (<em>options</em>) – Additional options to pass on to labeled_subsimplex. See other options
+for details.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.fixedpoint.labeled_subsimplex">
+<code class="sig-prename descclassname">gameanalysis.fixedpoint.</code><code class="sig-name descname">labeled_subsimplex</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">label_func</span></em>, <em class="sig-param"><span class="n">init</span></em>, <em class="sig-param"><span class="n">disc</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/fixedpoint.html#labeled_subsimplex"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.fixedpoint.labeled_subsimplex" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find approximate center of a fully labeled subsimplex</p>
+<p>This runs once at the discretization provided. It is recommended that this
+be run several times with successively finer discretization and warm
+started with the past result.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label_func</strong> (<em>ndarray -&gt; int</em>) – A proper lableing function. A labeling function takes an element of the
+d-simplex and returns a label in [0, d). It is proper if the label
+always coresponds to a dimension in support.</p></li>
+<li><p><strong>init</strong> (<em>ndarray</em>) – An initial guess for where the fully labeled element might be. This
+will be projected onto the simplex if it is not already.</p></li>
+<li><p><strong>disc</strong> (<em>int</em>) – The discretization to use. Fixed points will be approximated by the
+reciprocal this much.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>ret</strong> – A discretized simplex with 1 coarser resolution (i.e. ret.sum() + 1 ==
+init.sum()) that is fully labeled.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This is an implementation of the sandwhich method from <a class="footnote-reference brackets" href="#id3" id="id1">5</a> and <a class="footnote-reference brackets" href="#id4" id="id2">6</a></p>
+<dl class="footnote brackets">
+<dt class="label" id="id3"><span class="brackets"><a class="fn-backref" href="#id1">5</a></span></dt>
+<dd><p>Kuhn and Mackinnon 1975. Sandwich Method for Finding Fixed Points.</p>
+</dd>
+<dt class="label" id="id4"><span class="brackets"><a class="fn-backref" href="#id2">6</a></span></dt>
+<dd><p>Kuhn 1968. Simplicial Approximation Of Fixed Points.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="gameanalysis.dominance.html"
+                        title="previous chapter">gameanalysis.dominance module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="gameanalysis.gambit.html"
+                        title="next chapter">gameanalysis.gambit module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/gameanalysis.fixedpoint.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.gambit.html" title="gameanalysis.gambit module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.dominance.html" title="gameanalysis.dominance module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" >gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.fixedpoint module</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, Strategic Reasoning Group.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.2.1.
+    </div>
+  </body>
+</html>

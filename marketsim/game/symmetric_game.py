@@ -46,9 +46,8 @@ class SymmetricGame(AbstractGame):
         # Set epsilon based on data type
         if epsilon is None:
             if isinstance(device, str):
-            self.epsilon = F32_EPSILON if device.startswith("cuda") else F64_EPSILON
+                self.epsilon = F32_EPSILON if device.startswith("cuda") else F64_EPSILON
             else:
-                # For torch.device objects
                 self.epsilon = F32_EPSILON if device.type.startswith("cuda") else F64_EPSILON
         else:
             self.epsilon = epsilon

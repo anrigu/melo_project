@@ -54,11 +54,9 @@ class DPRScheduler(Scheduler):
             self.scaling_factor = 1.0
 
             
-        # Track profiles we've seen and scheduled
         self.scheduled_profiles: Set[Tuple[str, ...]] = set()
         self.requested_subgames: List[Set[str]] = []
         
-        # Initialize with a full subgame request
         self._initialize_with_uniform_subgame()
     
     def _initialize_with_uniform_subgame(self):
