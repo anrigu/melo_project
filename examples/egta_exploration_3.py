@@ -1,4 +1,3 @@
-
 # # EGTA Framework Exploration
 # 
 # This notebook demonstrates how to use the Empirical Game-Theoretic Analysis (EGTA) framework to explore strategic interactions between agents deciding how to allocate their trading between traditional CDA markets and the MELO mechanism.
@@ -137,8 +136,7 @@ simulator = MeloSimulator(
 #     reps=6000,
 #     shock_var=1e1,
 #     num_zi=15,
-#     num_hbl=0                     # Number of simulation repetitions per profile
-# )
+#     num_hbl=0                    
 
 # Get available strategies
 strategies = simulator.get_strategies()
@@ -154,8 +152,8 @@ for strategy in strategies:
 # Create DPR scheduler with reduction
 scheduler = DPRScheduler(
     strategies=strategies,
-    num_players=10,           # Full game has 10 players (N)
-    reduction_size=4,         # Reduced game has 4 players (n)
+    num_players=10,           
+    reduction_size=4,        
     subgame_size=min(2, len(strategies)),
     batch_size=11,
     seed=42
@@ -175,7 +173,7 @@ egta = EGTA(
 )
 
 
-# Run EGTA (this may take some time)
+
 print("Starting EGTA experiment...")
 print(f"Analyzing market allocation strategies: {strategies}")
 
@@ -183,7 +181,16 @@ game = egta.run(
     max_iterations=100, 
     profiles_per_iteration=1000,  
     save_frequency=1,   
-    verbose=True         
+    verbose=True,
+    quiesce_kwargs={
+        'num_iters': 50,
+        'num_random_starts': 20,
+        'regret_threshold': 1e-3,
+        'dist_threshold': 1e-2,
+        'solver': 'replicator',
+        'solver_iters': 5000,
+        'restricted_game_size': 4
+    }
 )
 
 print("\nEGTA experiment completed!")

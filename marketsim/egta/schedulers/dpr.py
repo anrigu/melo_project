@@ -125,11 +125,9 @@ class DPRScheduler(Scheduler):
         device = game.game.device
         strategy_mapping = {name: i for i, name in enumerate(game.strategy_names)}
         
-        # Create candidates for each subgame we've explored
         candidates = []
         
         for subgame in self.requested_subgames:
-            # Skip if not all profiles for this subgame have been simulated
             subgame_indices = [strategy_mapping[s] for s in subgame if s in strategy_mapping]
             
             if len(subgame_indices) < len(subgame):
@@ -187,11 +185,9 @@ class DPRScheduler(Scheduler):
         device = game.game.device
         mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
         
-        # Get deviation payoffs and apply scaling
         payoffs = game.deviation_payoffs(mixture_tensor)
         scaled_payoffs = self.scale_payoffs(payoffs)
         
-        # Sort by scaled payoffs
         sorted_indices = np.argsort(-scaled_payoffs.cpu().numpy())
         
         deviating_indices = sorted_indices[:num_deviations]
@@ -224,7 +220,6 @@ class DPRScheduler(Scheduler):
         if game is None:
             profiles_to_simulate = []
             for subgame in self.requested_subgames:
-                # Generate profiles using the reduced player count
                 profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         else:
             self.game = game
@@ -235,7 +230,6 @@ class DPRScheduler(Scheduler):
             for candidate in candidates:
                 support_strategies = self._select_support_strategies(game, candidate)
                 
-                # Strategies with highest scaled deviation payoffs
                 deviating_strategies = self._select_deviating_strategies(game, candidate)
                 
                 new_subgame = support_strategies.union(deviating_strategies)
@@ -249,7 +243,6 @@ class DPRScheduler(Scheduler):
             
             profiles_to_simulate = []
             for subgame in new_subgames:
-                # Generate profiles using the reduced player count
                 profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         
         new_profiles = []
@@ -260,7 +253,6 @@ class DPRScheduler(Scheduler):
                 new_profiles.append(profile)
                 self.scheduled_profiles.add(sorted_profile)
         
-        # Shuffle and limit batch size
         self.rand.shuffle(new_profiles)
         return new_profiles[:self.batch_size]
     

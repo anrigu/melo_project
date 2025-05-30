@@ -6,6 +6,11 @@ import time
 import matplotlib.pyplot as plt
 from typing import List, Dict, Tuple, Optional
 import seaborn as sns
+import json
+import pandas as pd
+from datetime import datetime
+from matplotlib.lines import Line2D
+
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,33 +23,20 @@ from marketsim.egta.solvers.equilibria import replicator_dynamics, regret
 import math
 
 def analyze_basins_of_attraction(game, num_points=100, iters=5000):
-    """
-    Analyze and visualize the basins of attraction for the game's equilibria.
-    
-    Args:
-        game: The game to analyze
-        num_points: Number of initial points to test
-        iters: Number of iterations for replicator dynamics
-        
-    Returns:
-        Tuple of (grid_mixtures, final_states, equilibria)
-    """
+
     print("\nAnalyzing basins of attraction...")
     
-    # We need at least 2 strategies to analyze basins of attraction
     if game.num_strategies < 2:
         print("Need at least 2 strategies to analyze basins of attraction")
         return None
     
-    # For 2-strategy games, create a 1D grid from all MELO to all CDA
     if game.num_strategies == 2:
-        # Generate grid of initial mixtures
         grid_mixtures = []
         for i in range(num_points + 1):
             p = i / num_points
             mix = torch.zeros(game.num_strategies, device=game.game.device)
-            mix[0] = p  # MELO_0_100 probability
-            mix[1] = 1 - p  # MELO_100_0 probability
+            mix[0] = p  
+            mix[1] = 1 - p  
             grid_mixtures.append(mix)
         
         # Run replicator dynamics from each starting point
@@ -78,12 +70,9 @@ def analyze_basins_of_attraction(game, num_points=100, iters=5000):
             
             converged_to_eq.append(converged_to)
         
-        # Visualize the basins of attraction
-        # Plot 1: Basin of Attraction
         plt.figure(figsize=(12, 6))
         x_vals = [mix[0].item() for mix in grid_mixtures]
         
-        # Create colors for each equilibrium
         colors = {"All MELO": "blue", "All CDA": "red", "Mixed": "purple", "None": "gray"}
         point_colors = [colors[eq] for eq in converged_to_eq]
         
@@ -92,8 +81,6 @@ def analyze_basins_of_attraction(game, num_points=100, iters=5000):
         plt.xlabel('Initial MELO Probability')
         plt.title('Basin of Attraction (Initial → Final State)')
         
-        # Add a legend
-        from matplotlib.lines import Line2D
         legend_elements = [
             Line2D([0], [0], marker='o', color='w', markerfacecolor=colors["All MELO"], label='All MELO', markersize=10),
             Line2D([0], [0], marker='o', color='w', markerfacecolor=colors["All CDA"], label='All CDA', markersize=10),
@@ -124,11 +111,8 @@ def analyze_basins_of_attraction(game, num_points=100, iters=5000):
         plt.savefig('trajectory_samples.png')
         plt.show()
 
-        # Plot 3: Heatmap showing trajectories
-        # Find the maximum trace length
         max_trace_len = max(len(trace) for trace in traces)
         
-        # Create an array with the right dimensions
         trajectory_data = np.zeros((len(traces), max_trace_len))
         
         # Fill in trajectory data - probability of MELO
@@ -168,7 +152,6 @@ def analyze_basins_of_attraction(game, num_points=100, iters=5000):
         return grid_mixtures, final_states, converged_to_eq
     
     else:
-        # For games with more than 2 strategies, we'd need a different visualization
         print("Basin visualization for >2 strategies not implemented yet")
         return None
 
@@ -182,218 +165,425 @@ else:
 
 def run_mobi_zi_egta():
     num_mobi_agents = 10
-    num_zi_agents = 15
-    holding_period = 290
-    sim_time = 10000  # 1×10^4 timesteps as specified
-    num_iterations = 10
-    num_strategies = 2 
-    batch_size = int(math.factorial(num_mobi_agents + num_strategies - 1) / 
-                     (math.factorial(num_mobi_agents)  * math.factorial(num_strategies - 1)))
-    print(batch_size)
+    num_zi_agents = 30
+    holding_periods = [160, 180]
     
-    print(f"Running EGTA with {num_mobi_agents} MOBI and {num_zi_agents} ZI agents")
-    print(f"Holding period: {holding_period}")
-    print(f"Simulation time: {sim_time}")
+    # Store results for all holding periods
+    all_results = []
     
-    # Create simulator with paper-specified parameters
-    simulator = MeloSimulator(
-        num_strategic=num_mobi_agents, 
-        sim_time=sim_time,
-        lam=0.006,           # Background trader arrival rate: once every 167 timesteps
-        mean=1000000,        # Fundamental mean: 1×10^6
-        r=0.05,              # Mean-reversion parameter: 5×10^-2
-        shock_var=100,       # Fundamental shock variance: 1×10^2
-        q_max=10,            # Maximum position: 10
-        pv_var=5000000,      # Private value variance: 5×10^6
-        shade=[10, 30],      # Surplus offset bounds: [10, 30]
-        holding_period=holding_period,  
-        lam_melo=0.001,      # MOBI trader arrival rate: 1×10^-3 (once every 1000 timesteps)
-        num_zi=num_zi_agents,  
-        num_hbl=0, 
-        reps=10000           # Number of simulations per strategy profile: 10,000
-    )
+    for holding_period in holding_periods:
+        print(f"\n{'='*60}")
+        print(f"RUNNING EXPERIMENT: HOLDING PERIOD {holding_period}")
+        print(f"{'='*60}")
     
-    strategies = simulator.get_strategies()
-    print(f"Available strategies: {strategies}")
-    
-    for strategy, params in simulator.strategy_params.items():
-        print(f"{strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
-    
-    scheduler = DPRScheduler(
-        strategies=strategies,
-        num_players=simulator.get_num_players(),
-        batch_size=batch_size,
-        reduction_size=4, #num_mobi - 1 / reduction_size - 1 needs to be an integer
-        seed=42
-    )
-    
-    # Alternative: Use RandomScheduler for more diverse profile sampling
-    # scheduler = RandomScheduler(
-    #     strategies=strategies,
-    #     num_players=simulator.get_num_players(),
-    #     batch_size=20,
-    #     seed=42
-    # )
-    
-    egta = EGTA(
-        simulator=simulator,
-        scheduler=scheduler,
-        device=device,
-        output_dir="results/mobi_zi_egta",
-        max_profiles=batch_size,
-        seed=42
-    )
-    
-    # Run EGTA
-    print("Running EGTA...")
-    start_time = time.time()
-    game = egta.run(
-        max_iterations=num_iterations,
-        profiles_per_iteration=20,
-        save_frequency=1,
-        verbose=True
-    )
-    end_time = time.time()
-    print(f"EGTA completed in {end_time - start_time:.2f} seconds")
-    
-    print("\nGame Details:")
-    print(f"Strategy names: {game.strategy_names}")
-    
-    # Get the payoff matrix
-    payoff_matrix = game.game.payoff_table.cpu().numpy()
-    print("\nPayoff Matrix:")
-    for i, strategy in enumerate(game.strategy_names):
-        print(f"{strategy}: {payoff_matrix[i]}")
-    
-    # Get equilibrium from EGTA
-    if egta.equilibria:
-        eq_mixture, eq_regret = egta.equilibria[0]  # Get the first (usually best) equilibrium
+        sim_time = 10000  # 1×10^4 timesteps as specified
+        num_iterations = 10
+        num_strategies = 2 
+        batch_size = int(math.factorial(num_mobi_agents + num_strategies - 1) / 
+                        (math.factorial(num_mobi_agents)  * math.factorial(num_strategies - 1)))
+        print(f"Batch size: {batch_size}")
         
-        print("\nEquilibria found by EGTA:")
+        print(f"Running EGTA with {num_mobi_agents} MOBI and {num_zi_agents} ZI agents")
+        print(f"Holding period: {holding_period}")
+        print(f"Simulation time: {sim_time}")
         
-        # Calculate welfare for each equilibrium
-        print("\nWelfare Analysis of Equilibria:")
-        welfare_data = []
-        welfare_data_exp = []  # Exponentiated welfare
-        labels = []
+        # Create simulator with paper-specified parameters
+        simulator = MeloSimulator(
+            num_strategic=num_mobi_agents, 
+            sim_time=sim_time,
+            lam=0.006,           
+            mean=1000000.0,      
+            r=0.001,              # Mean-reversion parameter: 5×10^-2
+            shock_var=100,       # Fundamental shock variance: 1×10^2
+            q_max=10,            # Maximum position: 10
+            pv_var=5000000,      # Private value variance: 5×10^6
+            shade=[10, 30],      # Surplus offset bounds: [10, 30]
+            holding_period=holding_period,  
+            lam_melo=0.001,      # MOBI trader arrival rate: 1×10^-3 (once every 1000 timesteps)
+            num_zi=num_zi_agents,  
+            num_hbl=0, 
+            reps=10000           # Number of simulations per strategy profile
+        )
         
-        strategy_to_idx = {name: i for i, name in enumerate(game.strategy_names)}
+        strategies = simulator.get_strategies()
+        print(f"Available strategies: {strategies}")
         
-        profile_payoffs = {}
-        for profile_data in egta.payoff_data:
-            profile_str = str([(player_id, strat) for player_id, strat, _ in profile_data])
-            if profile_str not in profile_payoffs:
-                profile_payoffs[profile_str] = []
-            profile_payoffs[profile_str].extend([payoff for _, _, payoff in profile_data])
+        for strategy, params in simulator.strategy_params.items():
+            print(f"{strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
         
-        for i, (mixture, regret_val) in enumerate(egta.equilibria):
-            #calculate expected payoff as weighted sum of profile payoffs
-            expected_welfare = 0.0
-            weight_sum = 0.0
-            
-            # For each profile in our payoff data
-            for profile_str, payoffs in profile_payoffs.items():
-                # Count strategy occurrences in profile
-                profile_list = eval(profile_str)
-                strategy_counts = {}
-                for _, strat in profile_list:
-                    if strat not in strategy_counts:
-                        strategy_counts[strat] = 0
-                    strategy_counts[strat] += 1
-                
-                profile_prob = 1.0
-                for strat, count in strategy_counts.items():
-                    if strat in strategy_to_idx:
-                        strat_idx = strategy_to_idx[strat]
-                        profile_prob *= mixture[strat_idx].item() ** count
-                
-                # Calculate the average payoff for this profile
-                avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
-                
-                # Add to expected welfare
-                expected_welfare += profile_prob * avg_payoff
-                weight_sum += profile_prob
-            
-            if weight_sum > 0:
-                expected_welfare /= weight_sum
-            
-            # Convert from log space to direct payoff
-            expected_welfare_exp = np.exp(expected_welfare)
-            
-            welfare_data.append(expected_welfare)
-            welfare_data_exp.append(expected_welfare_exp)
-            labels.append(f"Eq {i+1}")
-            
-            print(f"\nEquilibrium {i+1} (regret: {regret_val:.6f}):")
-            print(f"  Expected MOBI Agent Welfare (log space): {expected_welfare:.6f}")
-            print(f"  Expected MOBI Agent Welfare (actual): {expected_welfare_exp:.2f}")
-            for j, strategy in enumerate(game.strategy_names):
-                print(f"  {strategy}: {mixture[j].item():.6f}")
+        scheduler = DPRScheduler(
+            strategies=strategies,
+            num_players=num_mobi_agents,
+            batch_size=batch_size,
+            reduction_size=4, #num_mobi - 1 / reduction_size - 1 needs to be an integer
+            seed=42
+        )
         
-        # Create two charts - one for log space, one for direct space
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        egta = EGTA(
+            simulator=simulator,
+            scheduler=scheduler,
+            device=device,
+            output_dir=f"results/mobi_zi_egta/holding_period_{holding_period}",
+            max_profiles=batch_size,
+            seed=42
+        )
         
-        ax1.bar(labels, welfare_data)
-        ax1.set_ylabel('Expected Agent Welfare (log space)')
-        ax1.set_title('Welfare Analysis - Log Space')
-        for i, v in enumerate(welfare_data):
-            ax1.text(i, v + 0.02, f'{v:.2f}', ha='center')
+        print("Running EGTA...")
+        start_time = time.time()
+        game = egta.run(
+            max_iterations=num_iterations,
+            profiles_per_iteration=20,
+            save_frequency=1,
+            verbose=True,
+            quiesce_kwargs={
+                'num_iters': 50,
+                'num_random_starts': 20,
+                'regret_threshold': 1e-3,
+                'dist_threshold': 1e-2,
+                'solver': 'replicator',
+                'solver_iters': 5000,
+                'restricted_game_size': 4
+            }
+        )
+        end_time = time.time()
+        print(f"EGTA completed in {end_time - start_time:.2f} seconds")
         
-        ax2.bar(labels, welfare_data_exp)
-        ax2.set_ylabel('Expected Agent Welfare (actual)')
-        ax2.set_title('Welfare Analysis - Actual Values')
-        for i, v in enumerate(welfare_data_exp):
-            ax2.text(i, v * 1.02, f'{v:.0f}', ha='center')
-            
-        plt.tight_layout()
-        plt.savefig('mobi_zi_welfare.png')
-        plt.show()
+        print("\nGame Details:")
+        print(f"Strategy names: {game.strategy_names}")
         
-        print("\nDetailed analysis of best equilibrium:")
+        # Get the payoff matrix
+        payoff_matrix = game.game.payoff_table.cpu().numpy()
+        print("\nPayoff Matrix:")
         for i, strategy in enumerate(game.strategy_names):
-            print(f"{strategy}: {eq_mixture[i].item():.6f}")
+            print(f"{strategy}: {payoff_matrix[i]}")
         
-        regret_val = eq_regret if isinstance(eq_regret, float) else eq_regret.item()
-        print(f"Regret: {regret_val:.6f}")
+        welfare_data = []
+        labels = []
+        eq_mixture = None
         
-        # Save equilibrium visualization
-        plt.figure(figsize=(10, 6))
-        plt.bar(game.strategy_names, eq_mixture.cpu().numpy())
-        plt.ylabel('Probability')
-        plt.title(f'Equilibrium Distribution (Regret: {regret_val:.6f})')
-        plt.ylim(0, 1)
+        if egta.equilibria:
+            eq_mixture, eq_regret = egta.equilibria[0]  
+            
+            print("\nEquilibria found by EGTA:")
+            print("\nWelfare Analysis of Equilibria:")
+            
+            strategy_to_idx = {name: i for i, name in enumerate(game.strategy_names)}
+            
+            profile_payoffs = {}
+            for profile_data in egta.payoff_data:
+                profile_str = str([(player_id, strat) for player_id, strat, _ in profile_data])
+                if profile_str not in profile_payoffs:
+                    profile_payoffs[profile_str] = []
+                profile_payoffs[profile_str].extend([payoff for _, _, payoff in profile_data])
+            
+            for i, (mixture, regret_val) in enumerate(egta.equilibria):
+                expected_welfare = 0.0
+                weight_sum = 0.0
+                
+                for profile_str, payoffs in profile_payoffs.items():
+                    profile_list = eval(profile_str)
+                    strategy_counts = {}
+                    for _, strat in profile_list:
+                        if strat not in strategy_counts:
+                            strategy_counts[strat] = 0
+                        strategy_counts[strat] += 1
+                    
+                    profile_prob = 1.0
+                    for strat, count in strategy_counts.items():
+                        if strat in strategy_to_idx:
+                            strat_idx = strategy_to_idx[strat]
+                            profile_prob *= mixture[strat_idx].item() ** count
+                    
+                    avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
+                    
+                    expected_welfare += profile_prob * avg_payoff
+                    weight_sum += profile_prob
+                
+                if weight_sum > 0:
+                    expected_welfare /= weight_sum
+                
+                welfare_data.append(expected_welfare)
+                labels.append(f"Eq {i+1}")
+                
+                print(f"\nEquilibrium {i+1} (regret: {regret_val:.6f}):")
+                print(f"  Expected MOBI Agent Welfare: {expected_welfare:.6f}")
+                for j, strategy in enumerate(game.strategy_names):
+                    print(f"  {strategy}: {mixture[j].item():.6f}")
+            
+            print("\nDetailed analysis of best equilibrium:")
+            for i, strategy in enumerate(game.strategy_names):
+                print(f"{strategy}: {eq_mixture[i].item():.6f}")
+            
+            regret_val = eq_regret if isinstance(eq_regret, float) else eq_regret.item()
+            print(f"Regret: {regret_val:.6f}")
+            
+            # Determine strategy dominance
+            cda_idx = game.strategy_names.index("MELO_100_0") if "MELO_100_0" in game.strategy_names else 0
+            cda_probability = eq_mixture[cda_idx].item()
+            
+            if cda_probability > 0.99:
+                dominant_strategy = "CDA"
+                print("The equilibrium is predominantly CDA")
+            elif cda_probability < 0.01:
+                dominant_strategy = "MELO"
+                print("The equilibrium is predominantly MELO")
+            else:
+                dominant_strategy = "Mixed"
+                print("⚖️ The equilibrium is mixed strategy")
         
-        for i, v in enumerate(eq_mixture.cpu().numpy()):
-            plt.text(i, v + 0.02, f'{v:.4f}', ha='center')
+        # Create experiment parameters dictionary
+        experiment_params = {
+            "holding_period": holding_period,
+            "sim_time": sim_time,
+            "num_mobi_agents": num_mobi_agents,
+            "num_zi_agents": num_zi_agents,
+            "num_iterations": num_iterations,
+            "num_strategies": num_strategies,
+            "batch_size": batch_size,
+            "simulator_params": simulator.strategy_params
+        }
         
-        plt.savefig('mobi_zi_equilibrium.png')
-        plt.show()
+        # Save results for this holding period
+        print(f"\n💾 Saving results for holding period {holding_period}...")
+        results_dir = save_comprehensive_results(
+            egta, game, welfare_data, labels, experiment_params, 
+            output_dir=f"results/mobi_zi_egta/holding_period_{holding_period}"
+        )
         
-        cda_idx = game.strategy_names.index("MELO_100_0") if "MELO_100_0" in game.strategy_names else 0
-        all_cda_exists = False
-        all_cda_eq_idx = -1
+        period_summary = {
+            "holding_period": holding_period,
+            "best_welfare": welfare_data[0] if welfare_data else None,
+            "best_regret": regret_val if egta.equilibria else None,
+            "dominant_strategy": dominant_strategy if egta.equilibria else "None",
+            "cda_probability": cda_probability if egta.equilibria else None,
+            "num_equilibria": len(egta.equilibria),
+            "results_dir": results_dir
+        }
+        all_results.append(period_summary)
         
-        for i, (eq_mix, _) in enumerate(egta.equilibria):
-            if eq_mix[cda_idx].item() > 0.99:  
-                all_cda_exists = True
-                all_cda_eq_idx = i
-                break
-        
-        if all_cda_exists:
-            print(f"\nAn all-CDA equilibrium exists (Equilibrium {all_cda_eq_idx+1}) as expected")
-        else:
-            print("\nWARNING: No all-CDA equilibrium found among the equilibria, which is unexpected")
-        
-        if eq_mixture[cda_idx].item() > 0.99:
-            print("The best equilibrium is predominantly CDA")
-        else:
-            print("The best equilibrium is NOT predominantly CDA (but another equilibrium may be)")
-        
-        #basins_result = analyze_basins_of_attraction(game, num_points=100, iters=1000)
-        
-        return game, eq_mixture
+        print(f"Completed holding period {holding_period}")
+        print(f"Results saved to: {results_dir}")
+    
+    print(f"\n{'='*60}")
+    print("CROSS-PERIOD ANALYSIS SUMMARY")
+    print(f"{'='*60}")
+    
+    summary_file = "results/mobi_zi_egta/cross_period_summary.json"
+    os.makedirs("results/mobi_zi_egta", exist_ok=True)
+    with open(summary_file, 'w') as f:
+        json.dump({
+            "analysis_timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "holding_periods_analyzed": holding_periods,
+            "results": all_results
+        }, f, indent=2)
+    
+    print(f"Cross-period summary saved to: {summary_file}")
+    
+    # Print summary table
+    print("SUMMARY TABLE:")
+    print("Holding Period | Dominant Strategy | CDA Probability | Welfare")
+    print("-" * 65)
+    for result in all_results:
+        hp = result["holding_period"]
+        strategy = result["dominant_strategy"]
+        cda_prob = result["cda_probability"]
+        welfare = result["best_welfare"]
+        cda_str = f"{cda_prob:.3f}" if cda_prob is not None else "N/A"
+        welfare_str = f"{welfare:.1f}" if welfare is not None else "N/A"
+        print(f"{hp:14d} | {strategy:16s} | {cda_str:11s} | {welfare_str}")
+    
+    return game, eq_mixture, egta, welfare_data, labels, experiment_params
+
+def convert_tensors_to_lists(obj):
+
+    
+    if isinstance(obj, torch.Tensor):
+        return obj.cpu().numpy().tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_tensors_to_lists(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_tensors_to_lists(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_tensors_to_lists(item) for item in obj)
+    else:
+        return obj
+
+def save_comprehensive_results(egta, game, welfare_data, labels, experiment_params, output_dir="results/mobi_zi_egta", basin_results=None):
    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    results_dir = os.path.join(output_dir, f"comprehensive_results_{timestamp}")
+    os.makedirs(results_dir, exist_ok=True)
+    
+    params_file = os.path.join(results_dir, "experiment_parameters.json")
+    with open(params_file, 'w') as f:
+        json.dump(experiment_params, f, indent=2)
+    print(f"Saved experiment parameters to {params_file}")
+    
+    equilibria_detailed = []
+    for i, (mixture, regret_val) in enumerate(egta.equilibria):
+        eq_dict = {
+            "equilibrium_id": i + 1,
+            "regret": float(regret_val),
+            "welfare": welfare_data[i] if i < len(welfare_data) else None,
+            "mixture_dict": {name: float(mixture[j].item()) for j, name in enumerate(game.strategy_names)},
+            "mixture_vector": mixture.tolist(),
+            "support": [name for j, name in enumerate(game.strategy_names) if mixture[j].item() > 0.001],
+            "support_size": sum(1 for x in mixture if x.item() > 0.001),
+            "is_pure_strategy": sum(1 for x in mixture if x.item() > 0.99) == 1,
+            "dominant_strategy": game.strategy_names[torch.argmax(mixture).item()] if len(game.strategy_names) > 0 else None,
+            "dominant_probability": float(torch.max(mixture).item())
+        }
+        equilibria_detailed.append(eq_dict)
+    
+    eq_file = os.path.join(results_dir, "equilibria_detailed.json")
+    with open(eq_file, 'w') as f:
+        json.dump(equilibria_detailed, f, indent=2)
+    print(f"Saved detailed equilibria to {eq_file}")
+    
+    eq_df = pd.DataFrame(equilibria_detailed)
+    eq_csv = os.path.join(results_dir, "equilibria_summary.csv")
+    eq_df.to_csv(eq_csv, index=False)
+    print(f"Saved equilibria CSV to {eq_csv}")
+    
+    welfare_analysis = {
+        "welfare_data": welfare_data,
+        "labels": labels,
+        "best_equilibrium_welfare": max(welfare_data) if welfare_data else None,
+        "worst_equilibrium_welfare": min(welfare_data) if welfare_data else None,
+        "welfare_variance": np.var(welfare_data) if len(welfare_data) > 1 else 0,
+        "welfare_comparison": [
+            {
+                "equilibrium": labels[i],
+                "welfare": welfare_data[i],
+                "welfare_rank": sorted(welfare_data, reverse=True).index(welfare_data[i]) + 1
+            } for i in range(len(welfare_data))
+        ]
+    }
+    
+    welfare_file = os.path.join(results_dir, "welfare_analysis.json")
+    with open(welfare_file, 'w') as f:
+        json.dump(welfare_analysis, f, indent=2)
+    print(f"Saved welfare analysis to {welfare_file}")
+    
+    # 5. Save game details and payoff matrix
+    game_details = {
+        "strategy_names": game.strategy_names,
+        "num_strategies": game.num_strategies,
+        "num_players": game.num_players,
+        "payoff_matrix": game.game.payoff_table.cpu().numpy().tolist(),
+        "game_metadata": game.metadata if hasattr(game, 'metadata') and game.metadata else {},
+        "total_profiles_simulated": len(egta.payoff_data),
+        "profiles_per_strategy_combination": {}
+    }
+    
+    # Count profiles per strategy combination
+    for profile_data in egta.payoff_data:
+        strategies_in_profile = [strat for _, strat, _ in profile_data]
+        strategy_counts = {}
+        for strat in set(strategies_in_profile):
+            strategy_counts[strat] = strategies_in_profile.count(strat)
+        profile_key = str(sorted(strategy_counts.items()))
+        if profile_key not in game_details["profiles_per_strategy_combination"]:
+            game_details["profiles_per_strategy_combination"][profile_key] = 0
+        game_details["profiles_per_strategy_combination"][profile_key] += 1
+    
+    game_file = os.path.join(results_dir, "game_details.json")
+    with open(game_file, 'w') as f:
+        json.dump(game_details, f, indent=2)
+    print(f"Saved game details to {game_file}")
+    
+    # 6. Save raw payoff data for future analysis
+    payoff_data_processed = []
+    for i, profile_data in enumerate(egta.payoff_data):
+        profile_dict = {
+            "profile_id": i,
+            "agents": [{"agent_id": agent_id, "strategy": strat, "payoff": float(payoff)} 
+                      for agent_id, strat, payoff in profile_data],
+            "average_payoff": np.mean([payoff for _, _, payoff in profile_data]),
+            "strategy_distribution": {}
+        }
+        
+        strategies_in_profile = [strat for _, strat, _ in profile_data]
+        for strat in set(strategies_in_profile):
+            profile_dict["strategy_distribution"][strat] = strategies_in_profile.count(strat)
+        
+        payoff_data_processed.append(profile_dict)
+    
+    payoff_file = os.path.join(results_dir, "raw_payoff_data.json")
+    with open(payoff_file, 'w') as f:
+        json.dump(payoff_data_processed, f, indent=2)
+    print(f"Saved raw payoff data to {payoff_file}")
+    
+    if basin_results is not None:
+        basin_file = os.path.join(results_dir, "basin_analysis.json")
+        basin_analysis = {
+            "basin_results": convert_tensors_to_lists(basin_results),
+            "analysis_timestamp": timestamp,
+            "analysis_type": "replicator_dynamics_basins"
+        }
+        with open(basin_file, 'w') as f:
+            json.dump(basin_analysis, f, indent=2)
+        print(f"Saved basin analysis to {basin_file}")
+    
+    # 8. Create summary report
+    summary_report = {
+        "experiment_summary": {
+            "timestamp": timestamp,
+            "holding_period": experiment_params.get("holding_period"),
+            "num_equilibria_found": len(egta.equilibria),
+            "best_equilibrium": equilibria_detailed[0] if equilibria_detailed else None,
+            "predominant_strategy": None,
+            "strategy_frequencies": {}
+        },
+        "key_findings": [],
+        "files_generated": [
+            "experiment_parameters.json",
+            "equilibria_detailed.json", 
+            "equilibria_summary.csv",
+            "welfare_analysis.json",
+            "game_details.json",
+            "raw_payoff_data.json"
+        ]
+    }
+    
+    for strategy in game.strategy_names:
+        total_freq = 0
+        for eq_dict in equilibria_detailed:
+            total_freq += eq_dict["mixture_dict"][strategy]
+        summary_report["experiment_summary"]["strategy_frequencies"][strategy] = total_freq / len(equilibria_detailed) if equilibria_detailed else 0
+    
+    # Determine predominant strategy
+    if summary_report["experiment_summary"]["strategy_frequencies"]:
+        predominant = max(summary_report["experiment_summary"]["strategy_frequencies"].items(), key=lambda x: x[1])
+        summary_report["experiment_summary"]["predominant_strategy"] = predominant[0]
+    
+    # Add key findings
+    if equilibria_detailed:
+        best_eq = equilibria_detailed[0]
+        summary_report["key_findings"].append(f"Found {len(equilibria_detailed)} equilibria")
+        summary_report["key_findings"].append(f"Best equilibrium has regret {best_eq['regret']:.6f}")
+        summary_report["key_findings"].append(f"Dominant strategy: {best_eq['dominant_strategy']} ({best_eq['dominant_probability']:.1%})")
+        
+        if best_eq["is_pure_strategy"]:
+            summary_report["key_findings"].append("Best equilibrium is a pure strategy")
+        else:
+            summary_report["key_findings"].append("Best equilibrium is a mixed strategy")
+    
+    if basin_results is not None:
+        summary_report["files_generated"].append("basin_analysis.json")
+    
+    summary_file = os.path.join(results_dir, "experiment_summary.json")
+    with open(summary_file, 'w') as f:
+        json.dump(summary_report, f, indent=2)
+    print(f"Saved experiment summary to {summary_file}")
+    
+    print(f"Comprehensive results saved to: {results_dir}")
+    print(f"📁 Generated {len(summary_report['files_generated'])} result files")
+    
+    return results_dir
 
 if __name__ == "__main__":
     os.makedirs("results/mobi_zi_egta", exist_ok=True)
-    game, eq_mixture = run_mobi_zi_egta() 
+    game, eq_mixture, egta, welfare_data, labels, experiment_params = run_mobi_zi_egta() 
+    results_dir = save_comprehensive_results(egta, game, welfare_data, labels, experiment_params, basin_results=analyze_basins_of_attraction(game, num_points=100, iters=5000)) 

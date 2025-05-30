@@ -139,15 +139,35 @@ def replicator_dynamics(game: Game,
                 pure_non_melo = torch.zeros(num_strategies, device=device)
                 pure_non_melo[non_melo_indices] = 1.0 / len(non_melo_indices)
                 starting_mixtures.append(pure_non_melo)
+            
+            # Add specific pure strategies for full CDA and full MELO
+            full_cda_idx = None
+            full_melo_idx = None
+            
+            # Look for specific strategy names
+            for idx, strategy_name in enumerate(game.strategy_names):
+                if strategy_name == "MELO_100_0":  # Full CDA strategy
+                    full_cda_idx = idx
+                elif strategy_name == "MELO_0_100":  # Full MELO strategy
+                    full_melo_idx = idx
+            
+            # Pure full CDA mixture
+            if full_cda_idx is not None:
+                pure_full_cda = torch.zeros(num_strategies, device=device)
+                pure_full_cda[full_cda_idx] = 1.0
+                starting_mixtures.append(pure_full_cda)
+            
+            # Pure full MELO mixture
+            if full_melo_idx is not None:
+                pure_full_melo = torch.zeros(num_strategies, device=device)
+                pure_full_melo[full_melo_idx] = 1.0
+                starting_mixtures.append(pure_full_melo)
         
         for _ in range(num_random_starts):
             random_mixture = torch.rand(num_strategies, device=device)
             random_mixture = random_mixture / random_mixture.sum()
             starting_mixtures.append(random_mixture)
         
-
-        
-       
         equilibria = []  
         basin_counts = []  
         
@@ -438,14 +458,15 @@ def regret(game: Game, mixture: torch.Tensor) -> torch.Tensor:
 async def quiesce(
     game: Game, 
     num_iters: int = 10,
-    num_random_starts: int = 10, 
-    regret_threshold: float = 1e-3,  
-    dist_threshold: float = 1e-4,    
+    num_random_starts: int = 10,
+    regret_threshold: float = 1e-3,
+    dist_threshold: float = 1e-4,
     restricted_game_size: int = 4,
     solver: str = 'replicator',
     solver_iters: int = 5000,       
     verbose: bool = True, 
-    maximal_subgames: Set[frozenset] = None
+    maximal_subgames: Set[frozenset] = None,
+    full_game: Optional[Game] = None
 ) -> List[Tuple[torch.Tensor, float]]:
     """
     find all equilibria of a game using the QUIESCE algorithm.
@@ -453,7 +474,7 @@ async def quiesce(
     Erik Brinkman's work. 
     
     Args:
-        game: Game to analyze
+        game: Game to analyze (may be reduced game when using DPR)
         num_iters: Maximum number of QUIESCE iterations
         num_random_starts: Number of random starting points to try
         regret_threshold: Regret threshold for considering a mixture an equilibrium
@@ -463,10 +484,20 @@ async def quiesce(
         solver_iters: Number of iterations for the solver
         verbose: Whether to print progress
         maximal_subgames: Set of frozensets of strategy indices representing explored subgames
+        full_game: Optional full game for testing equilibria (used with DPR)
         
     Returns:
         List of equilibria as (mixture, regret) tuples
     """
+    # Determine which game to use for testing equilibria
+    test_game = full_game if full_game is not None else None
+    if test_game is None:
+        raise ValueError("A True Game was Not Generated/Passed in!")
+    
+    if verbose and full_game is not None:
+        print(f"Using DPR: Finding equilibria in reduced game ({game.num_strategies} strategies, {game.num_players} players)")
+        print(f"Testing equilibria against full game ({full_game.num_strategies} strategies, {full_game.num_players} players)")
+    
     start_time = time.time()
     
     confirmed_eq = []
@@ -488,13 +519,10 @@ async def quiesce(
             mixture=pure_mixture
         )
         
-        # Add to unconfirmed candidates
         unconfirmed_candidates.append(pure_candidate)
         
-        # Add singleton to maximal subgames collection
         maximal_subgames.add(frozenset([s]))
     
-    # Add uniform mixture as a starting point
     uniform_mixture = torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies
     uniform_candidate = SubgameCandidate(
         support=set(range(game.num_strategies)),
@@ -546,27 +574,150 @@ async def quiesce(
             
             if len(non_melo_indices) <= restricted_game_size:
                 maximal_subgames.add(frozenset(non_melo_indices))
+        
+        # Add specific pure strategies for full CDA and full MELO
+        full_cda_idx = None
+        full_melo_idx = None
+        
+        # Look for specific strategy names
+        for idx, strategy_name in enumerate(game.strategy_names):
+            if strategy_name == "MELO_100_0":  # Full CDA strategy
+                full_cda_idx = idx
+            elif strategy_name == "MELO_0_100":  # Full MELO strategy
+                full_melo_idx = idx
+        
+        # Add pure full CDA candidate
+        if full_cda_idx is not None:
+            pure_full_cda_mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            pure_full_cda_mixture[full_cda_idx] = 1.0
+            pure_full_cda_candidate = SubgameCandidate(
+                support=set([full_cda_idx]),
+                restriction=[full_cda_idx],
+                mixture=pure_full_cda_mixture
+            )
+            unconfirmed_candidates.append(pure_full_cda_candidate)
+            
+            if verbose:
+                print(f"Added pure full CDA starting point (MELO_100_0)")
+            
+            maximal_subgames.add(frozenset([full_cda_idx]))
+        
+        # Add pure full MELO candidate
+        if full_melo_idx is not None:
+            pure_full_melo_mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            pure_full_melo_mixture[full_melo_idx] = 1.0
+            pure_full_melo_candidate = SubgameCandidate(
+                support=set([full_melo_idx]),
+                restriction=[full_melo_idx],
+                mixture=pure_full_melo_mixture
+            )
+            unconfirmed_candidates.append(pure_full_melo_candidate)
+            
+            if verbose:
+                print(f"Added pure full MELO starting point (MELO_0_100)")
+            
+            maximal_subgames.add(frozenset([full_melo_idx]))
     
     if len(game.strategy_names) <= restricted_game_size:
         maximal_subgames.add(frozenset(range(game.num_strategies)))
     
-    for i in range(num_random_starts):
-        rand_mixture = torch.rand(game.num_strategies, device=game.game.device)
+    if verbose:
+        print(f"Initialized with {len(maximal_subgames)} maximal subgames")
+    
+    # Add skewed distributions (80% on one strategy, 20% distributed on others)
+    for primary_strategy in range(game.num_strategies):
+        if game.num_strategies > 1:
+            skewed_mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            skewed_mixture[primary_strategy] = 0.8
+            
+            # Distribute remaining 20% equally among other strategies
+            remaining_mass = 0.2
+            other_strategies = [s for s in range(game.num_strategies) if s != primary_strategy]
+            mass_per_other = remaining_mass / len(other_strategies)
+            
+            for other_s in other_strategies:
+                skewed_mixture[other_s] = mass_per_other
+            
+            # Create candidate
+            support = set([s for s in range(game.num_strategies) if skewed_mixture[s] > 0.01])
+            skewed_candidate = SubgameCandidate(
+                support=support,
+                restriction=list(support),
+                mixture=skewed_mixture
+            )
+            unconfirmed_candidates.append(skewed_candidate)
+            
+            if verbose:
+                strategy_name = game.strategy_names[primary_strategy] if hasattr(game, 'strategy_names') else f"Strategy {primary_strategy}"
+                print(f"Added 80/20 skewed candidate favoring {strategy_name}")
+    
+    # Add other structured distributions (70/30, 60/40)
+    for primary_strategy in range(game.num_strategies):
+        if game.num_strategies > 1:
+            for primary_weight in [0.7, 0.6]:
+                skewed_mixture = torch.zeros(game.num_strategies, device=game.game.device)
+                skewed_mixture[primary_strategy] = primary_weight
+                
+                # Distribute remaining mass equally among other strategies
+                remaining_mass = 1.0 - primary_weight
+                other_strategies = [s for s in range(game.num_strategies) if s != primary_strategy]
+                mass_per_other = remaining_mass / len(other_strategies)
+                
+                for other_s in other_strategies:
+                    skewed_mixture[other_s] = mass_per_other
+                
+                # Create candidate
+                support = set([s for s in range(game.num_strategies) if skewed_mixture[s] > 0.01])
+                skewed_candidate = SubgameCandidate(
+                    support=support,
+                    restriction=list(support),
+                    mixture=skewed_mixture
+                )
+                unconfirmed_candidates.append(skewed_candidate)
+                
+                if verbose:
+                    strategy_name = game.strategy_names[primary_strategy] if hasattr(game, 'strategy_names') else f"Strategy {primary_strategy}"
+                    weight_pct = int(primary_weight * 100)
+                    other_pct = int((1.0 - primary_weight) * 100)
+                    print(f"Added {weight_pct}/{other_pct} skewed candidate favoring {strategy_name}")
+    
+    # Add additional diverse random starting points for maximum exploration
+    additional_random_starts = max(50, num_random_starts * 2)  # More diverse random starts
+    for i in range(additional_random_starts):
+        # Generate different types of random mixtures for diversity
+        if i % 4 == 0:
+            # Pure random (uniform distribution)
+            rand_mixture = torch.rand(game.num_strategies, device=game.game.device)
+        elif i % 4 == 1:
+            # Dirichlet-like (more extreme distributions)
+            rand_mixture = torch.rand(game.num_strategies, device=game.game.device) ** 2
+        elif i % 4 == 2:
+            # Concentrated (favor one strategy heavily)
+            rand_mixture = torch.rand(game.num_strategies, device=game.game.device) ** 0.5
+        else:
+            # Uniform-ish (less extreme)
+            rand_mixture = torch.rand(game.num_strategies, device=game.game.device) + 0.5
         
-        if hasattr(game, 'strategy_names') and game.strategy_names and i < num_random_starts // 3:
+        # Apply MELO/non-MELO biasing for some candidates
+        if hasattr(game, 'strategy_names') and game.strategy_names and i < additional_random_starts // 4:
             melo_mask = torch.zeros(game.num_strategies, dtype=torch.bool, device=game.game.device)
             for idx, strategy_name in enumerate(game.strategy_names):
                 if "MELO" in strategy_name or "melo" in strategy_name:
                     melo_mask[idx] = True
             
-            if i % 2 == 0 and melo_mask.any():
-                rand_mixture[melo_mask] *= 10.0
-            elif (~melo_mask).any():
-                rand_mixture[~melo_mask] *= 10.0
+            if i % 3 == 0 and melo_mask.any():
+                # Bias toward MELO strategies
+                rand_mixture[melo_mask] *= 5.0
+            elif i % 3 == 1 and (~melo_mask).any():
+                # Bias toward non-MELO strategies
+                rand_mixture[~melo_mask] *= 5.0
+            # i % 3 == 2: Keep original mixture (no bias)
         
+        # Normalize
         rand_mixture = rand_mixture / rand_mixture.sum()
         
-        support = set([s for s in range(game.num_strategies) if rand_mixture[s] > 0.05])
+        # Create support (strategies with significant probability)
+        support = set([s for s in range(game.num_strategies) if rand_mixture[s] > 0.01])
         if len(support) == 0:  
             support = {torch.argmax(rand_mixture).item()}
             
@@ -577,6 +728,7 @@ async def quiesce(
         )
         unconfirmed_candidates.append(rand_candidate)
         
+        # Update maximal subgames
         if len(support) <= restricted_game_size:
             support_set = frozenset(support)
             is_contained = False
@@ -591,7 +743,9 @@ async def quiesce(
                 maximal_subgames.add(support_set)
     
     if verbose:
-        print(f"Initialized with {len(maximal_subgames)} maximal subgames")
+        total_candidates = len(unconfirmed_candidates)
+        print(f"Generated {total_candidates} total candidates (including {num_random_starts + additional_random_starts} random starts)")
+        print(f"Updated to {len(maximal_subgames)} maximal subgames")
     
     for iteration in range(num_iters):
         if verbose:
@@ -602,7 +756,7 @@ async def quiesce(
             
         new_unconfirmed = []
         for candidate in unconfirmed_candidates:
-            is_eq, _ = await test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames, verbose)
+            is_eq, _ = await test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames, verbose, test_game)
             
             if is_eq:
                 is_distinct = True
@@ -679,7 +833,8 @@ async def quiesce(
             for i, s in enumerate(restriction):
                 full_mixture[s] = equilibrium[i]
             
-            regret_val = game.regret(full_mixture).item()
+            # Test regret against the appropriate game (full game if using DPR)
+            regret_val = test_game.regret(full_mixture).item()
             
             candidate = SubgameCandidate(
                 support=new_support,
@@ -711,46 +866,13 @@ def quiesce_sync(
     restricted_game_size=4,
     solver="replicator_dynamics",
     solver_iters=1000,
-    verbose=False
+    verbose=False,
+    full_game=None  # Full game for testing equilibria (when using DPR)
 ):
+    """Synchronous wrapper for quiesce - finds all equilibria of a game using QUIESCE."""
     # Import and apply nest_asyncio to handle nested event loops
     import nest_asyncio
     nest_asyncio.apply()
-    
-    # 2-strategy game fallback using direct computation
-    #if game.num_strategies == 2:
-       # try:
-            # Use get_payoff_matrix method instead of payoff_matrix
-         #   payoff_matrix = game.get_payoff_matrix()
-            
-            # Handle pathological payoff values for 2x2 games
-         #   if (torch.isnan(payoff_matrix).any() or 
-          #      torch.isinf(payoff_matrix).any() or 
-         #       torch.max(torch.abs(payoff_matrix)) > 1e6):
-                # Set NaN/Inf values to zero
-         #       payoff_matrix = torch.nan_to_num(payoff_matrix, nan=0.0, posinf=10.0, neginf=-10.0)
-                # Clip to reasonable range
-        #        payoff_matrix = torch.clamp(payoff_matrix, min=-10.0, max=10.0)
-            
-         #   eq, steps = replicator_dynamics(
-         #       game,
-         #       torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies,
-         #       iters=solver_iters,
-         #       return_trace=True
-         #   )
-            
-         #   regret_val = game.regret(eq).item() if torch.is_tensor(game.regret(eq)) else game.regret(eq)
-            
-         #   if verbose:
-         #       print(f"Using direct 2x2 calculation. Found equilibrium: {format_mixture(eq, game.strategy_names)}")
-          #      print(f"Equilibrium regret: {regret_val:.6f}")
-            
-          #  return [(eq, regret_val)]
-            
-       # except Exception as e:
-            # Fallback to QUIESCE if direct calculation fails
-            #if verbose:
-                #print(f"Direct 2x2 calculation failed: {e}. Falling back to QUIESCE.")
     
     try:
         loop = asyncio.new_event_loop()
@@ -768,7 +890,8 @@ def quiesce_sync(
             solver=solver,
             solver_iters=solver_iters,
             maximal_subgames=maximal_subgames,
-            verbose=verbose
+            verbose=verbose,
+            full_game=full_game  # Pass through full_game parameter
         ))
         loop.close()
         
@@ -782,32 +905,33 @@ def quiesce_sync(
             if verbose:
                 print("Attempting replicator dynamics on full game as last resort.")
             
-            init_mixture = torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies
+            test_game = full_game if full_game is not None else game
+            init_mixture = torch.ones(test_game.num_strategies, device=test_game.game.device) / test_game.num_strategies
             
             try:
-                payoff_matrix = game.get_payoff_matrix()
+                payoff_matrix = test_game.get_payoff_matrix()
                 payoff_matrix = torch.nan_to_num(payoff_matrix, nan=0.0, posinf=10.0, neginf=-10.0)
                 payoff_matrix = torch.clamp(payoff_matrix, min=-10.0, max=10.0)
                 
                 eq, _ = replicator_dynamics(
-                    game,
+                    test_game,
                     init_mixture,
                     iters=solver_iters,
                     return_trace=True
                 )
             except:
                 eq, _ = replicator_dynamics(
-                    game,
+                    test_game,
                     init_mixture,
                     iters=solver_iters,
                     return_trace=True
                 )
             
             # Calculate regret
-            regret_val = game.regret(eq).item() if torch.is_tensor(game.regret(eq)) else game.regret(eq)
+            regret_val = test_game.regret(eq).item() if torch.is_tensor(test_game.regret(eq)) else test_game.regret(eq)
             
             if verbose:
-                print(f"Replicator dynamics found: {format_mixture(eq, game.strategy_names)}")
+                print(f"Replicator dynamics found: {format_mixture(eq, test_game.strategy_names)}")
                 print(f"Equilibrium regret: {regret_val:.6f}")
             
             return [(eq, regret_val)]
@@ -816,7 +940,8 @@ def quiesce_sync(
             if verbose:
                 print(f"All equilibrium finding methods failed. Last error: {e2}")
             # Return uniform mixture as a last resort
-            uniform = torch.ones(game.num_strategies, device=game.game.device) / game.num_strategies
+            test_game = full_game if full_game is not None else None
+            uniform = torch.ones(test_game.num_strategies, device=test_game.game.device) / test_game.num_strategies
             return [(uniform, 1.0)]
 
 async def test_deviations(
@@ -828,62 +953,65 @@ async def test_deviations(
     maximal_subgames=None,
     verbose=False
 ):
-    """Test for beneficial deviations from a mixture and add them to the queue."""
     num_strategies = game.num_strategies
+    
+    #if metadata exists and dpr_reduced is True, then we're testing against reduced game
+    is_testing_reduced_game = (hasattr(game, 'metadata') and game.metadata and 
+                              game.metadata.get('dpr_reduced', False) == True)
+    
+    if verbose and hasattr(game, 'metadata') and game.metadata:
+        if game.metadata.get('dpr_reduced', False):
+            print(f"    Testing deviations against REDUCED game ({game.num_players} players)")
+        else:
+            original_players = game.metadata.get('original_players')
+            if original_players and original_players != game.num_players:
+                print(f"Testing deviations against FULL game ({game.num_players} players, was reduced from {original_players})")
+            else:
+                print(f" Testing deviations against FULL game ({game.num_players} players)")
+    elif verbose:
+        print(f"Testing deviations against game ({game.num_players} players)")
+    
     dev_payoffs = game.deviation_payoffs(mixture)
     
-    # Check for NaN in deviation payoffs
     if torch.is_tensor(dev_payoffs) and (torch.isnan(dev_payoffs).any() or torch.isinf(dev_payoffs).any()):
         if verbose:
-            print(f"    Warning: NaN or Inf in deviation payoffs. Fixing values.")
-        # Replace with safer values
+            print(f"Warning: NaN or Inf in deviation payoffs. Fixing values.")
         dev_payoffs = torch.nan_to_num(dev_payoffs, nan=0.0, posinf=10.0, neginf=-10.0)
-        # Apply clipping for stability
         #dev_payoffs = torch.clamp(dev_payoffs, min=-10.0, max=10.0)
         
     # Calculate expected payoff for the mixture - safely
     expected_payoff_values = mixture * dev_payoffs
-    # Check for NaN in intermediate calculation
     if torch.isnan(expected_payoff_values).any() or torch.isinf(expected_payoff_values).any():
         expected_payoff_values = torch.nan_to_num(expected_payoff_values, nan=0.0, posinf=0.0, neginf=0.0)
     
     expected_payoff = expected_payoff_values.sum()
     
-    # Calculate gains from deviation - with safety checks
     gains = dev_payoffs - expected_payoff
     #gains = torch.clamp(gains, min=-10.0, max=10.0)
     
-    # Find beneficial deviations
     has_beneficial = False
     beneficial_strategies = []
     
     for s in range(num_strategies):
-        # Get the current support
         support = set([i for i, p in enumerate(mixture) if p > 0.01])
         
-        # Skip strategies already in support
         if s in support:
             continue
         
         gain = gains[s].item() if torch.is_tensor(gains[s]) else gains[s]
         
-        # Safety check for NaN gain
         if np.isnan(gain) or np.isinf(gain):
             if verbose:
                 print(f"    Warning: NaN/Inf gain for strategy {s}. Skipping.")
             continue
         
-        # If gain is significant, add to deviation queue
         if gain > regret_threshold:
             has_beneficial = True
             beneficial_strategies.append((s, gain))
             
-            # Create new support with the deviating strategy
             new_support = support.union({s})
             
-            # Check if adding this strategy would exceed restricted game size
             if len(new_support) <= restricted_game_size:
-                # If we're tracking maximal subgames, check if this subgame is already explored
                 should_explore = True
                 if maximal_subgames is not None:
                     new_support_set = frozenset(new_support)
@@ -900,8 +1028,9 @@ async def test_deviations(
                     deviation_queue.push(gain, s, mixture)
                     
                     if verbose:
-                        print(f"    Found beneficial deviation to {game.strategy_names[s]} "
-                              f"with gain {gain:.6f}")
+                        game_type = "REDUCED" if is_testing_reduced_game else "FULL"
+                        print(f"Found beneficial deviation to {game.strategy_names[s]} "
+                              f"with gain {gain:.6f} (vs {game_type} game)")
             else:
                 if verbose:
                     print(f"    Skipping deviation to {game.strategy_names[s]} as it would exceed restricted game size")
@@ -909,17 +1038,25 @@ async def test_deviations(
     # If no beneficial deviations, this is an equilibrium
     if not has_beneficial:
         if verbose:
-            print(f"    Found equilibrium with regret {game.regret(mixture):.6f}: "
+            game_type = "REDUCED" if is_testing_reduced_game else "FULL"
+            print(f"    Found equilibrium with regret {game.regret(mixture):.6f} (vs {game_type} game): "
                   f"{format_mixture(mixture, game.strategy_names)}")
         return True, []
         
     return False, beneficial_strategies
 
 
-async def test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames=None, verbose=False):
+async def test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames=None, verbose=False, full_game: Optional[Game] = None):
     """Test a candidate equilibrium and add beneficial deviations to the queue."""
     mixture = candidate.mixture
     num_strategies = game.num_strategies
+    
+    # Determine which game to use for testing
+    test_game = full_game if full_game is not None else game
+    
+    # Safety check to ensure we have a true game for testing
+    if test_game is None:
+        raise ValueError("No valid game available for testing equilibrium candidates")
     
     # Validate mixture for numerical issues before testing
     if torch.isnan(mixture).any() or torch.isinf(mixture).any() or torch.any(mixture < 0):
@@ -931,9 +1068,9 @@ async def test_candidate(candidate, game, regret_threshold, deviation_queue, res
         mixture = mixture / mixture.sum()
         candidate.mixture = mixture
     
-    # Calculate regret
+    # Calculate regret using the test game (full game if using DPR)
     try:
-        regret_val = game.regret(mixture)
+        regret_val = test_game.regret(mixture)
         
         # Handle NaN regret
         if torch.is_tensor(regret_val) and (torch.isnan(regret_val) or torch.isinf(regret_val)):
@@ -949,7 +1086,7 @@ async def test_candidate(candidate, game, regret_threshold, deviation_queue, res
         candidate.regret = regret_val
         
         if verbose:
-            print(f"    Candidate regret: {regret_val:.6f}")
+            print(f"    Candidate regret (vs {'full' if full_game else 'reduced'} game): {regret_val:.6f}")
             
         # If regret is above threshold, not an equilibrium
         if regret_val > regret_threshold:
@@ -961,9 +1098,9 @@ async def test_candidate(candidate, game, regret_threshold, deviation_queue, res
         candidate.regret = 1.0
         return False, []
     
-    # Now test for beneficial deviations
+    # Now test for beneficial deviations using the test game
     return await test_deviations(
-        game=game,
+        game=test_game,  # Use test_game for deviation testing
         mixture=mixture,
         deviation_queue=deviation_queue,
         regret_threshold=regret_threshold,
