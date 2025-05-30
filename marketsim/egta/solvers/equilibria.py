@@ -889,9 +889,9 @@ def quiesce_sync(
             restricted_game_size=restricted_game_size,
             solver=solver,
             solver_iters=solver_iters,
-            maximal_subgames=maximal_subgames,
+            maximal_subgames=maximal_subgames,     
             verbose=verbose,
-            full_game=full_game  # Pass through full_game parameter
+            full_game=full_game  # Pass through fu_game parameter
         ))
         loop.close()
         
