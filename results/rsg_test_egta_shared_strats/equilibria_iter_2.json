@@ -1,0 +1,11 @@
+[
+  {
+    "id": 0,
+    "regret": 0.009835779666900635,
+    "mixture": {
+      "mobi_MELO_100_0": 0.5,
+      "mobi_MELO_0_100": 0.5,
+      "background_MELO_100_0": 1.0
+    }
+  }
+]

@@ -1,0 +1,353 @@
+{
+  "id": -672244339748449851,
+  "name": "Symmetric Game",
+  "simulator_fullname": "EGTA Simulator",
+  "roles": [
+    {
+      "name": "all",
+      "count": 15,
+      "strategies": [
+        "MELO_0_100",
+        "MELO_100_0"
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "id": 0,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "0_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 2,
+          "payoff": 69.57859431890286,
+          "payoff_sd": 0
+        },
+        {
+          "id": "0_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 13,
+          "payoff": 69.5786477716384,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "1_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 3,
+          "payoff": 69.57855848040414,
+          "payoff_sd": 0
+        },
+        {
+          "id": "1_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 12,
+          "payoff": 69.57856465019611,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "2_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 11,
+          "payoff": 69.57855372154005,
+          "payoff_sd": 0
+        },
+        {
+          "id": "2_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 4,
+          "payoff": 69.57855123611715,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "3_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 6,
+          "payoff": 69.57854886478718,
+          "payoff_sd": 0
+        },
+        {
+          "id": "3_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 9,
+          "payoff": 69.57854979061078,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "4_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 10,
+          "payoff": 69.57855126412026,
+          "payoff_sd": 0
+        },
+        {
+          "id": "4_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 5,
+          "payoff": 69.57854960100882,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "5_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 8,
+          "payoff": 69.57854882644574,
+          "payoff_sd": 0
+        },
+        {
+          "id": "5_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 7,
+          "payoff": 69.57854856406414,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "6_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 15,
+          "payoff": 69.59334585838077,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "7_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 9,
+          "payoff": 69.57855211084429,
+          "payoff_sd": 0
+        },
+        {
+          "id": "7_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 6,
+          "payoff": 69.57854915172639,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "8_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 5,
+          "payoff": 69.5785493578787,
+          "payoff_sd": 0
+        },
+        {
+          "id": "8_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 10,
+          "payoff": 69.57855229817326,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "9_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 15,
+          "payoff": 69.59142172268434,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "10_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 14,
+          "payoff": 69.5798228073808,
+          "payoff_sd": 0
+        },
+        {
+          "id": "10_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 1,
+          "payoff": 69.57882377760161,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "11_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 4,
+          "payoff": 69.57855217334074,
+          "payoff_sd": 0
+        },
+        {
+          "id": "11_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 11,
+          "payoff": 69.5785530359379,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "12_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 13,
+          "payoff": 69.57863473354482,
+          "payoff_sd": 0
+        },
+        {
+          "id": "12_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 2,
+          "payoff": 69.57859740766438,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "13_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 1,
+          "payoff": 69.57887385896994,
+          "payoff_sd": 0
+        },
+        {
+          "id": "13_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 14,
+          "payoff": 69.57915909673483,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "14_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 12,
+          "payoff": 69.57857448782877,
+          "payoff_sd": 0
+        },
+        {
+          "id": "14_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 3,
+          "payoff": 69.57856006430121,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "15_0",
+          "role": "all",
+          "strategy": "MELO_0_100",
+          "count": 7,
+          "payoff": 69.57854848906665,
+          "payoff_sd": 0
+        },
+        {
+          "id": "15_1",
+          "role": "all",
+          "strategy": "MELO_100_0",
+          "count": 8,
+          "payoff": 69.57854957396424,
+          "payoff_sd": 0
+        }
+      ]
+    }
+  ]
+}

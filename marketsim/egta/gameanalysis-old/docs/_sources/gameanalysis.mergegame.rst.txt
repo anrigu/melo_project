@@ -1,0 +1,7 @@
+gameanalysis.mergegame module
+=============================
+
+.. automodule:: gameanalysis.mergegame
+    :members:
+    :undoc-members:
+    :show-inheritance:
