@@ -1,0 +1,168 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gameanalysis.regret module &#8212; Game Analysis 8.1.0 documentation</title>
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gameanalysis.restrict module" href="gameanalysis.restrict.html" />
+    <link rel="prev" title="gameanalysis.paygame module" href="gameanalysis.paygame.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.restrict.html" title="gameanalysis.restrict module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.paygame.html" title="gameanalysis.paygame module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" accesskey="U">gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.regret module</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-gameanalysis.regret">
+<span id="gameanalysis-regret-module"></span><h1>gameanalysis.regret module<a class="headerlink" href="#module-gameanalysis.regret" title="Permalink to this headline">¶</a></h1>
+<p>A module for computing regret and social welfare of profiles</p>
+<dl class="py function">
+<dt id="gameanalysis.regret.max_pure_social_welfare">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">max_pure_social_welfare</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">by_role</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#max_pure_social_welfare"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.max_pure_social_welfare" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the maximum social welfare over the known profiles.</p>
+<p>If by_role is specified, then max social welfare applies to each role
+independently. If there are no profiles with full payoff data for a role,
+an arbitrary profile will be returned.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.mixed_social_welfare">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">mixed_social_welfare</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">mix</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#mixed_social_welfare"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.mixed_social_welfare" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the social welfare of a mixed strategy profile</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.mixture_deviation_gains">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">mixture_deviation_gains</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">mix</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#mixture_deviation_gains"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.mixture_deviation_gains" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns all the gains from deviation from a mixed strategy</p>
+<p>The result is ordered by role, then strategy.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.mixture_regret">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">mixture_regret</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">mix</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#mixture_regret"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.mixture_regret" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the regret of a mixture profile</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.pure_social_welfare">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">pure_social_welfare</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">profile</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#pure_social_welfare"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.pure_social_welfare" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the social welfare of a pure strategy profile in game</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.pure_strategy_deviation_gains">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">pure_strategy_deviation_gains</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">profile</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#pure_strategy_deviation_gains"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.pure_strategy_deviation_gains" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the pure strategy deviations gains</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.pure_strategy_deviation_pays">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">pure_strategy_deviation_pays</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">profile</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#pure_strategy_deviation_pays"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.pure_strategy_deviation_pays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the pure strategy deviation payoffs</p>
+<p>The result is a compact array of deviation payoffs. Each element
+corresponds to the payoff of deviating to strategy i from strategy j for
+all valid deviations.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.regret.pure_strategy_regret">
+<code class="sig-prename descclassname">gameanalysis.regret.</code><code class="sig-name descname">pure_strategy_regret</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">prof</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/regret.html#pure_strategy_regret"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.regret.pure_strategy_regret" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the regret of a pure strategy profile</p>
+<p>If prof has more than one dimension, the last dimension is taken as a set
+of profiles and returned as a new array.</p>
+</dd></dl>
+
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="gameanalysis.paygame.html"
+                        title="previous chapter">gameanalysis.paygame module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="gameanalysis.restrict.html"
+                        title="next chapter">gameanalysis.restrict module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/gameanalysis.regret.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.restrict.html" title="gameanalysis.restrict module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.paygame.html" title="gameanalysis.paygame module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" >gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.regret module</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, Strategic Reasoning Group.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.2.1.
+    </div>
+  </body>
+</html>

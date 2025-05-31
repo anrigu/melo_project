@@ -1,0 +1,119 @@
+{
+  "id": -5057881946273909990,
+  "name": "Symmetric Game",
+  "simulator_fullname": "EGTA Simulator",
+  "roles": [
+    {
+      "name": "all",
+      "count": 7,
+      "strategies": [
+        "A",
+        "C"
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "id": 0,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "0_0",
+          "role": "all",
+          "strategy": "A",
+          "count": 3,
+          "payoff": 3.4723977035712723,
+          "payoff_sd": 0
+        },
+        {
+          "id": "0_1",
+          "role": "all",
+          "strategy": "C",
+          "count": 4,
+          "payoff": 3.481537187838659,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "1_0",
+          "role": "all",
+          "strategy": "A",
+          "count": 6,
+          "payoff": 3.7037652219195962,
+          "payoff_sd": 0
+        },
+        {
+          "id": "1_1",
+          "role": "all",
+          "strategy": "C",
+          "count": 1,
+          "payoff": 3.4785749465985236,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "2_0",
+          "role": "all",
+          "strategy": "A",
+          "count": 5,
+          "payoff": 3.5082575904871343,
+          "payoff_sd": 0
+        },
+        {
+          "id": "2_1",
+          "role": "all",
+          "strategy": "C",
+          "count": 2,
+          "payoff": 3.4730456306955904,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "3_0",
+          "role": "all",
+          "strategy": "A",
+          "count": 4,
+          "payoff": 3.4789004516912714,
+          "payoff_sd": 0
+        },
+        {
+          "id": "3_1",
+          "role": "all",
+          "strategy": "C",
+          "count": 3,
+          "payoff": 3.4738446235648666,
+          "payoff_sd": 0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "observations_count": 1,
+      "symmetry_groups": [
+        {
+          "id": "4_1",
+          "role": "all",
+          "strategy": "C",
+          "count": 7,
+          "payoff": 7.075200163824167,
+          "payoff_sd": 0
+        }
+      ]
+    }
+  ]
+}

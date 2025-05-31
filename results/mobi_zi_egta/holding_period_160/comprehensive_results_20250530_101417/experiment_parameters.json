@@ -1,0 +1,19 @@
+{
+  "holding_period": 160,
+  "sim_time": 10000,
+  "num_mobi_agents": 10,
+  "num_zi_agents": 30,
+  "num_iterations": 10,
+  "num_strategies": 2,
+  "batch_size": 11,
+  "simulator_params": {
+    "MELO_100_0": {
+      "cda_proportion": 1.0,
+      "melo_proportion": 0.0
+    },
+    "MELO_0_100": {
+      "cda_proportion": 0.0,
+      "melo_proportion": 1.0
+    }
+  }
+}

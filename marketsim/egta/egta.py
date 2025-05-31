@@ -58,10 +58,8 @@ class EGTA:
         else:
             self.scheduler = scheduler
         
-        # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
         
-        # Game state
         self.game = None
         self.payoff_data = []
         self.simulated_profiles = set()
@@ -188,10 +186,9 @@ class EGTA:
                 
                 if verbose:
                     print(f"Solving equilibria on reduced game (scaling factor: {self.scheduler.scaling_factor:.2f})")
-            else:
+            else: #TODO remove for role symmetry
                 reduced_game = self.game
             
-            # Always use quiesce_sync for equilibrium finding
             try:
                 self.equilibria = quiesce_sync(
                     game=reduced_game,  # Use reduced game for equilibrium finding
@@ -201,20 +198,20 @@ class EGTA:
                     dist_threshold=quiesce_kwargs['dist_threshold'],
                     solver=quiesce_kwargs['solver'],
                     solver_iters=quiesce_kwargs['solver_iters'],
-                    verbose=verbose
+                    verbose=verbose,
+                    full_game=self.game if isinstance(self.scheduler, DPRScheduler) else None  # Pass full game for DPR for eq checking
                 )
                 
-                # Print payoff matrix for debugging if it's a 2-strategy game
                 if verbose and reduced_game.num_strategies == 2:
                     payoff_matrix = reduced_game.get_payoff_matrix()
                     print("\nReduced Game Payoff Matrix:")
                     for i in range(2):
                         print(f"  {reduced_game.strategy_names[i]}: [{payoff_matrix[i, 0].item():.4f}, {payoff_matrix[i, 1].item():.4f}]")
                     print()
+
                     
             except Exception as e:
                 print(f"Error in equilibrium finding: {e}")
-                # Fallback to direct replicator dynamics
                 mixture = torch.ones(reduced_game.num_strategies, device=self.device) / reduced_game.num_strategies
                 eq_mixture = replicator_dynamics(reduced_game, mixture, iters=5000)
                 eq_regret = regret(reduced_game, eq_mixture)
@@ -232,9 +229,7 @@ class EGTA:
             if verbose:
                 print(f"Found {len(self.equilibria)} equilibria in {equilibria_time:.2f} seconds")
                 
-                # Print equilibria
                 for i, (eq_mix, eq_regret) in enumerate(self.equilibria):
-                    # Skip equilibria with NaN regret
                     if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
                         continue
                     if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
@@ -247,29 +242,22 @@ class EGTA:
                     ])
                     print(f"  Equilibrium {i+1}: regret={float(eq_regret):.6f}, {strat_str}")
                     
-                    # Show the expected payoff for this equilibrium
                     try:
-                        # Is this a DPR reduced game?
                         is_dpr = isinstance(self.scheduler, DPRScheduler)
                         
-                        # Calculate expected payoff based on the appropriate game
                         if is_dpr:
-                            # Show both reduced and full game payoffs
                             reduced_payoffs = reduced_game.deviation_payoffs(eq_mix)
                             reduced_exp_payoff = (eq_mix * reduced_payoffs).sum().item()
                             
-                            # Calculate full game expected payoff by scaling
                             scaling_factor = self.scheduler.scaling_factor
                             full_exp_payoff = reduced_exp_payoff * scaling_factor
                             
-                            print(f"    Expected Payoff (Reduced Game): {reduced_exp_payoff:.4f}")
-                            print(f"    Expected Payoff (Full Game): {full_exp_payoff:.4f}")
+                            print(f"Expected Payoff (Reduced Game): {reduced_exp_payoff:.4f}")
+                            print(f"Expected Payoff (Full Game): {full_exp_payoff:.4f}")
                         else:
-                            # Regular game
                             payoffs = self.game.deviation_payoffs(eq_mix)
                             exp_payoff = (eq_mix * payoffs).sum().item()
                             
-                            # Denormalize if necessary
                             if 'payoff_mean' in self.game.metadata and 'payoff_std' in self.game.metadata:
                                 payoff_mean = self.game.metadata['payoff_mean']
                                 payoff_std = self.game.metadata['payoff_std']
@@ -338,10 +326,8 @@ class EGTA:
     def analyze_equilibria(self, verbose: bool = True) -> Dict[str, Any]:
         """
         Analyze the found equilibria.
-        
         Args:
             verbose: Whether to print analysis
-            
         Returns:
             Dictionary with analysis results
         """
@@ -350,12 +336,10 @@ class EGTA:
                 print("No equilibria found.")
             return {}
         
-        # Support sizes
         support_sizes = []
         strategy_frequencies = {name: 0.0 for name in self.game.strategy_names}
         
         for eq_mix, _ in self.equilibria:
-            # Count strategies in support
             support = sum(1 for x in eq_mix if x.item() > 0.001)
             support_sizes.append(support)
             
@@ -406,7 +390,6 @@ class EGTA:
             
         scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
         
-        # Create a new SymmetricGame with reduced player count
         reduced_sym_game = SymmetricGame(
             num_players=reduction_size,
             num_actions=full_game.game.num_actions,
@@ -426,3 +409,5 @@ class EGTA:
         metadata['scaling_factor'] = scaling_factor
         
         return Game(reduced_sym_game, metadata) 
+    
+  

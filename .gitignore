@@ -1,10 +1,10 @@
-*.csv
-*.png
-*.jpg
-*.zip
-*.npz
-*.json
-*.txt
+#*.csv
+#*.png
+#*.jpg
+#*.zip
+#*.npz
+#*.json
+#*.txt
 *.pkl
 *.out
 .DS_Store

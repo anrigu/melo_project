@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gameanalysis.gamereader module &#8212; Game Analysis 8.1.0 documentation</title>
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gameanalysis.learning module" href="gameanalysis.learning.html" />
+    <link rel="prev" title="gameanalysis.gamegen module" href="gameanalysis.gamegen.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.learning.html" title="gameanalysis.learning module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.gamegen.html" title="gameanalysis.gamegen module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" accesskey="U">gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.gamereader module</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-gameanalysis.gamereader">
+<span id="gameanalysis-gamereader-module"></span><h1>gameanalysis.gamereader module<a class="headerlink" href="#module-gameanalysis.gamereader" title="Permalink to this headline">¶</a></h1>
+<p>Module for loading an arbitrary game with its associated serializer</p>
+<dl class="py function">
+<dt id="gameanalysis.gamereader.dump">
+<code class="sig-prename descclassname">gameanalysis.gamereader.</code><code class="sig-name descname">dump</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em>, <em class="sig-param"><span class="n">file_like</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/gamereader.html#dump"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.gamereader.dump" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dump a game to a file object</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.gamereader.dumpj">
+<code class="sig-prename descclassname">gameanalysis.gamereader.</code><code class="sig-name descname">dumpj</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/gamereader.html#dumpj"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.gamereader.dumpj" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dump a game to json</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.gamereader.dumps">
+<code class="sig-prename descclassname">gameanalysis.gamereader.</code><code class="sig-name descname">dumps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">game</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/gamereader.html#dumps"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.gamereader.dumps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dump a game to a string</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.gamereader.load">
+<code class="sig-prename descclassname">gameanalysis.gamereader.</code><code class="sig-name descname">load</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filelike</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/gamereader.html#load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.gamereader.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a game from a file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>filelike</strong> (<em>file-like</em>) – A file-like object to read the game from. The entire file will be
+consumed by this action.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.gamereader.loadj">
+<code class="sig-prename descclassname">gameanalysis.gamereader.</code><code class="sig-name descname">loadj</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/gamereader.html#loadj"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.gamereader.loadj" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a game from serializable python objects</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>json</strong> (<em>{...}</em>) – The python object representation of a game encoded as json. Any valid
+game will be read and returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="gameanalysis.gamereader.loads">
+<code class="sig-prename descclassname">gameanalysis.gamereader.</code><code class="sig-name descname">loads</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">string</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/gameanalysis/gamereader.html#loads"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#gameanalysis.gamereader.loads" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a game from a string</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>string</strong> (<em>str</em>) – A string representation of the game.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="gameanalysis.gamegen.html"
+                        title="previous chapter">gameanalysis.gamegen module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="gameanalysis.learning.html"
+                        title="next chapter">gameanalysis.learning module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/gameanalysis.gamereader.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.learning.html" title="gameanalysis.learning module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="gameanalysis.gamegen.html" title="gameanalysis.gamegen module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Game Analysis 8.1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="gameanalysis.html" >gameanalysis package</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">gameanalysis.gamereader module</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, Strategic Reasoning Group.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.2.1.
+    </div>
+  </body>
+</html>

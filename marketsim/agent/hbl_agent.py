@@ -8,7 +8,7 @@ from marketsim.agent.agent import Agent
 from marketsim.market.market import Market
 from marketsim.fourheap.order import Order
 from marketsim.private_values.private_values import PrivateValues
-from marketsim.fourheap.constants import BUY, SELL
+from marketsim.fourheap.constants import BUY, SELL, CDA
 from typing import List
 from fastcubicspline import FCS
 from scipy.interpolate import CubicSpline
@@ -16,7 +16,8 @@ from scipy.interpolate import CubicSpline
 
 class HBLAgent(Agent):
     def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, L: int, pv_var: float,
-                 arrival_rate: float):
+                 arrival_rate: float, cda_proportion=1,
+                    melo_proportion=0):
         self.agent_id = agent_id
         self.market = market
         self.pv = PrivateValues(q_max, pv_var)
@@ -42,6 +43,8 @@ class HBLAgent(Agent):
         self.sell_after_spoofer = []
         self.sell_count = [0,0]
         self.buy_count = [0,0]
+        self.cda_proportion = cda_proportion
+        self.melo_proportion = melo_proportion
 
         self.q_max = q_max
         self.pv_var = pv_var
@@ -643,7 +646,7 @@ class HBLAgent(Agent):
             
             return optimal_price[0], optimal_price[1]
 
-    def take_action(self, side, seed = 0):
+    def take_action(self, side, market = CDA, seed = 0):
         """
         Submits order to market for HBL.
 

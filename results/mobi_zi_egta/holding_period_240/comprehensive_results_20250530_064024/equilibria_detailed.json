@@ -1,0 +1,22 @@
+[
+  {
+    "equilibrium_id": 1,
+    "regret": 0.0,
+    "welfare": 31547.975718005328,
+    "mixture_dict": {
+      "MELO_0_100": 0.0,
+      "MELO_100_0": 1.0
+    },
+    "mixture_vector": [
+      0.0,
+      1.0
+    ],
+    "support": [
+      "MELO_100_0"
+    ],
+    "support_size": 1,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 1.0
+  }
+]

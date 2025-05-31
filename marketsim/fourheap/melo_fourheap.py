@@ -115,8 +115,6 @@ class MELOFourHeap(FourHeap):
     def withdraw_all(self, agent_id: int, order_tracker):
         for order_id in self.agent_id_map[agent_id]:
             self.remove(order_id)
-            if order_tracker[order_id] == "active":
-                a = "hello"
             order_tracker[order_id] += " withdrawn"
         self.agent_id_map[agent_id] = []
 
@@ -246,8 +244,6 @@ class MELOFourHeap(FourHeap):
             self.sell_eligibility_queue.remove(order_id)
             self.removed_eligibility += 1
             return
-
-        super().remove(order_id)
 
     def market_clear(self):
         matched_orders = self.buy_matched_orders + self.sell_matched_orders

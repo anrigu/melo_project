@@ -4,14 +4,15 @@ from marketsim.agent.agent import Agent
 from marketsim.market.market import Market
 from marketsim.fourheap.order import Order
 from marketsim.private_values.private_values import PrivateValues
-from marketsim.fourheap.constants import BUY, SELL
+from marketsim.fourheap.constants import BUY, SELL, CDA, MELO
 from typing import List
 import torch
 import math
 
 
 class ZIAgent(Agent):
-    def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, pv_var: float, eta: float = 1.0):
+    def __init__(self, agent_id: int, market: Market, q_max: int, shade: List, pv_var: float, eta: float = 1.0, cda_proportion=1,
+                            melo_proportion=0):
         self.agent_id = agent_id
         self.market = market
         self.q_max = q_max
@@ -26,6 +27,10 @@ class ZIAgent(Agent):
         self.melo_profit = 0
         self.eta = eta
         self.melo_trades = []
+
+        #In case we want the agent to act different based on the market
+        self.cda_proportion = cda_proportion
+        self.melo_proportion = melo_proportion
 
     def generate_pv(self):
         #Generate new private values
@@ -72,7 +77,7 @@ class ZIAgent(Agent):
         return estimate
         # return estimate + np.random.normal(0, np.sqrt(3e5))
 
-    def take_action(self, side, seed = 0):
+    def take_action(self, side, market = CDA, seed = 0):
         t = self.market.get_time()
         # random.seed(t + seed)
         estimate = self.estimate_fundamental() 

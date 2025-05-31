@@ -32,7 +32,6 @@ class MeloMarket(Market):
             if order_placement == 1:
                 return_val = current_time
 
-        #TODO: REMOVE AS LONG AS THE ASSERT DOESN'T FAIL
         return return_val
         
     def reset(self, fundamental=None):

@@ -29,6 +29,9 @@ class MELOSimulatorSampledArrival:
                  strategies = None,
                  strategy_counts = None,
                  strategy_params = None,
+                 strategy_counts_background = None,
+                 strategy_params_background = None,
+                 strategies_background = None,
                  num_assets: int = 1,
                  lam: float = 0.1,
                  mean: float = 100,
@@ -62,6 +65,10 @@ class MELOSimulatorSampledArrival:
         self.strategy_counts = strategy_counts
         self.strategy_params = strategy_params
 
+        self.strategies_background = strategies_background
+        self.strategy_counts_background = strategy_counts_background
+        self.strategy_params_background = strategy_params_background
+
         self.arrivals = defaultdict(list)
         self.arrivals_melo = defaultdict(list)
 
@@ -94,48 +101,72 @@ class MELOSimulatorSampledArrival:
 
         self.fundamentals = []
 
+        
+
 
         # print("R", r, "SHOCK", shock_var)
 
         #Market is only passed in for access to fundamental. Melo doesn't care about that
-        for agent_id in range(num_zi):
-            self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
-            self.arrival_index += 1
-            self.agents[agent_id] = (
-                ZIAgent(
-                    agent_id=agent_id,
-                    market=self.market,
-                    q_max=q_max,
-                    shade=shade,
-                    pv_var=pv_var,
-                    eta=eta
-                ))
+        if not self.strategies_background:
+            for agent_id in range(num_zi):
+                self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+                self.arrival_index += 1
+                self.agents[agent_id] = (
+                    ZIAgent(
+                        agent_id=agent_id,
+                        market=self.market,
+                        q_max=q_max,
+                        shade=shade,
+                        pv_var=pv_var,
+                        eta=eta,
+                        cda_proportion=1,
+                        melo_proportion=0,
+                    ))
 
-        for agent_id in range(num_zi, num_zi + num_hbl):
-            self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
-            self.arrival_index += 1
-            self.agents[agent_id] = (
-                HBLAgent(
-                    agent_id=agent_id,
-                    market=self.market,
-                    q_max=q_max,
-                    shade=shade,
-                    pv_var=pv_var,
-                    L=4,
-                    arrival_rate=self.lam
-                ))
+            for agent_id in range(num_zi, num_zi + num_hbl):
+                self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+                self.arrival_index += 1
 
+                self.agents[agent_id] = (
+                    HBLAgent(
+                        agent_id=agent_id,
+                        market=self.market,
+                        q_max=q_max,
+                        shade=shade,
+                        pv_var=pv_var,
+                        L=4,
+                        arrival_rate=self.lam,
+                        cda_proportion=1,
+                        melo_proportion=0,
+                    ))
+        else:
+            for strategy in self.strategies_background:
+                count = strategy_counts_background[strategy]
+                for i in range(count):
+                    self.arrivals[self.arrival_times[self.arrival_index].item()].append(agent_id)
+                    self.arrival_index += 1
+                    params = self.strategy_params_background[strategy]
+                    
+                    self.agents[i] = (
+                        ZIAgent(
+                        agent_id=agent_id,
+                        market=self.market,
+                        q_max=q_max,
+                        shade=shade,
+                        pv_var=pv_var,
+                        eta=eta,
+                        cda_proportion=1,
+                        melo_proportion=0,
+                    ))
+
+            
         if not self.strategies:
             strategic_agent_id = num_zi + num_hbl
             for agent_id in range(num_strategic):
                 self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
                 self.arrival_index_melo += 1
-                if agent_id <= 1:
-                    cda_proportion = 0
-                    melo_proportion = 1
-                else:
-                    cda_proportion = 0
-                    melo_proportion = 1
+                cda_proportion = 0
+                melo_proportion = 1
                 self.agents[strategic_agent_id] = (
                     MeloAgent(
                         agent_id=strategic_agent_id,
@@ -179,11 +210,25 @@ class MELOSimulatorSampledArrival:
             if agents:
                 for agent_id in agents:
                     #Normal orderbook traders
-                    agent = self.agents[agent_id]
+                    agent: Agent = self.agents[agent_id]
                     self.market.withdraw_all(agent_id)
                     side = random.choice([BUY, SELL])
-                    orders = agent.take_action(side)
-                    self.market.add_orders(orders)
+                    if random.random() < agent.melo_proportion:
+                        marketSelection = MELO
+                    else:
+                        marketSelection = CDA
+                        
+                    if marketSelection == MELO:
+                        #PLACE MELO
+                        orders = agent.take_action(side, marketSelection) 
+                        self.meloMarket.add_orders(orders)
+                        
+                        #TODO: add tracking of these orders
+                    else:
+                        #PLACE CDA ORDER
+                        orders = agent.take_action(side, marketSelection)
+                        self.market.add_orders(orders)
+
                     if isinstance(agent, HBLAgent):
                         self.timesteps_hbl_orders.append((self.time, side, orders[0].price))
                     if self.arrival_index == self.arrivals_sampled:
