@@ -1,0 +1,44 @@
+gameanalysis package
+====================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gameanalysis.reduction
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gameanalysis.aggfn
+   gameanalysis.bootstrap
+   gameanalysis.canongame
+   gameanalysis.collect
+   gameanalysis.dominance
+   gameanalysis.fixedpoint
+   gameanalysis.gambit
+   gameanalysis.gamegen
+   gameanalysis.gamereader
+   gameanalysis.learning
+   gameanalysis.matgame
+   gameanalysis.nash
+   gameanalysis.paygame
+   gameanalysis.regret
+   gameanalysis.restrict
+   gameanalysis.rsgame
+   gameanalysis.scriptutils
+   gameanalysis.trace
+   gameanalysis.utils
+
+Module contents
+---------------
+
+.. automodule:: gameanalysis
+   :members:
+   :undoc-members:
+   :show-inheritance:

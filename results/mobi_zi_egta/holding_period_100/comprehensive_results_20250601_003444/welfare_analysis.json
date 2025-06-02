@@ -1,0 +1,32 @@
+{
+  "welfare_data": [
+    27808.798314751166,
+    22781.97025090088,
+    21557.775788172763
+  ],
+  "labels": [
+    "Eq 1",
+    "Eq 2",
+    "Eq 3"
+  ],
+  "best_equilibrium_welfare": 27808.798314751166,
+  "worst_equilibrium_welfare": 21557.775788172763,
+  "welfare_variance": 7315881.677097517,
+  "welfare_comparison": [
+    {
+      "equilibrium": "Eq 1",
+      "welfare": 27808.798314751166,
+      "welfare_rank": 1
+    },
+    {
+      "equilibrium": "Eq 2",
+      "welfare": 22781.97025090088,
+      "welfare_rank": 2
+    },
+    {
+      "equilibrium": "Eq 3",
+      "welfare": 21557.775788172763,
+      "welfare_rank": 3
+    }
+  ]
+}

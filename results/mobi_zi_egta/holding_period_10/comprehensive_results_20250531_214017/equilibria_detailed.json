@@ -1,0 +1,1155 @@
+[
+  {
+    "equilibrium_id": 1,
+    "regret": 0.0,
+    "welfare": 33484.80869995117,
+    "mixture_dict": {
+      "MELO_0_100": 1.0,
+      "MELO_100_0": 0.0
+    },
+    "mixture_vector": [
+      1.0,
+      0.0
+    ],
+    "support": [
+      "MELO_0_100"
+    ],
+    "support_size": 1,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 1.0
+  },
+  {
+    "equilibrium_id": 2,
+    "regret": 0.0,
+    "welfare": 23791.128447265623,
+    "mixture_dict": {
+      "MELO_0_100": 0.0,
+      "MELO_100_0": 1.0
+    },
+    "mixture_vector": [
+      0.0,
+      1.0
+    ],
+    "support": [
+      "MELO_100_0"
+    ],
+    "support_size": 1,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 1.0
+  },
+  {
+    "equilibrium_id": 3,
+    "regret": 0.0,
+    "welfare": 24548.64377338757,
+    "mixture_dict": {
+      "MELO_0_100": 0.5,
+      "MELO_100_0": 0.5
+    },
+    "mixture_vector": [
+      0.5,
+      0.5
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5
+  },
+  {
+    "equilibrium_id": 4,
+    "regret": 0.0,
+    "welfare": 32619.980936019045,
+    "mixture_dict": {
+      "MELO_0_100": 0.800000011920929,
+      "MELO_100_0": 0.20000000298023224
+    },
+    "mixture_vector": [
+      0.800000011920929,
+      0.20000000298023224
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.800000011920929
+  },
+  {
+    "equilibrium_id": 5,
+    "regret": 0.0,
+    "welfare": 22542.11713241969,
+    "mixture_dict": {
+      "MELO_0_100": 0.20000000298023224,
+      "MELO_100_0": 0.800000011920929
+    },
+    "mixture_vector": [
+      0.20000000298023224,
+      0.800000011920929
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.800000011920929
+  },
+  {
+    "equilibrium_id": 6,
+    "regret": 0.0,
+    "welfare": 31439.961565555,
+    "mixture_dict": {
+      "MELO_0_100": 0.699999988079071,
+      "MELO_100_0": 0.30000001192092896
+    },
+    "mixture_vector": [
+      0.699999988079071,
+      0.30000001192092896
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.699999988079071
+  },
+  {
+    "equilibrium_id": 7,
+    "regret": 0.0,
+    "welfare": 28986.656327749643,
+    "mixture_dict": {
+      "MELO_0_100": 0.6000000238418579,
+      "MELO_100_0": 0.4000000059604645
+    },
+    "mixture_vector": [
+      0.6000000238418579,
+      0.4000000059604645
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6000000238418579
+  },
+  {
+    "equilibrium_id": 8,
+    "regret": 0.0,
+    "welfare": 21954.676289420277,
+    "mixture_dict": {
+      "MELO_0_100": 0.30000001192092896,
+      "MELO_100_0": 0.699999988079071
+    },
+    "mixture_vector": [
+      0.30000001192092896,
+      0.699999988079071
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.699999988079071
+  },
+  {
+    "equilibrium_id": 9,
+    "regret": 0.0,
+    "welfare": 21938.005327351613,
+    "mixture_dict": {
+      "MELO_0_100": 0.4000000059604645,
+      "MELO_100_0": 0.6000000238418579
+    },
+    "mixture_vector": [
+      0.4000000059604645,
+      0.6000000238418579
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6000000238418579
+  },
+  {
+    "equilibrium_id": 10,
+    "regret": 0.0,
+    "welfare": 24017.363341790035,
+    "mixture_dict": {
+      "MELO_0_100": 0.48769545555114746,
+      "MELO_100_0": 0.5123045444488525
+    },
+    "mixture_vector": [
+      0.48769545555114746,
+      0.5123045444488525
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5123045444488525
+  },
+  {
+    "equilibrium_id": 11,
+    "regret": 0.0,
+    "welfare": 22160.218073194294,
+    "mixture_dict": {
+      "MELO_0_100": 0.4204409122467041,
+      "MELO_100_0": 0.5795590877532959
+    },
+    "mixture_vector": [
+      0.4204409122467041,
+      0.5795590877532959
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5795590877532959
+  },
+  {
+    "equilibrium_id": 12,
+    "regret": 0.0,
+    "welfare": 33399.3150253534,
+    "mixture_dict": {
+      "MELO_0_100": 0.957983136177063,
+      "MELO_100_0": 0.04201684892177582
+    },
+    "mixture_vector": [
+      0.957983136177063,
+      0.04201684892177582
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.957983136177063
+  },
+  {
+    "equilibrium_id": 13,
+    "regret": 0.0,
+    "welfare": 22050.278938955882,
+    "mixture_dict": {
+      "MELO_0_100": 0.41176286339759827,
+      "MELO_100_0": 0.5882371068000793
+    },
+    "mixture_vector": [
+      0.41176286339759827,
+      0.5882371068000793
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5882371068000793
+  },
+  {
+    "equilibrium_id": 14,
+    "regret": 0.0,
+    "welfare": 21887.701519468992,
+    "mixture_dict": {
+      "MELO_0_100": 0.31562185287475586,
+      "MELO_100_0": 0.6843781471252441
+    },
+    "mixture_vector": [
+      0.31562185287475586,
+      0.6843781471252441
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6843781471252441
+  },
+  {
+    "equilibrium_id": 15,
+    "regret": 0.0,
+    "welfare": 21830.041852041362,
+    "mixture_dict": {
+      "MELO_0_100": 0.38077864050865173,
+      "MELO_100_0": 0.6192213892936707
+    },
+    "mixture_vector": [
+      0.38077864050865173,
+      0.6192213892936707
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6192213892936707
+  },
+  {
+    "equilibrium_id": 16,
+    "regret": 0.0,
+    "welfare": 27466.465609413317,
+    "mixture_dict": {
+      "MELO_0_100": 0.5618813037872314,
+      "MELO_100_0": 0.4381187856197357
+    },
+    "mixture_vector": [
+      0.5618813037872314,
+      0.4381187856197357
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5618813037872314
+  },
+  {
+    "equilibrium_id": 17,
+    "regret": 0.0,
+    "welfare": 30326.04426628549,
+    "mixture_dict": {
+      "MELO_0_100": 0.6450934410095215,
+      "MELO_100_0": 0.3549065589904785
+    },
+    "mixture_vector": [
+      0.6450934410095215,
+      0.3549065589904785
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6450934410095215
+  },
+  {
+    "equilibrium_id": 18,
+    "regret": 0.0,
+    "welfare": 24482.781450156923,
+    "mixture_dict": {
+      "MELO_0_100": 0.498527467250824,
+      "MELO_100_0": 0.501472532749176
+    },
+    "mixture_vector": [
+      0.498527467250824,
+      0.501472532749176
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.501472532749176
+  },
+  {
+    "equilibrium_id": 19,
+    "regret": 0.0,
+    "welfare": 22255.336403090925,
+    "mixture_dict": {
+      "MELO_0_100": 0.42669183015823364,
+      "MELO_100_0": 0.5733082294464111
+    },
+    "mixture_vector": [
+      0.42669183015823364,
+      0.5733082294464111
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5733082294464111
+  },
+  {
+    "equilibrium_id": 20,
+    "regret": 0.0,
+    "welfare": 25142.160887048216,
+    "mixture_dict": {
+      "MELO_0_100": 0.512823224067688,
+      "MELO_100_0": 0.4871767461299896
+    },
+    "mixture_vector": [
+      0.512823224067688,
+      0.4871767461299896
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.512823224067688
+  },
+  {
+    "equilibrium_id": 21,
+    "regret": 0.0,
+    "welfare": 26001.236491903655,
+    "mixture_dict": {
+      "MELO_0_100": 0.5306611657142639,
+      "MELO_100_0": 0.4693388342857361
+    },
+    "mixture_vector": [
+      0.5306611657142639,
+      0.4693388342857361
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5306611657142639
+  },
+  {
+    "equilibrium_id": 22,
+    "regret": 0.0,
+    "welfare": 22016.068100727403,
+    "mixture_dict": {
+      "MELO_0_100": 0.4085920453071594,
+      "MELO_100_0": 0.5914079546928406
+    },
+    "mixture_vector": [
+      0.4085920453071594,
+      0.5914079546928406
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5914079546928406
+  },
+  {
+    "equilibrium_id": 23,
+    "regret": 0.0,
+    "welfare": 30075.929719932676,
+    "mixture_dict": {
+      "MELO_0_100": 0.6353946328163147,
+      "MELO_100_0": 0.3646053969860077
+    },
+    "mixture_vector": [
+      0.6353946328163147,
+      0.3646053969860077
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6353946328163147
+  },
+  {
+    "equilibrium_id": 24,
+    "regret": 0.0,
+    "welfare": 32526.44569145484,
+    "mixture_dict": {
+      "MELO_0_100": 0.7890308499336243,
+      "MELO_100_0": 0.21096916496753693
+    },
+    "mixture_vector": [
+      0.7890308499336243,
+      0.21096916496753693
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.7890308499336243
+  },
+  {
+    "equilibrium_id": 25,
+    "regret": 0.0,
+    "welfare": 21825.732849771306,
+    "mixture_dict": {
+      "MELO_0_100": 0.37952151894569397,
+      "MELO_100_0": 0.6204784512519836
+    },
+    "mixture_vector": [
+      0.37952151894569397,
+      0.6204784512519836
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6204784512519836
+  },
+  {
+    "equilibrium_id": 26,
+    "regret": 0.0,
+    "welfare": 23671.71000336796,
+    "mixture_dict": {
+      "MELO_0_100": 0.020460834726691246,
+      "MELO_100_0": 0.979539155960083
+    },
+    "mixture_vector": [
+      0.020460834726691246,
+      0.979539155960083
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.979539155960083
+  },
+  {
+    "equilibrium_id": 27,
+    "regret": 0.0,
+    "welfare": 23719.994261236516,
+    "mixture_dict": {
+      "MELO_0_100": 0.012235029600560665,
+      "MELO_100_0": 0.9877649545669556
+    },
+    "mixture_vector": [
+      0.012235029600560665,
+      0.9877649545669556
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.9877649545669556
+  },
+  {
+    "equilibrium_id": 28,
+    "regret": 0.0,
+    "welfare": 24063.515470909704,
+    "mixture_dict": {
+      "MELO_0_100": 0.4888090491294861,
+      "MELO_100_0": 0.5111908912658691
+    },
+    "mixture_vector": [
+      0.4888090491294861,
+      0.5111908912658691
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5111908912658691
+  },
+  {
+    "equilibrium_id": 29,
+    "regret": 0.0,
+    "welfare": 21980.65925869528,
+    "mixture_dict": {
+      "MELO_0_100": 0.4049726724624634,
+      "MELO_100_0": 0.5950273871421814
+    },
+    "mixture_vector": [
+      0.4049726724624634,
+      0.5950273871421814
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5950273871421814
+  },
+  {
+    "equilibrium_id": 30,
+    "regret": 0.0,
+    "welfare": 26779.275549696544,
+    "mixture_dict": {
+      "MELO_0_100": 0.5468959808349609,
+      "MELO_100_0": 0.45310401916503906
+    },
+    "mixture_vector": [
+      0.5468959808349609,
+      0.45310401916503906
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5468959808349609
+  },
+  {
+    "equilibrium_id": 31,
+    "regret": 0.0,
+    "welfare": 23745.902549941104,
+    "mixture_dict": {
+      "MELO_0_100": 0.007795069832354784,
+      "MELO_100_0": 0.9922049641609192
+    },
+    "mixture_vector": [
+      0.007795069832354784,
+      0.9922049641609192
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.9922049641609192
+  },
+  {
+    "equilibrium_id": 32,
+    "regret": 0.0,
+    "welfare": 23571.117562795618,
+    "mixture_dict": {
+      "MELO_0_100": 0.47630900144577026,
+      "MELO_100_0": 0.5236910581588745
+    },
+    "mixture_vector": [
+      0.47630900144577026,
+      0.5236910581588745
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5236910581588745
+  },
+  {
+    "equilibrium_id": 33,
+    "regret": 0.0,
+    "welfare": 25991.929540699224,
+    "mixture_dict": {
+      "MELO_0_100": 0.5304690003395081,
+      "MELO_100_0": 0.46953096985816956
+    },
+    "mixture_vector": [
+      0.5304690003395081,
+      0.46953096985816956
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5304690003395081
+  },
+  {
+    "equilibrium_id": 34,
+    "regret": 0.0,
+    "welfare": 21981.956447934648,
+    "mixture_dict": {
+      "MELO_0_100": 0.4051123857498169,
+      "MELO_100_0": 0.5948876142501831
+    },
+    "mixture_vector": [
+      0.4051123857498169,
+      0.5948876142501831
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5948876142501831
+  },
+  {
+    "equilibrium_id": 35,
+    "regret": 0.0,
+    "welfare": 22639.012951115077,
+    "mixture_dict": {
+      "MELO_0_100": 0.1850377321243286,
+      "MELO_100_0": 0.8149622678756714
+    },
+    "mixture_vector": [
+      0.1850377321243286,
+      0.8149622678756714
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.8149622678756714
+  },
+  {
+    "equilibrium_id": 36,
+    "regret": 0.0,
+    "welfare": 21871.083238166073,
+    "mixture_dict": {
+      "MELO_0_100": 0.3200651705265045,
+      "MELO_100_0": 0.6799347996711731
+    },
+    "mixture_vector": [
+      0.3200651705265045,
+      0.6799347996711731
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6799347996711731
+  },
+  {
+    "equilibrium_id": 37,
+    "regret": 0.0,
+    "welfare": 21793.321005392965,
+    "mixture_dict": {
+      "MELO_0_100": 0.3589588701725006,
+      "MELO_100_0": 0.6410411596298218
+    },
+    "mixture_vector": [
+      0.3589588701725006,
+      0.6410411596298218
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6410411596298218
+  },
+  {
+    "equilibrium_id": 38,
+    "regret": 0.0,
+    "welfare": 33250.749793692856,
+    "mixture_dict": {
+      "MELO_0_100": 0.9099003672599792,
+      "MELO_100_0": 0.09009961038827896
+    },
+    "mixture_vector": [
+      0.9099003672599792,
+      0.09009961038827896
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.9099003672599792
+  },
+  {
+    "equilibrium_id": 39,
+    "regret": 0.0,
+    "welfare": 32046.991713575684,
+    "mixture_dict": {
+      "MELO_0_100": 0.7429094910621643,
+      "MELO_100_0": 0.2570905387401581
+    },
+    "mixture_vector": [
+      0.7429094910621643,
+      0.2570905387401581
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.7429094910621643
+  },
+  {
+    "equilibrium_id": 40,
+    "regret": 0.0,
+    "welfare": 24091.206112469907,
+    "mixture_dict": {
+      "MELO_0_100": 0.48947250843048096,
+      "MELO_100_0": 0.5105275511741638
+    },
+    "mixture_vector": [
+      0.48947250843048096,
+      0.5105275511741638
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5105275511741638
+  },
+  {
+    "equilibrium_id": 41,
+    "regret": 0.0,
+    "welfare": 28111.712626115328,
+    "mixture_dict": {
+      "MELO_0_100": 0.5769801139831543,
+      "MELO_100_0": 0.4230199158191681
+    },
+    "mixture_vector": [
+      0.5769801139831543,
+      0.4230199158191681
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5769801139831543
+  },
+  {
+    "equilibrium_id": 42,
+    "regret": 0.0,
+    "welfare": 29687.51279651596,
+    "mixture_dict": {
+      "MELO_0_100": 0.6216474175453186,
+      "MELO_100_0": 0.3783526122570038
+    },
+    "mixture_vector": [
+      0.6216474175453186,
+      0.3783526122570038
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6216474175453186
+  },
+  {
+    "equilibrium_id": 43,
+    "regret": 0.0,
+    "welfare": 32369.825290733643,
+    "mixture_dict": {
+      "MELO_0_100": 0.772316038608551,
+      "MELO_100_0": 0.2276839315891266
+    },
+    "mixture_vector": [
+      0.772316038608551,
+      0.2276839315891266
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.772316038608551
+  },
+  {
+    "equilibrium_id": 44,
+    "regret": 0.0,
+    "welfare": 29626.454837441364,
+    "mixture_dict": {
+      "MELO_0_100": 0.6196134686470032,
+      "MELO_100_0": 0.3803865313529968
+    },
+    "mixture_vector": [
+      0.6196134686470032,
+      0.3803865313529968
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6196134686470032
+  },
+  {
+    "equilibrium_id": 45,
+    "regret": 0.0,
+    "welfare": 21895.211101171088,
+    "mixture_dict": {
+      "MELO_0_100": 0.39401066303253174,
+      "MELO_100_0": 0.6059893369674683
+    },
+    "mixture_vector": [
+      0.39401066303253174,
+      0.6059893369674683
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6059893369674683
+  },
+  {
+    "equilibrium_id": 46,
+    "regret": 0.0,
+    "welfare": 29988.398062895893,
+    "mixture_dict": {
+      "MELO_0_100": 0.6321660876274109,
+      "MELO_100_0": 0.3678339719772339
+    },
+    "mixture_vector": [
+      0.6321660876274109,
+      0.3678339719772339
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6321660876274109
+  },
+  {
+    "equilibrium_id": 47,
+    "regret": 0.0,
+    "welfare": 23734.132864087056,
+    "mixture_dict": {
+      "MELO_0_100": 0.009814354591071606,
+      "MELO_100_0": 0.9901856780052185
+    },
+    "mixture_vector": [
+      0.009814354591071606,
+      0.9901856780052185
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.9901856780052185
+  },
+  {
+    "equilibrium_id": 48,
+    "regret": 0.0,
+    "welfare": 22842.974988367892,
+    "mixture_dict": {
+      "MELO_0_100": 0.4537476599216461,
+      "MELO_100_0": 0.5462523102760315
+    },
+    "mixture_vector": [
+      0.4537476599216461,
+      0.5462523102760315
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5462523102760315
+  },
+  {
+    "equilibrium_id": 49,
+    "regret": 0.0,
+    "welfare": 23381.169002842413,
+    "mixture_dict": {
+      "MELO_0_100": 0.4710240662097931,
+      "MELO_100_0": 0.5289759039878845
+    },
+    "mixture_vector": [
+      0.4710240662097931,
+      0.5289759039878845
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.5289759039878845
+  },
+  {
+    "equilibrium_id": 50,
+    "regret": 0.0,
+    "welfare": 30982.754719486995,
+    "mixture_dict": {
+      "MELO_0_100": 0.6746665835380554,
+      "MELO_100_0": 0.3253334164619446
+    },
+    "mixture_vector": [
+      0.6746665835380554,
+      0.3253334164619446
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6746665835380554
+  },
+  {
+    "equilibrium_id": 51,
+    "regret": 0.0,
+    "welfare": 29423.36577015473,
+    "mixture_dict": {
+      "MELO_0_100": 0.6130678653717041,
+      "MELO_100_0": 0.3869321346282959
+    },
+    "mixture_vector": [
+      0.6130678653717041,
+      0.3869321346282959
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6130678653717041
+  },
+  {
+    "equilibrium_id": 52,
+    "regret": 0.0,
+    "welfare": 21908.116054532253,
+    "mixture_dict": {
+      "MELO_0_100": 0.3105400800704956,
+      "MELO_100_0": 0.6894599795341492
+    },
+    "mixture_vector": [
+      0.3105400800704956,
+      0.6894599795341492
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6894599795341492
+  },
+  {
+    "equilibrium_id": 53,
+    "regret": 0.0,
+    "welfare": 22011.780465393054,
+    "mixture_dict": {
+      "MELO_0_100": 0.28833532333374023,
+      "MELO_100_0": 0.7116646766662598
+    },
+    "mixture_vector": [
+      0.28833532333374023,
+      0.7116646766662598
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.7116646766662598
+  },
+  {
+    "equilibrium_id": 54,
+    "regret": 0.0,
+    "welfare": 22808.335464617347,
+    "mixture_dict": {
+      "MELO_0_100": 0.15896740555763245,
+      "MELO_100_0": 0.8410326242446899
+    },
+    "mixture_vector": [
+      0.15896740555763245,
+      0.8410326242446899
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.8410326242446899
+  },
+  {
+    "equilibrium_id": 55,
+    "regret": 0.0,
+    "welfare": 23782.248801447873,
+    "mixture_dict": {
+      "MELO_0_100": 0.0015349987661466002,
+      "MELO_100_0": 0.9984650015830994
+    },
+    "mixture_vector": [
+      0.0015349987661466002,
+      0.9984650015830994
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.9984650015830994
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "is_role_symmetric": true,
+  "role_names": [
+    "MOBI",
+    "ZI"
+  ],
+  "num_players_per_role": 

@@ -1,0 +1,660 @@
+[
+  {
+    "profile_id": 0,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 20408.23519042969
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 17696.90447631836
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 28088.09207977295
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 23899.768901367188
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_0_100",
+        "payoff": 24206.944494628908
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_0_100",
+        "payoff": 24488.219685668944
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_0_100",
+        "payoff": 25142.503820190428
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_0_100",
+        "payoff": 24130.977791748046
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 24642.716223754884
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 24643.596934814454
+      }
+    ],
+    "average_payoff": 23734.795959869385,
+    "strategy_distribution": {
+      "MELO_0_100": 8,
+      "MELO_100_0": 2
+    }
+  },
+  {
+    "profile_id": 1,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 21275.490571899412
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_100_0",
+        "payoff": 23289.72993286133
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_100_0",
+        "payoff": 20779.89701171875
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_100_0",
+        "payoff": 24317.942141113283
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_100_0",
+        "payoff": 24657.921787109375
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_100_0",
+        "payoff": 22496.756645507812
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 20155.84604736328
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 19776.242385253907
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 18535.336876220703
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 0.0
+      }
+    ],
+    "average_payoff": 19528.516339904785,
+    "strategy_distribution": {
+      "MELO_0_100": 1,
+      "MELO_100_0": 9
+    }
+  },
+  {
+    "profile_id": 2,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 20055.15039550781
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 19815.162995605468
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 20233.91467590332
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 20989.16084869385
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_0_100",
+        "payoff": 21833.812673950197
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_0_100",
+        "payoff": 19451.370364990235
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_0_100",
+        "payoff": 22288.062681884767
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 21970.919854736327
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 23492.19549682617
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 27023.06233642578
+      }
+    ],
+    "average_payoff": 21715.28123245239,
+    "strategy_distribution": {
+      "MELO_0_100": 7,
+      "MELO_100_0": 3
+    }
+  },
+  {
+    "profile_id": 3,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 19191.764422607423
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 19500.83449951172
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 20390.338837890624
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 20133.554912109375
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_0_100",
+        "payoff": 21741.045139160156
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_0_100",
+        "payoff": 21658.136372680663
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 20927.553983154296
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 22387.193433227538
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 21152.022307128907
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 17223.781461791994
+      }
+    ],
+    "average_payoff": 20430.62253692627,
+    "strategy_distribution": {
+      "MELO_0_100": 6,
+      "MELO_100_0": 4
+    }
+  },
+  {
+    "profile_id": 4,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 30270.745979003907
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 29066.037932128907
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 28945.547095336915
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 28582.173276367186
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_0_100",
+        "payoff": 24741.88539428711
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_0_100",
+        "payoff": 27381.469471435546
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_0_100",
+        "payoff": 26711.467061767577
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_0_100",
+        "payoff": 24100.241408691407
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_0_100",
+        "payoff": 26080.92729370117
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_0_100",
+        "payoff": 26105.849716796874
+      }
+    ],
+    "average_payoff": 27198.63446295166,
+    "strategy_distribution": {
+      "MELO_0_100": 10
+    }
+  },
+  {
+    "profile_id": 5,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_100_0",
+        "payoff": 20162.1154296875
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_100_0",
+        "payoff": 23753.034564208985
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_100_0",
+        "payoff": 20041.583252563476
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_100_0",
+        "payoff": 22563.281599121095
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_100_0",
+        "payoff": 22789.66411376953
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_100_0",
+        "payoff": 22219.557307128907
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 22491.297568359376
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 23395.34485168457
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 23316.007897949217
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 24675.9026953125
+      }
+    ],
+    "average_payoff": 22540.778927978517,
+    "strategy_distribution": {
+      "MELO_100_0": 10
+    }
+  },
+  {
+    "profile_id": 6,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 18957.70575439453
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 22547.545009765625
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 22661.524167480467
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 19240.408581542968
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_0_100",
+        "payoff": 17554.028422851563
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_100_0",
+        "payoff": 20232.885018310546
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 21706.455756835938
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 19605.265299072267
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 20175.185670776365
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 17740.800355911255
+      }
+    ],
+    "average_payoff": 20042.18040369415,
+    "strategy_distribution": {
+      "MELO_0_100": 5,
+      "MELO_100_0": 5
+    }
+  },
+  {
+    "profile_id": 7,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 20756.182536621094
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 23118.722104492186
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_100_0",
+        "payoff": 21933.62494140625
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_100_0",
+        "payoff": 23080.55547973633
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_100_0",
+        "payoff": 25128.605327148438
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_100_0",
+        "payoff": 21546.607959594727
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 20705.101845703124
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 22479.32565551758
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 12357.61548828125
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 12182.206331787109
+      }
+    ],
+    "average_payoff": 20328.854767028806,
+    "strategy_distribution": {
+      "MELO_0_100": 2,
+      "MELO_100_0": 8
+    }
+  },
+  {
+    "profile_id": 8,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 23070.672470703124
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 22965.439296875
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 23171.66637084961
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 24937.609141235353
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_0_100",
+        "payoff": 25823.44190307617
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_0_100",
+        "payoff": 24271.23810058594
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_0_100",
+        "payoff": 25108.213807373046
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_0_100",
+        "payoff": 25165.837349853515
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_0_100",
+        "payoff": 27441.022227783204
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 23620.288238830566
+      }
+    ],
+    "average_payoff": 24557.542890716555,
+    "strategy_distribution": {
+      "MELO_0_100": 9,
+      "MELO_100_0": 1
+    }
+  },
+  {
+    "profile_id": 9,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 20356.820734863282
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 25879.111538085937
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 22385.333145751953
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_100_0",
+        "payoff": 21598.82972167969
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_100_0",
+        "payoff": 21563.063267822265
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_100_0",
+        "payoff": 21376.616313476563
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 21198.879798583985
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 14233.60316772461
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 15366.891700439453
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 15756.977100830078
+      }
+    ],
+    "average_payoff": 19971.61264892578,
+    "strategy_distribution": {
+      "MELO_0_100": 3,
+      "MELO_100_0": 7
+    }
+  },
+  {
+    "profile_id": 10,
+    "agents": [
+      {
+        "agent_id": 0,
+        "strategy": "MELO_0_100",
+        "payoff": 18355.510716552733
+      },
+      {
+        "agent_id": 1,
+        "strategy": "MELO_0_100",
+        "payoff": 21210.17402709961
+      },
+      {
+        "agent_id": 2,
+        "strategy": "MELO_0_100",
+        "payoff": 19625.772407226563
+      },
+      {
+        "agent_id": 3,
+        "strategy": "MELO_0_100",
+        "payoff": 17261.99546142578
+      },
+      {
+        "agent_id": 4,
+        "strategy": "MELO_100_0",
+        "payoff": 23461.683798828126
+      },
+      {
+        "agent_id": 5,
+        "strategy": "MELO_100_0",
+        "payoff": 21702.355077514647
+      },
+      {
+        "agent_id": 6,
+        "strategy": "MELO_100_0",
+        "payoff": 19458.13193359375
+      },
+      {
+        "agent_id": 7,
+        "strategy": "MELO_100_0",
+        "payoff": 21420.441904907228
+      },
+      {
+        "agent_id": 8,
+        "strategy": "MELO_100_0",
+        "payoff": 18011.406632080078
+      },
+      {
+        "agent_id": 9,
+        "strategy": "MELO_100_0",
+        "payoff": 18397.809984741212
+      }
+    ],
+    "average_payoff": 19890.52819439697,
+    "strategy_distribution": {
+      "MELO_0_100": 4,
+      "MELO_100_0": 6
+    }
+  }
+]

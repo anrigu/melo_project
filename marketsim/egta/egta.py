@@ -1,5 +1,5 @@
 """
-Empirical Game-Theoretic Analysis (EGTA) framework.
+Empirical Game-Theoretic Analysis (EGTA) framework with Role Symmetric Game support.
 """
 import os
 import json
@@ -20,7 +20,7 @@ from marketsim.game.symmetric_game import SymmetricGame
 
 class EGTA:
     """
-    Empirical Game-Theoretic Analysis framework.
+    Empirical Game-Theoretic Analysis framework with Role Symmetric Game support.
     """
     
     def __init__(self, 
@@ -36,7 +36,7 @@ class EGTA:
         Args:
             simulator: Simulator to use for evaluating profiles
             scheduler: Scheduler for determining which profiles to simulate
-                If None, uses RandomScheduler
+                If None, uses appropriate scheduler based on simulator type
             device: PyTorch device to use
             output_dir: Directory to save results
             max_profiles: Maximum number of profiles to simulate
@@ -48,13 +48,43 @@ class EGTA:
         self.max_profiles = max_profiles
         self.seed = seed
         
-        # If scheduler is not provided, use RandomScheduler
+        # Detect if simulator supports role symmetric games
+        self.is_role_symmetric = hasattr(simulator, 'get_role_info')
+        
+        if self.is_role_symmetric:
+            # Role symmetric game setup
+            self.role_names, self.num_players_per_role, self.strategy_names_per_role = simulator.get_role_info()
+            self.num_players = sum(self.num_players_per_role)
+            
+            # Get all strategies for scheduler initialization
+            all_strategies = []
+            for strategies in self.strategy_names_per_role:
+                all_strategies.extend(strategies)
+        else:
+            # Symmetric game setup
+            self.role_names = ["Player"]
+            self.num_players = simulator.get_num_players()
+            self.num_players_per_role = [self.num_players]
+            all_strategies = simulator.get_strategies()
+            self.strategy_names_per_role = [all_strategies]
+        
+        # If scheduler is not provided, use appropriate default
         if scheduler is None:
-            self.scheduler = RandomScheduler(
-                strategies=simulator.get_strategies(),
-                num_players=simulator.get_num_players(),
-                seed=seed
-            )
+            if self.is_role_symmetric:
+                self.scheduler = DPRScheduler(
+                    strategies=all_strategies,
+                    num_players=self.num_players,
+                    role_names=self.role_names,
+                    num_players_per_role=self.num_players_per_role,
+                    strategy_names_per_role=self.strategy_names_per_role,
+                    seed=seed
+                )
+            else:
+                self.scheduler = RandomScheduler(
+                    strategies=all_strategies,
+                    num_players=self.num_players,
+                    seed=seed
+                )
         else:
             self.scheduler = scheduler
         
@@ -118,7 +148,6 @@ class EGTA:
             if verbose:
                 print(f"\nIteration {iteration+1}/{max_iterations}")
             
-            # FIXED SECTION: Always generate profiles for the full game, not reduced game
             if isinstance(self.scheduler, DPRScheduler):
                 original_reduction_size = self.scheduler.reduction_size
                 self.scheduler.reduction_size = self.scheduler.num_players
@@ -132,7 +161,6 @@ class EGTA:
                     print("No more profiles to simulate. Ending early.")
                 break
             
-            # Simulate profiles
             if verbose:
                 print(f"Simulating {len(profiles_to_simulate)} profiles...")
             
@@ -146,16 +174,27 @@ class EGTA:
                 # Print payoff data for debugging
                 print("\nPayoff data from simulation:")
                 for profile_data in new_data:
-                    # Extract all strategies in this profile
-                    all_strategies = [strat for _, strat, _ in profile_data]
-                    # Count occurrences of each strategy
-                    strategy_counts = {}
-                    for strat in set(all_strategies):
-                        strategy_counts[strat] = all_strategies.count(strat)
-                    # Format as a distribution string
-                    profile_dist = ", ".join([f"{strat}:{count}" for strat, count in strategy_counts.items()])
+                    if profile_data and len(profile_data[0]) == 4:
+                        role_strategy_counts = {}
+                        for _, role_name, strategy_name, _ in profile_data:
+                            key = f"{role_name}:{strategy_name}"
+                            role_strategy_counts[key] = role_strategy_counts.get(key, 0) + 1
+                        
+                        profile_dist = ", ".join([f"{key}({count})" for key, count in role_strategy_counts.items()])
+                        payoffs = [float(payoff) for _, _, _, payoff in profile_data]
+                    elif profile_data and len(profile_data[0]) == 3:
+                        # Symmetric format: (player_id, strategy_name, payoff)
+                        all_strategies = [strategy for _, strategy, _ in profile_data]
+                        strategy_counts = {}
+                        for strat in set(all_strategies):
+                            strategy_counts[strat] = all_strategies.count(strat)
+                        profile_dist = ", ".join([f"{strat}:{count}" for strat, count in strategy_counts.items()])
+                        payoffs = [float(payoff) for _, _, payoff in profile_data]
+                    else:
+                        # Unknown format
+                        profile_dist = "Unknown format"
+                        payoffs = []
                     
-                    payoffs = [float(payoff) for _, _, payoff in profile_data]
                     avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
                     print(f"  Profile: [{profile_dist}], Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
                 print()
@@ -186,7 +225,7 @@ class EGTA:
                 
                 if verbose:
                     print(f"Solving equilibria on reduced game (scaling factor: {self.scheduler.scaling_factor:.2f})")
-            else: #TODO remove for role symmetry
+            else:
                 reduced_game = self.game
             
             try:
@@ -202,7 +241,7 @@ class EGTA:
                     full_game=self.game if isinstance(self.scheduler, DPRScheduler) else None  # Pass full game for DPR for eq checking
                 )
                 
-                if verbose and reduced_game.num_strategies == 2:
+                if verbose and not reduced_game.is_role_symmetric and reduced_game.num_strategies == 2:
                     payoff_matrix = reduced_game.get_payoff_matrix()
                     print("\nReduced Game Payoff Matrix:")
                     for i in range(2):
@@ -235,11 +274,27 @@ class EGTA:
                     if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
                         continue
                         
-                    strat_str = ", ".join([
-                        f"{self.game.strategy_names[s]}: {eq_mix[s].item():.4f}" 
-                        for s in range(self.game.num_strategies)
-                        if eq_mix[s].item() > 0.01
-                    ])
+                    if self.is_role_symmetric:
+                        # Role symmetric game equilibrium display
+                        strat_str_parts = []
+                        global_idx = 0
+                        for role_idx, (role_name, role_strategies) in enumerate(zip(self.game.role_names, self.game.strategy_names_per_role)):
+                            role_parts = []
+                            for strat_name in role_strategies:
+                                if eq_mix[global_idx].item() > 0.01:
+                                    role_parts.append(f"{strat_name}: {eq_mix[global_idx].item():.4f}")
+                                global_idx += 1
+                            if role_parts:
+                                strat_str_parts.append(f"{role_name}[{', '.join(role_parts)}]")
+                        strat_str = ", ".join(strat_str_parts)
+                    else:
+                        # Symmetric game equilibrium display
+                        strat_str = ", ".join([
+                            f"{self.game.strategy_names[s]}: {eq_mix[s].item():.4f}" 
+                            for s in range(self.game.num_strategies)
+                            if eq_mix[s].item() > 0.01
+                        ])
+                    
                     print(f"  Equilibrium {i+1}: regret={float(eq_regret):.6f}, {strat_str}")
                     
                     try:
@@ -312,12 +367,29 @@ class EGTA:
             eq_dict = {
                 "id": i,
                 "regret": float(eq_regret),
-                "mixture": {
+                "is_role_symmetric": self.is_role_symmetric
+            }
+            
+            if self.is_role_symmetric:
+                # Role symmetric equilibrium format
+                eq_dict["mixture_by_role"] = {}
+                global_idx = 0
+                for role_name, role_strategies in zip(self.game.role_names, self.game.strategy_names_per_role):
+                    role_mixture = {}
+                    for strat_name in role_strategies:
+                        if eq_mix[global_idx].item() > 0.001:
+                            role_mixture[strat_name] = float(eq_mix[global_idx].item())
+                        global_idx += 1
+                    if role_mixture:
+                        eq_dict["mixture_by_role"][role_name] = role_mixture
+            else:
+                # Symmetric equilibrium format
+                eq_dict["mixture"] = {
                     name: float(eq_mix[j].item())
                     for j, name in enumerate(self.game.strategy_names)
                     if eq_mix[j].item() > 0.001
                 }
-            }
+            
             eq_data.append(eq_dict)
         
         with open(eq_path, 'w') as f:
@@ -337,20 +409,34 @@ class EGTA:
             return {}
         
         support_sizes = []
-        strategy_frequencies = {name: 0.0 for name in self.game.strategy_names}
         
-        for eq_mix, _ in self.equilibria:
-            support = sum(1 for x in eq_mix if x.item() > 0.001)
-            support_sizes.append(support)
+        if self.is_role_symmetric:
+            # Role symmetric analysis
+            role_strategy_frequencies = {}
+            for role_name in self.game.role_names:
+                role_strategy_frequencies[role_name] = {}
+                
+            for eq_mix, _ in self.equilibria:
+                global_idx = 0
+                for role_name, role_strategies in zip(self.game.role_names, self.game.strategy_names_per_role):
+                    for strat_name in role_strategies:
+                        if strat_name not in role_strategy_frequencies[role_name]:
+                            role_strategy_frequencies[role_name][strat_name] = 0.0
+                        role_strategy_frequencies[role_name][strat_name] += eq_mix[global_idx].item() / len(self.equilibria)
+                        global_idx += 1
+                
+                support = sum(1 for x in eq_mix if x.item() > 0.001)
+                support_sizes.append(support)
+        else:
+            # Symmetric game analysis
+            strategy_frequencies = {name: 0.0 for name in self.game.strategy_names}
             
-            for i, name in enumerate(self.game.strategy_names):
-                strategy_frequencies[name] += eq_mix[i].item() / len(self.equilibria)
-        
-        sorted_strategies = sorted(
-            strategy_frequencies.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
+            for eq_mix, _ in self.equilibria:
+                support = sum(1 for x in eq_mix if x.item() > 0.001)
+                support_sizes.append(support)
+                
+                for i, name in enumerate(self.game.strategy_names):
+                    strategy_frequencies[name] += eq_mix[i].item() / len(self.equilibria)
         
         results = {
             "num_equilibria": len(self.equilibria),
@@ -358,9 +444,19 @@ class EGTA:
             "avg_support_size": sum(support_sizes) / len(support_sizes),
             "min_support_size": min(support_sizes),
             "max_support_size": max(support_sizes),
-            "strategy_frequencies": strategy_frequencies,
-            "top_strategies": sorted_strategies[:3]
+            "is_role_symmetric": self.is_role_symmetric
         }
+        
+        if self.is_role_symmetric:
+            results["role_strategy_frequencies"] = role_strategy_frequencies
+        else:
+            results["strategy_frequencies"] = strategy_frequencies
+            sorted_strategies = sorted(
+                strategy_frequencies.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+            results["top_strategies"] = sorted_strategies[:3]
         
         if verbose:
             print("\nEquilibria Analysis")
@@ -368,9 +464,18 @@ class EGTA:
             print(f"Average regret: {sum(results['regrets'])/len(results['regrets']):.6f}")
             print(f"Average support size: {results['avg_support_size']:.2f}")
             print(f"Support size range: {results['min_support_size']} - {results['max_support_size']}")
-            print("\nTop strategies:")
-            for strat, freq in results['top_strategies']:
-                print(f"  {strat}: {freq:.4f}")
+            
+            if self.is_role_symmetric:
+                print("\nStrategy frequencies by role:")
+                for role_name, role_freqs in role_strategy_frequencies.items():
+                    print(f"  {role_name}:")
+                    sorted_role_strats = sorted(role_freqs.items(), key=lambda x: x[1], reverse=True)
+                    for strat, freq in sorted_role_strats[:3]:
+                        print(f"    {strat}: {freq:.4f}")
+            else:
+                print("\nTop strategies:")
+                for strat, freq in results['top_strategies']:
+                    print(f"  {strat}: {freq:.4f}")
         
         return results 
 
@@ -388,26 +493,32 @@ class EGTA:
         if not isinstance(self.scheduler, DPRScheduler):
             return full_game
             
-        scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
-        
-        reduced_sym_game = SymmetricGame(
-            num_players=reduction_size,
-            num_actions=full_game.game.num_actions,
-            config_table=full_game.game.config_table.clone(),
-            payoff_table=full_game.game.payoff_table.clone() / scaling_factor,  # Rescale payoffs
-            strategy_names=full_game.game.strategy_names,
-            device=full_game.game.device,
-            offset=full_game.game.offset,
-            scale=full_game.game.scale
-        )
-        
-        # Create metadata for the reduced game
-        metadata = {**full_game.metadata} if full_game.metadata else {}
-        metadata['dpr_reduced'] = True
-        metadata['original_players'] = full_game.num_players
-        metadata['reduced_players'] = reduction_size
-        metadata['scaling_factor'] = scaling_factor
-        
-        return Game(reduced_sym_game, metadata) 
+        if full_game.is_role_symmetric:
+            # For role symmetric games, create reduced version by scaling payoffs
+            # The underlying RSG should handle player reduction appropriately
+            return full_game  # RSG already handles this internally
+        else:
+            # For symmetric games, use the original reduction logic
+            scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
+            
+            reduced_sym_game = SymmetricGame(
+                num_players=reduction_size,
+                num_actions=full_game.game.num_actions,
+                config_table=full_game.game.config_table.clone(),
+                payoff_table=full_game.game.payoff_table.clone() / scaling_factor,  # Rescale payoffs
+                strategy_names=full_game.game.strategy_names,
+                device=full_game.game.device,
+                offset=full_game.game.offset,
+                scale=full_game.game.scale
+            )
+            
+            # Create metadata for the reduced game
+            metadata = {**full_game.metadata} if full_game.metadata else {}
+            metadata['dpr_reduced'] = True
+            metadata['original_players'] = full_game.num_players
+            metadata['reduced_players'] = reduction_size
+            metadata['scaling_factor'] = scaling_factor
+            
+            return Game(reduced_sym_game, metadata) 
     
   

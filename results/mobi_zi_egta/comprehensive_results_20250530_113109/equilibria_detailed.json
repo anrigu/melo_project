@@ -1,0 +1,106 @@
+[
+  {
+    "equilibrium_id": 1,
+    "regret": 0.0,
+    "welfare": 30137.34900415039,
+    "mixture_dict": {
+      "MELO_0_100": 0.0,
+      "MELO_100_0": 1.0
+    },
+    "mixture_vector": [
+      0.0,
+      1.0
+    ],
+    "support": [
+      "MELO_100_0"
+    ],
+    "support_size": 1,
+    "is_pure_strategy": true,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 1.0
+  },
+  {
+    "equilibrium_id": 2,
+    "regret": 7.406994700431824e-05,
+    "welfare": 7736.366445585172,
+    "mixture_dict": {
+      "MELO_0_100": 0.5932192802429199,
+      "MELO_100_0": 0.4067806303501129
+    },
+    "mixture_vector": [
+      0.5932192802429199,
+      0.4067806303501129
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5932192802429199
+  },
+  {
+    "equilibrium_id": 3,
+    "regret": 0.00025749020278453827,
+    "welfare": 7209.239221299238,
+    "mixture_dict": {
+      "MELO_0_100": 0.6000000238418579,
+      "MELO_100_0": 0.4000000059604645
+    },
+    "mixture_vector": [
+      0.6000000238418579,
+      0.4000000059604645
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.6000000238418579
+  },
+  {
+    "equilibrium_id": 4,
+    "regret": 0.0005860477685928345,
+    "welfare": 26194.98262152398,
+    "mixture_dict": {
+      "MELO_0_100": 0.4000000059604645,
+      "MELO_100_0": 0.6000000238418579
+    },
+    "mixture_vector": [
+      0.4000000059604645,
+      0.6000000238418579
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_100_0",
+    "dominant_probability": 0.6000000238418579
+  },
+  {
+    "equilibrium_id": 5,
+    "regret": 0.0009534275159239769,
+    "welfare": 10272.642157107453,
+    "mixture_dict": {
+      "MELO_0_100": 0.5653051137924194,
+      "MELO_100_0": 0.43469488620758057
+    },
+    "mixture_vector": [
+      0.5653051137924194,
+      0.43469488620758057
+    ],
+    "support": [
+      "MELO_0_100",
+      "MELO_100_0"
+    ],
+    "support_size": 2,
+    "is_pure_strategy": false,
+    "dominant_strategy": "MELO_0_100",
+    "dominant_probability": 0.5653051137924194
+  }
+]

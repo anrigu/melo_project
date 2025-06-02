@@ -293,11 +293,9 @@ class RoleSymmetricGame(AbstractGame):
                 is_valid_c_others = True
                 for r_iter_idx in range(self.num_roles):
                     role_slice = slice(self.role_starts[r_iter_idx], self.role_starts[r_iter_idx] + self.num_strategies_per_role[r_iter_idx])
-                    # Check if sum of counts in role for C_others matches expected number of players for that role in C_others
                     if not torch.isclose(profile_c_others[role_slice].sum(), num_players_others[r_iter_idx].to(torch.float64), atol=1e-6):
                         is_valid_c_others = False
                         break
-                    # Also check if any counts in C_others are negative (after subtraction)
                     if torch.any(profile_c_others[role_slice] < -1e-9):
                         is_valid_c_others = False
                         break
@@ -330,14 +328,13 @@ class RoleSymmetricGame(AbstractGame):
                     if torch.any(mixture_probs_in_role < -1e-9):
                         possible_to_form_c_others = False; break
                     
-                    # Clamp counts to be non-negative before passing to multinomial
                     clamped_counts_in_role = torch.clamp(counts_in_role_for_c_others, min=0.0)
 
                     try:
                         if current_role_players_for_others > 0 or (current_role_players_for_others == 0 and clamped_counts_in_role.sum() < 1e-9):
                              multinom_dist = torch.distributions.Multinomial(
                                 total_count=current_role_players_for_others, 
-                                probs=mixture_probs_in_role.to(torch.float32) # Probs also as float32
+                                probs=mixture_probs_in_role.to(torch.float32)
                             )
                              log_prob_c_others += multinom_dist.log_prob(clamped_counts_in_role)
                         elif current_role_players_for_others < 0: 
@@ -345,8 +342,7 @@ class RoleSymmetricGame(AbstractGame):
 
                     except ValueError: 
                         possible_to_form_c_others = False; break
-                    except RuntimeError as e: # Catch other issues like type mismatches if any
-                        # print(f"Runtime error in Multinomial: {e}")
+                    except RuntimeError as e: 
                         possible_to_form_c_others = False; break
                 
                 if not possible_to_form_c_others or torch.isinf(log_prob_c_others) or torch.isnan(log_prob_c_others):
@@ -392,12 +388,7 @@ class RoleSymmetricGame(AbstractGame):
             mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)
         elif mixture.dtype != torch.float32:
             mixture = mixture.to(dtype=torch.float32)
-        
-        # Ensure mixture is role normalized for expected payoff calculation part
-        # Use a temporary normalized version for this calculation if needed
-        # The dev_payoffs was already called with the original (or externally normalized) mixture.
-        # For calculating E[payoff | mixture] for a role, the mixture segment for that role should be normalized.
-        # _ensure_role_normalized_mixture returns float64, so convert back to float32 for consistency here.
+
         normalized_mixture_for_regret = self._ensure_role_normalized_mixture(mixture).to(torch.float32)
 
         max_regret_val = 0.0 # Use a different name to avoid conflict with function name
@@ -408,10 +399,8 @@ class RoleSymmetricGame(AbstractGame):
             role_mixture_segment = normalized_mixture_for_regret[role_slice]
             role_dev_payoffs = dev_payoffs[role_slice]
             
-            #nan_to_num for safety in case dev_payoffs for a strategy is nan
             expected_payoff_for_role = torch.sum(role_mixture_segment * torch.nan_to_num(role_dev_payoffs, nan=0.0))
             max_dev_payoff_for_role = torch.max(role_dev_payoffs) 
-            # If all dev payoffs for a role are NaN, max_dev_payoff_for_role will be -inf or nan. Handle this.
             if torch.isnan(max_dev_payoff_for_role) or torch.isinf(max_dev_payoff_for_role):
                 # If max dev payoff is problematic, but expected is fine, regret is effectively infinite or undefined.
                 # Or, if all strategies in role have NaN payoffs, treat max dev payoff as 0 for regret calc if E[payoff] is 0.
@@ -580,11 +569,9 @@ class RoleSymmetricGame(AbstractGame):
 
         filtered_rsg_config_table_cols = self.rsg_config_table.index_select(1, kept_original_global_indices_tensor)
 
-        # 2. Identify valid rows (configurations) in this new table structure
         valid_config_rows_mask = torch.ones(filtered_rsg_config_table_cols.shape[0], dtype=torch.bool, device=self.device)
         for i in range(filtered_rsg_config_table_cols.shape[0]):
             current_restricted_config_counts = filtered_rsg_config_table_cols[i, :]
-            # Check if this configuration is valid for the new role structure
             for r_new_idx in range(temp_restricted_rsg.num_roles):
                 new_role_slice = slice(temp_restricted_rsg.role_starts[r_new_idx],
                                        temp_restricted_rsg.role_starts[r_new_idx] + temp_restricted_rsg.num_strategies_per_role[r_new_idx])
@@ -597,15 +584,11 @@ class RoleSymmetricGame(AbstractGame):
         
         final_rsg_config_table = filtered_rsg_config_table_cols[valid_config_rows_mask, :]
         
-        # 3. Filter rsg_payoff_table (select rows for kept strategies, columns for kept configs)
-        # Rows for kept strategies are already indexed by kept_original_global_indices_tensor
-        # Columns correspond to valid_config_rows_mask
         filtered_rsg_payoff_table_rows = self.rsg_payoff_table.index_select(0, kept_original_global_indices_tensor)
         final_rsg_payoff_table = filtered_rsg_payoff_table_rows[:, valid_config_rows_mask]
 
-        if final_rsg_config_table.shape[0] == 0: # No valid configurations left
-            # print("Warning: Restriction results in a game with no valid configurations based on original data.")
-            # Return game with structure but empty payoff tables
+        if final_rsg_config_table.shape[0] == 0: #NOTE should never occur
+            
             return RoleSymmetricGame(
                 new_role_names, new_num_players_per_role, new_strategy_names_per_role, 
                 device=self.device, offset=self.offset, scale=self.scale
@@ -618,18 +601,13 @@ class RoleSymmetricGame(AbstractGame):
             rsg_config_table=final_rsg_config_table,
             rsg_payoff_table=final_rsg_payoff_table,
             device=self.device,
-            offset=self.offset, # Preserve original offset/scale as payoffs are relative to that
+            offset=self.offset, 
             scale=self.scale
         )
 
     def to_symmetric_game_for_solver(self) -> SymmetricGame:
         """
-        TEMPORARY: Convert to a SymmetricGame for use with existing solvers.
-        This is a HACK and loses role information for the solver.
-        It assumes solvers operate on a flat strategy space.
-        The number of players would be the total number of players.
-        This is only for initial integration and should be replaced by
-        making solvers role-aware.
+        This cane be removed
         """
         from marketsim.game.symmetric_game import SymmetricGame # Local import to avoid circular dependency
         
@@ -755,7 +733,6 @@ class RoleSymmetricGame(AbstractGame):
             for s_idx in range(self.num_strategies):
                 all_aggregated_raw_payoffs[config_tuple][s_idx].extend(raw_payoffs_for_this_sim_profile_by_strat[s_idx])
 
-        # --- Step 2: Determine new normalization constants if normalize_payoffs is True --- 
         new_offset = self.offset
         new_scale = self.scale
         if normalize_payoffs:
@@ -895,3 +872,15 @@ if __name__ == '__main__':
     print(f"\nMixture3p_2: {mix3p_2.tolist()}")
     print(f"Dev Payoffs3p_2: {dev_pays3p_2.tolist()}")
     print(f"Regret3p_2: {game3p.regret(mix3p_2)}")
+
+    # Add this after equilibrium analysis in your script
+    print("\n🔍 PAYOFF ANALYSIS:")
+    for i, (mixture, regret_val) in enumerate(egta.equilibria[:3]):  # Check first 3 equilibria
+        dev_payoffs = game.deviation_payoffs(mixture)
+        print(f"\nEquilibrium {i+1} deviation payoffs:")
+        print(f"  MOBI_0_100: {dev_payoffs[0].item():.8f}")  
+        print(f"  MOBI_100_0: {dev_payoffs[1].item():.8f}")
+        print(f"  ZI_0_100: {dev_payoffs[2].item():.8f}")
+        print(f"  ZI_100_0: {dev_payoffs[3].item():.8f}")
+        
+        print(f"  Payoff difference (MOBI_0_100 vs ZI_0_100): {abs(dev_payoffs[0] - dev_payoffs[2]).item():.8f}")

@@ -1,0 +1,123 @@
+{
+  "welfare_data": [
+    32473.188498229974,
+    22676.21619281654,
+    22579.13844334071,
+    22825.95041667343,
+    22564.494587981346,
+    22562.25403261814,
+    22546.952429280554,
+    22540.24277384074,
+    22539.89170818348,
+    23047.782126816786,
+    22532.41755844625,
+    23162.805814763437,
+    22531.79164658196,
+    23217.391787613287,
+    22532.108660346974,
+    22532.74864960875
+  ],
+  "labels": [
+    "Eq 1",
+    "Eq 2",
+    "Eq 3",
+    "Eq 4",
+    "Eq 5",
+    "Eq 6",
+    "Eq 7",
+    "Eq 8",
+    "Eq 9",
+    "Eq 10",
+    "Eq 11",
+    "Eq 12",
+    "Eq 13",
+    "Eq 14",
+    "Eq 15",
+    "Eq 16"
+  ],
+  "best_equilibrium_welfare": 32473.188498229974,
+  "worst_equilibrium_welfare": 22531.79164658196,
+  "welfare_variance": 5658426.449856463,
+  "welfare_comparison": [
+    {
+      "equilibrium": "Eq 1",
+      "welfare": 32473.188498229974,
+      "welfare_rank": 1
+    },
+    {
+      "equilibrium": "Eq 2",
+      "welfare": 22676.21619281654,
+      "welfare_rank": 6
+    },
+    {
+      "equilibrium": "Eq 3",
+      "welfare": 22579.13844334071,
+      "welfare_rank": 7
+    },
+    {
+      "equilibrium": "Eq 4",
+      "welfare": 22825.95041667343,
+      "welfare_rank": 5
+    },
+    {
+      "equilibrium": "Eq 5",
+      "welfare": 22564.494587981346,
+      "welfare_rank": 8
+    },
+    {
+      "equilibrium": "Eq 6",
+      "welfare": 22562.25403261814,
+      "welfare_rank": 9
+    },
+    {
+      "equilibrium": "Eq 7",
+      "welfare": 22546.952429280554,
+      "welfare_rank": 10
+    },
+    {
+      "equilibrium": "Eq 8",
+      "welfare": 22540.24277384074,
+      "welfare_rank": 11
+    },
+    {
+      "equilibrium": "Eq 9",
+      "welfare": 22539.89170818348,
+      "welfare_rank": 12
+    },
+    {
+      "equilibrium": "Eq 10",
+      "welfare": 23047.782126816786,
+      "welfare_rank": 4
+    },
+    {
+      "equilibrium": "Eq 11",
+      "welfare": 22532.41755844625,
+      "welfare_rank": 14
+    },
+    {
+      "equilibrium": "Eq 12",
+      "welfare": 23162.805814763437,
+      "welfare_rank": 3
+    },
+    {
+      "equilibrium": "Eq 13",
+      "welfare": 22531.79164658196,
+      "welfare_rank": 16
+    },
+    {
+      "equilibrium": "Eq 14",
+      "welfare": 23217.391787613287,
+      "welfare_rank": 2
+    },
+    {
+      "equilibrium": "Eq 15",
+      "welfare": 22532.108660346974,
+      "welfare_rank": 15
+    },
+    {
+      "equilibrium": "Eq 16",
+      "welfare": 22532.74864960875,
+      "welfare_rank": 13
+    }
+  ]
+}

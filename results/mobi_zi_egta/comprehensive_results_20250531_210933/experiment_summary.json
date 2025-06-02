@@ -1,0 +1,48 @@
+{
+  "experiment_summary": {
+    "timestamp": "20250531_210933",
+    "holding_period": 10,
+    "num_equilibria_found": 1,
+    "best_equilibrium": {
+      "equilibrium_id": 1,
+      "regret": 1.0,
+      "welfare": 24654.339130027078,
+      "mixture_dict": {
+        "MELO_0_100": 0.5,
+        "MELO_100_0": 0.5
+      },
+      "mixture_vector": [
+        0.5,
+        0.5
+      ],
+      "support": [
+        "MELO_0_100",
+        "MELO_100_0"
+      ],
+      "support_size": 2,
+      "is_pure_strategy": false,
+      "dominant_strategy": "MELO_0_100",
+      "dominant_probability": 0.5
+    },
+    "predominant_strategy": "MELO_0_100",
+    "strategy_frequencies": {
+      "MELO_0_100": 0.5,
+      "MELO_100_0": 0.5
+    }
+  },
+  "key_findings": [
+    "Found 1 equilibria",
+    "Best equilibrium has regret 1.000000",
+    "Dominant strategy: MELO_0_100 (50.0%)",
+    "Best equilibrium is a mixed strategy"
+  ],
+  "files_generated": [
+    "experiment_parameters.json",
+    "equilibria_detailed.json",
+    "equilibria_summary.csv",
+    "welfare_analysis.json",
+    "game_details.json",
+    "raw_payoff_data.json",
+    "basin_analysis.json"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "analysis_timestamp": "20250602_130818",
+  "holding_periods_analyzed": [
+    160
+  ],
+  "experiment_type": "role_symmetric",
+  "results": [
+    {
+      "holding_period": 160,
+      "best_welfare": 0.9818331599235535,
+      "best_regret": 0.0,
+      "equilibrium_type": "Pure",
+      "num_equilibria": 1,
+      "results_dir": "results/rsg_mobi_zi_egta/holding_period_160/comprehensive_rsg_results_20250602_130818",
+      "equilibrium_description": "MOBI: MOBI_100_0 | ZI: ZI_100_0"
+    }
+  ]
+}

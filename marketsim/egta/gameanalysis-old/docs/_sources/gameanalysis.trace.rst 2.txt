@@ -1,0 +1,7 @@
+gameanalysis.trace module
+=========================
+
+.. automodule:: gameanalysis.trace
+   :members:
+   :undoc-members:
+   :show-inheritance:

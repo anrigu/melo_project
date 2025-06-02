@@ -1,0 +1,122 @@
+[
+  {
+    "equilibrium_id": 1,
+    "regret": 0.0,
+    "welfare": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {},
+      "ZI": {
+        "ZI_100_0": 1.0
+      }
+    },
+    "mixture_vector": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "support_by_role": {
+      "MOBI": [],
+      "ZI": [
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 1,
+    "equilibrium_type": "Partially Mixed"
+  },
+  {
+    "equilibrium_id": 2,
+    "regret": 4.702619627039439e-09,
+    "welfare": -1.6863992424731578e-09,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100": 1.0
+      },
+      "ZI": {}
+    },
+    "mixture_vector": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_0_100"
+      ],
+      "ZI": []
+    },
+    "support_size": 1,
+    "equilibrium_type": "Partially Mixed"
+  },
+  {
+    "equilibrium_id": 3,
+    "regret": 5.273776696412824e-05,
+    "welfare": -4.525718395598233e-05,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100": 0.3500088155269623,
+        "MOBI_100_0": 0.008329946547746658
+      },
+      "ZI": {
+        "ZI_0_100": 0.25593098998069763,
+        "ZI_100_0": 0.38573020696640015
+      }
+    },
+    "mixture_vector": [
+      0.3500088155269623,
+      0.008329946547746658,
+      0.25593098998069763,
+      0.38573020696640015
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_0_100",
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_0_100",
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 4,
+    "equilibrium_type": "Mixed"
+  },
+  {
+    "equilibrium_id": 4,
+    "regret": 0.0002392370079178363,
+    "welfare": -1.8546593310020398e-06,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100": 0.5700364112854004,
+        "MOBI_100_0": 0.055135421454906464
+      },
+      "ZI": {
+        "ZI_0_100": 0.1289139986038208,
+        "ZI_100_0": 0.24591420590877533
+      }
+    },
+    "mixture_vector": [
+      0.5700364112854004,
+      0.055135421454906464,
+      0.1289139986038208,
+      0.24591420590877533
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_0_100",
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_0_100",
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 4,
+    "equilibrium_type": "Mixed"
+  }
+]

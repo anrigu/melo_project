@@ -29,6 +29,9 @@ class MELOSimulatorSampledArrival:
                  strategies = None,
                  strategy_counts = None,
                  strategy_params = None,
+                 # New role-based parameters
+                 role_strategy_counts = None,
+                 role_names = None,
                  strategy_counts_background = None,
                  strategy_params_background = None,
                  strategies_background = None,
@@ -64,6 +67,10 @@ class MELOSimulatorSampledArrival:
         self.strategies = strategies
         self.strategy_counts = strategy_counts
         self.strategy_params = strategy_params
+
+        # Role-based parameters for role symmetric games
+        self.role_strategy_counts = role_strategy_counts
+        self.role_names = role_names
 
         self.strategies_background = strategies_background
         self.strategy_counts_background = strategy_counts_background
@@ -160,8 +167,47 @@ class MELOSimulatorSampledArrival:
                     ))
 
             
-        if not self.strategies:
-            strategic_agent_id = num_zi + num_hbl
+        # Handle strategic agents - either role-based or legacy strategy-based
+        strategic_agent_id = num_zi + num_hbl
+        
+        if self.role_strategy_counts and self.role_names:
+            # Role-based strategic agent creation
+            for role_name in self.role_names:
+                role_strategies = self.role_strategy_counts[role_name]
+                for strategy_name, count in role_strategies.items():
+                    for _ in range(count):
+                        self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
+                        self.arrival_index_melo += 1
+                        params = self.strategy_params[strategy_name]
+                        
+                        # Create appropriate agent type based on role
+                        if role_name == "MOBI":
+                            self.agents[strategic_agent_id] = (
+                                MeloAgent(
+                                    agent_id=strategic_agent_id,
+                                    market=self.market,
+                                    meloMarket=self.meloMarket,
+                                    q_max=q_max,
+                                    pv_var=pv_var,
+                                    cda_proportion=params["cda_proportion"],
+                                    melo_proportion=params["melo_proportion"],
+                                ))
+                        elif role_name == "ZI":
+                            self.agents[strategic_agent_id] = (
+                                ZIAgent(
+                                    agent_id=strategic_agent_id,
+                                    market=self.market,
+                                    q_max=q_max,
+                                    shade=shade,
+                                    pv_var=pv_var,
+                                    eta=eta,
+                                    cda_proportion=params["cda_proportion"],
+                                    melo_proportion=params["melo_proportion"],
+                                ))
+                        strategic_agent_id += 1
+                        
+        elif not self.strategies:
+            # Legacy: Create default strategic agents if no strategies specified
             for agent_id in range(num_strategic):
                 self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
                 self.arrival_index_melo += 1
@@ -179,7 +225,7 @@ class MELOSimulatorSampledArrival:
                     ))
                 strategic_agent_id += 1
         else:
-            strategic_agent_id = num_zi + num_hbl
+            # Legacy: Strategy-based agent creation (for backward compatibility)
             for strategy in self.strategies:
                 count = strategy_counts[strategy]
                 for _ in range(count):
@@ -243,8 +289,8 @@ class MELOSimulatorSampledArrival:
                     self.meloMarket.withdraw_all(agent_id, self.order_tracker)
                     self.market.withdraw_all(agent_id)
                     self.num_orders += 1
-                    # Check if the agent is a MeloAgent with strategy parameters
-                    assert isinstance(agent, MeloAgent) and hasattr(agent, 'cda_proportion') and hasattr(agent, 'melo_proportion')
+                    # Check if the agent has strategy parameters (works for both MeloAgent and ZIAgent)
+                    assert hasattr(agent, 'cda_proportion') and hasattr(agent, 'melo_proportion')
                     # Use the strategy parameters to determine market selection
                     if random.random() < agent.melo_proportion:
                         marketSelection = MELO
@@ -292,8 +338,9 @@ class MELOSimulatorSampledArrival:
 
             for matched_order in new_orders:
                 agent_id = matched_order.order.agent_id
-                if isinstance(self.agents[agent_id], MeloAgent):
-                    current_agent: MeloAgent = self.agents[agent_id]
+                # Record trade for agents that have the record_trade method (MeloAgent)
+                if hasattr(self.agents[agent_id], 'record_trade'):
+                    current_agent = self.agents[agent_id]
                     current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
                     self.timesteps_melo_trade.append((self.time, matched_order.order.quantity, matched_order.order.order_type))
                 quantity = matched_order.order.order_type*matched_order.order.quantity
@@ -314,8 +361,10 @@ class MELOSimulatorSampledArrival:
             for side_orders in new_orders:
                 for matched_order in side_orders:
                     agent_id = matched_order.order.agent_id
-                    current_agent: MeloAgent = self.agents[agent_id]
-                    current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
+                    # Record trade for agents that have the record_trade method (MeloAgent)
+                    if hasattr(self.agents[agent_id], 'record_trade'):
+                        current_agent = self.agents[agent_id]
+                        current_agent.record_trade(matched_order.order.order_type, matched_order.order.quantity)
                     quantity = matched_order.order.order_type*matched_order.order.quantity
                     cash = -matched_order.price*matched_order.order.quantity*matched_order.order.order_type
                     self.agents[agent_id].update_position(quantity, cash)
