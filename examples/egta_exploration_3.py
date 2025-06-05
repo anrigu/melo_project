@@ -96,9 +96,9 @@ plt.rcParams['font.size'] = 12
 output_dir = 'results/egta_notebook'
 os.makedirs(output_dir, exist_ok=True)
 
-HOLDING_PERIOD = 320
-SHOCK_VAR = 1e4
-R = 0.01
+HOLDING_PERIOD = 100
+SHOCK_VAR = 1e6
+R = 0.001
 NUM_ZI = 15
 NUM_HBL = 0
 
@@ -118,7 +118,7 @@ simulator = MeloSimulator(
     # r=.9,          # Mean reversion rate
     # q_max=10,        # Maximum inventory
     holding_period=HOLDING_PERIOD, # MELO holding period
-    reps=10000,
+    reps=10,
     r=R,
     shock_var=SHOCK_VAR,
     num_zi=NUM_ZI,
@@ -181,7 +181,7 @@ game = egta.run(
     max_iterations=100, 
     profiles_per_iteration=1000,  
     save_frequency=1,   
-    verbose=True,
+    verbose=False,
     quiesce_kwargs={
         'num_iters': 50,
         'num_random_starts': 20,
@@ -221,7 +221,7 @@ plt.title('Strategy Frequencies Across Equilibria')
 plt.ylabel('Frequency')
 plt.tight_layout()
 plt.show()  
-plt.savefig('./examples/paperResults/15zi_r001_10/{}.jpg'.format(HOLDING_PERIOD))
+plt.savefig('./examples/graphs/{}.jpg'.format(HOLDING_PERIOD))
 # plt.savefig('./examples/new_graphs/supplemental_15/{}.jpg'.format(HOLDING_PERIOD))
 
 # 

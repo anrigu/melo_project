@@ -8,6 +8,9 @@ from typing import Dict, List, Tuple, Any, Optional, Union, Set
 import torch
 import numpy as np
 from datetime import datetime
+import matplotlib.pyplot as plt
+from collections import defaultdict
+import re
 
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
@@ -16,6 +19,237 @@ from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.simulators.base import Simulator
 from marketsim.egta.solvers.equilibria import quiesce, quiesce_sync, replicator_dynamics, regret
 from marketsim.game.symmetric_game import SymmetricGame
+
+
+class PayoffAnalyzer:
+    """
+    A class to analyze and visualize payoff data for different strategy compositions.
+    """
+    
+    def __init__(self, payoff_data=None):
+        """
+        Initialize the analyzer with payoff data.
+        
+        Args:
+            payoff_data (dict): Dictionary with keys as strategy profiles and values as 
+                               lists of payoffs [strategy1_payoffs, strategy2_payoffs]
+        """
+        self.payoff_data = payoff_data or {}
+        self.processed_data = []
+    
+    def parse_strategy_key(self, key):
+        """
+        Parse strategy composition from key string.
+        
+        Args:
+            key (str): Key string like "[MELO_0_100:5, MELO_100_0:26]"
+            
+        Returns:
+            tuple: (strategy1_count, strategy2_count, strategy1_name, strategy2_name)
+        """
+        # Default strategy names    
+        strategy1_name = "Strategy 1"
+        strategy2_name = "Strategy 2"
+        
+        # Try to extract strategy names and counts
+        pattern = r'\[([^:]+):(\d+)(?:,\s*([^:]+):(\d+))?\]'
+        match = re.search(pattern, key)
+        
+        if match:
+            strategy1_name = match.group(1).replace('_', '-')
+            count1 = int(match.group(2))
+            
+            if match.group(3) and match.group(4):
+                strategy2_name = match.group(3).replace('_', '-')
+                count2 = int(match.group(4))
+            else:
+                count2 = 0
+                
+            return count1, count2, strategy1_name, strategy2_name
+        
+        return 0, 0, strategy1_name, strategy2_name
+    
+    def process_data(self, sort_by='count1'):
+        """
+        Process the raw payoff data into a format suitable for visualization.
+        
+        Args:
+            sort_by (str): How to sort the data. Options:
+                - 'count1': Sort by first strategy count (ascending)
+                - 'count2': Sort by second strategy count (ascending)
+                - 'total': Sort by total number of agents (ascending)
+                - 'ratio': Sort by ratio of count1/(count1+count2) (ascending)
+                - 'composition': Sort by composition for better visualization
+        """
+        self.processed_data = []
+        
+        for key, payoffs in self.payoff_data.items():
+            count1, count2, name1, name2 = self.parse_strategy_key(key)
+            
+            # Get payoffs for each strategy
+            payoffs1 = payoffs[0] if len(payoffs) > 0 else []
+            payoffs2 = payoffs[1] if len(payoffs) > 1 else []
+            
+            # Calculate statistics
+            mean1 = np.mean(payoffs1) if payoffs1 else np.nan
+            std_err1 = np.std(payoffs1, ddof=1) / np.sqrt(len(payoffs1)) if payoffs1 else 0
+            
+            mean2 = np.mean(payoffs2) if payoffs2 else np.nan
+            std_err2 = np.std(payoffs2, ddof=1) / np.sqrt(len(payoffs2)) if payoffs2 else 0
+            
+            total_agents = count1 + count2
+            ratio = count1 / total_agents if total_agents > 0 else 0
+            
+            self.processed_data.append({
+                'count1': count1,
+                'count2': count2,
+                'name1': name1,
+                'name2': name2,
+                'mean1': mean1,
+                'std_err1': std_err1,
+                'mean2': mean2,
+                'std_err2': std_err2,
+                'total_agents': total_agents,
+                'ratio': ratio,
+                'label': f"{name1}:{count1}, {name2}:{count2}",
+                'payoffs1': payoffs1,
+                'payoffs2': payoffs2
+            })
+        
+        # Sort based on the specified method
+        if sort_by == 'count1':
+            self.processed_data.sort(key=lambda x: x['count1'])
+        elif sort_by == 'count2':
+            self.processed_data.sort(key=lambda x: x['count2'])
+        elif sort_by == 'total':
+            self.processed_data.sort(key=lambda x: x['total_agents'])
+        elif sort_by == 'ratio':
+            self.processed_data.sort(key=lambda x: x['ratio'])
+        elif sort_by == 'composition':
+            # Sort by ratio, but handle edge cases better for visualization
+            self.processed_data.sort(key=lambda x: (x['ratio'], x['total_agents']))
+        
+        return self.processed_data
+    
+    def plot_payoffs(self, title="Average Payoffs by Strategy Composition", 
+                    figsize=(12, 6), show_error_bars=False, colors=None, sort_by='composition'):
+        """
+        Create a bar plot of average payoffs.
+        
+        Args:
+            title (str): Plot title
+            figsize (tuple): Figure size
+            show_error_bars (bool): Whether to show error bars
+            colors (list): Colors for the bars [color1, color2]
+            sort_by (str): How to sort the bars ('count1', 'count2', 'total', 'ratio', 'composition')
+        """
+        if not self.processed_data:
+            self.process_data(sort_by=sort_by)
+        
+        # Default colors
+        if colors is None:
+            colors = ["#9ace69", "#44a2f0"]
+        
+        # Prepare data for plotting
+        labels = [d['label'] for d in self.processed_data]
+        means1 = [d['mean1'] if not np.isnan(d['mean1']) else 0 for d in self.processed_data]
+        means2 = [d['mean2'] if not np.isnan(d['mean2']) else 0 for d in self.processed_data]
+        
+        if show_error_bars:
+            std_errs1 = [d['std_err1'] if not np.isnan(d['mean1']) else 0 for d in self.processed_data]
+            std_errs2 = [d['std_err2'] if not np.isnan(d['mean2']) else 0 for d in self.processed_data]
+        else:
+            std_errs1 = std_errs2 = None
+        
+        # Create plot
+        x = np.arange(len(labels))
+        width = 0.35
+        
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        # Get strategy names for legend
+        strategy1_label = self.processed_data[0]['name1'] if self.processed_data else "MELO"
+        strategy2_label = self.processed_data[0]['name2'] if self.processed_data else "CDA"
+        
+        rects1 = ax.bar(x - width/2, means1, width, 
+                       label=f'{strategy1_label} Strategy',
+                       yerr=std_errs1, capsize=5, color=colors[0])
+        rects2 = ax.bar(x + width/2, means2, width,
+                       label=f'{strategy2_label} Strategy', 
+                       yerr=std_errs2, capsize=5, color=colors[1])
+        
+        # Formatting
+        ax.set_ylabel('Average Payoff', fontsize=18)
+        ax.set_title(title, fontsize=18)
+        ax.set_xlabel('Strategy Profiles', fontsize=18)
+        ax.set_xticks(x)
+        
+        # Truncate labels to show only the counts
+        truncated_labels = []
+        for label in labels:
+            # Remove the square brackets and split by comma
+            clean_label = label.strip('[]')
+            parts = clean_label.split(', ')
+            
+            # Initialize counts for both strategies
+            melo_count = '0'
+            cda_count = '0'
+            
+            # Process each part
+            for part in parts:
+                strat, count = part.split(':')
+                if 'MELO-0-100' in strat:
+                    melo_count = count
+                elif 'MELO-100-0' in strat:
+                    cda_count = count
+            
+            # Always show both strategies in the same format
+            truncated_labels.append(f"MELO:{melo_count}, CDA:{cda_count}")
+        
+        # Sort labels based on MELO count first, then CDA count
+        def sort_key(label):
+            melo, cda = label.split(', ')
+            melo_count = int(melo.split(':')[1])
+            cda_count = int(cda.split(':')[1])
+            return (melo_count, cda_count)
+        
+        truncated_labels.sort(key=sort_key)
+        
+        print(truncated_labels)
+        ax.set_xticklabels(truncated_labels, rotation=45, ha='right', fontsize=16)
+        ax.legend(fontsize=16, loc='lower right')
+        ax.tick_params(axis='y', labelsize=15)
+        
+        plt.tight_layout()
+        return fig, ax
+    
+    def get_summary_stats(self, sort_by='composition'):
+        """
+        Get summary statistics for all strategy compositions.
+        
+        Args:
+            sort_by (str): How to sort the results
+        """
+        if not self.processed_data:
+            self.process_data(sort_by=sort_by)
+        
+        summary = []
+        for data in self.processed_data:
+            summary.append({
+                'composition': data['label'],
+                'strategy1_count': data['count1'],
+                'strategy2_count': data['count2'],
+                'total_agents': data['total_agents'],
+                'ratio': data['ratio'],
+                'strategy1_mean': data['mean1'],
+                'strategy1_std_err': data['std_err1'],
+                'strategy1_n': len(data['payoffs1']),
+                'strategy2_mean': data['mean2'],
+                'strategy2_std_err': data['std_err2'],
+                'strategy2_n': len(data['payoffs2'])
+            })
+        
+        return summary
 
 
 class EGTA:
@@ -145,6 +379,10 @@ class EGTA:
                 
                 # Print payoff data for debugging
                 print("\nPayoff data from simulation:")
+                
+                # Store data for plotting
+                payoff_vectors = {}
+                
                 for profile_data in new_data:
                     # Extract all strategies in this profile
                     all_strategies = [strat for _, strat, _ in profile_data]
@@ -152,13 +390,67 @@ class EGTA:
                     strategy_counts = {}
                     for strat in set(all_strategies):
                         strategy_counts[strat] = all_strategies.count(strat)
+                    
+                    
+                    # Sort strategies by MELO_0_100 first, then MELO_100_0
+                    sorted_strategies = sorted(strategy_counts.items(), 
+                                            key=lambda x: (x[0] != "MELO_0_100", x[0]))
+                    
                     # Format as a distribution string
-                    profile_dist = ", ".join([f"{strat}:{count}" for strat, count in strategy_counts.items()])
+                    profile_dist = ", ".join([f"{strat}:{count}" for strat, count in sorted_strategies])
                     
                     payoffs = [float(payoff) for _, _, payoff in profile_data]
-                    avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
-                    print(f"  Profile: [{profile_dist}], Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
-                print()
+                    # For MELO_0_100, take the last x elements where x is the count
+                    melo_count = strategy_counts.get("MELO_0_100", 0)
+                    cda_count = strategy_counts.get("MELO_100_0", 0)
+                    
+                    if melo_count > 0 and cda_count > 0:
+                        # Both strategies present
+                        melo_payoffs = payoffs[-melo_count:]
+                        cda_payoffs = payoffs[:-melo_count]
+                    elif melo_count > 0:
+                        # Only MELO_0_100
+                        melo_payoffs = payoffs
+                        cda_payoffs = []
+                    else:
+                        # Only MELO_100_0
+                        melo_payoffs = []
+                        cda_payoffs = payoffs
+                        
+                    formatted_payoffs = [melo_payoffs, cda_payoffs]
+                    
+                    print(f'"{profile_dist}": {formatted_payoffs}')
+                    print()
+                    
+                    # Store data for plotting
+                    payoff_vectors[f"[{profile_dist}]"] = formatted_payoffs
+                
+                # Create analyzer and process data
+                analyzer = PayoffAnalyzer(payoff_vectors)
+                
+                # Generate plot
+                fig, ax = analyzer.plot_payoffs(
+                    title="Average Payoffs by Strategy Composition",
+                    show_error_bars=True,
+                    sort_by='composition'
+                )
+                
+                # Save the plot
+                print("GRAPH OUTPUT DIR", self.output_dir)
+                plot_path = os.path.join(self.output_dir, f"payoff_plot_{datetime.now().strftime('%Y%m%d_%H%M%S_eq_payoffs_2')}.png")
+                fig.savefig(plot_path)
+                plt.close()
+                
+                print(f"\nPayoff plot saved to: {plot_path}")
+                
+                # Print summary statistics
+                print("\nSummary Statistics:")
+                print("-" * 80)
+                for stat in analyzer.get_summary_stats():
+                    print(f"Composition: {stat['composition']}")
+                    print(f"  Strategy 1: Mean={stat['strategy1_mean']:.2f}, SE={stat['strategy1_std_err']:.2f}, N={stat['strategy1_n']}")
+                    print(f"  Strategy 2: Mean={stat['strategy2_mean']:.2f}, SE={stat['strategy2_std_err']:.2f}, N={stat['strategy2_n']}")
+                    print()
             
             self.payoff_data.extend(new_data)
             total_profiles += len(new_data)
