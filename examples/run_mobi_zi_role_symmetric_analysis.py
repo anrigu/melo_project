@@ -151,8 +151,8 @@ def run_role_symmetric_mobi_zi_egta():
     """
     Run EGTA with role symmetric games where both MOBI and ZI agents are strategic.
     """
-    num_strategic_mobi = 15
-    num_strategic_zi = 15
+    num_strategic_mobi = 28
+    num_strategic_zi = 40
     holding_periods = [160]
     
     all_results = []
@@ -163,8 +163,8 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"{'='*60}")
     
         sim_time = 8000  
-        num_iterations = 1
-        batch_size = 1
+        num_iterations = 3
+        batch_size = 4
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -222,12 +222,14 @@ def run_role_symmetric_mobi_zi_egta():
             strategies=simulator.get_strategies(),  # All strategies combined
             num_players=simulator.get_num_players(),
             batch_size=batch_size,
-            reduction_size={"MOBI": 4, "ZI": 4},  
+            reduction_size_per_role={"MOBI": 4, "ZI": 4},  
             seed=42,
             role_names=role_names,
             num_players_per_role=num_players_per_role,
-            strategy_names_per_role=strategy_names_per_role
+            strategy_names_per_role=strategy_names_per_role,
+            subgame_size=4
         )
+
 
         
         egta = EGTA(

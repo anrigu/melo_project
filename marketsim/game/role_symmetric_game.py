@@ -671,25 +671,7 @@ class RoleSymmetricGame(AbstractGame):
             num_existing_configs = self.rsg_config_table.shape[0]
             for i in range(num_existing_configs):
                 config_counts_tuple = tuple(self.rsg_config_table[i].cpu().long().tolist()) # Use long().tolist() for exact counts
-                # We don't have original profile counts per config stored, so this part is tricky.
-                # For now, we can't accurately re-create the list of raw payoffs from just the mean.
-                # The re-processing strategy requires that we merge lists of raw payoffs.
-                # This means `from_payoff_data_rsg` should have stored these lists or we accept approximation.
-                
-                # **Revised strategy for update_with_new_data**: 
-                # Instead of trying to perfectly de-normalize means (which is lossy without counts),
-                # we will assume that RoleSymmetricGame instance can store the `final_processed_profiles` 
-                # from its creation or last update. This is a significant change to what __init__ stores.
-                # For now, let's proceed with a version that can *only add new data and new configs* and 
-                # *re-normalize based on all data encountered SO FAR in this object's lifetime* if new data is added.
-                # This implies `all_raw_payoffs_for_re_norm` should be a member variable `self._all_raw_payoffs_history`
-
-                # To make this method work correctly with re-normalization, RoleSymmetricGame needs to store
-                # the equivalent of `final_processed_profiles` from the last build/update OR all raw payoffs.
-                # Let's assume we build `final_processed_profiles` from scratch using old tables + new data.
-
-                # Populate `all_aggregated_raw_payoffs` from existing tables by de-normalizing.
-                # This is still an approximation as we de-normalize a mean.
+             
                 for s_idx in range(self.num_strategies):
                     if not torch.isnan(self.rsg_payoff_table[s_idx, i]):
                         # This is the stored (potentially normalized) mean payoff.
@@ -697,12 +679,7 @@ class RoleSymmetricGame(AbstractGame):
                         # De-normalize it. This is an estimate of one raw data point.
                         raw_payoff_estimate = stored_mean_payoff * self.scale + self.offset
                         all_aggregated_raw_payoffs[config_counts_tuple][s_idx].append(raw_payoff_estimate)
-                # We don't have the original profile_count for this old config, so we can't update it accurately.
-                # We'll use counts from new_data only for new entries for now or sum if config existed.
-                # This highlights the need to store more detailed original data.
-
-        # Collect all raw payoffs from *new_payoff_data* for re-normalization
-        # And add new observations to all_aggregated_raw_payoffs
+                
         for sim_profile in new_payoff_data:
             current_profile_role_player_counts = Counter([p_data[1] for p_data in sim_profile])
             expected_total_players = self.num_players_per_role.sum().item()
@@ -781,106 +758,11 @@ class RoleSymmetricGame(AbstractGame):
         if hasattr(self, 'deviation_payoffs') and hasattr(self.deviation_payoffs, 'cache_clear'):
             self.deviation_payoffs.cache_clear()
 
-if __name__ == '__main__':
-    # --- Basic Test Case ---
-    r_names = ["A", "B"]
-    n_players_per_role = [3, 5]
-    s_names_per_role = [["A1", "A2"], ["B1", "B2"]]
-    dev = "cpu"
+    def has_profile(self, profile: List[Tuple[str,str]]) -> bool:
+        """
+        Shortcut so callers can ask the RSG object directly.
+        """
+        # We already implemented the logic in the wrapper – just delegate.
+        from marketsim.egta.core.game import Game   # avoid circular at top
+        return Game(self).has_profile(profile)
 
-    cfg1 = torch.tensor([1,0,1,0], device=dev, dtype=torch.float64)
-    cfg2 = torch.tensor([1,0,0,1], device=dev, dtype=torch.float64)
-    cfg3 = torch.tensor([0,1,1,0], device=dev, dtype=torch.float64)
-    cfg4 = torch.tensor([0,1,0,1], device=dev, dtype=torch.float64)
-
-    test_rsg_config_table = torch.stack([cfg1, cfg2, cfg3, cfg4])
-    test_rsg_payoff_table = torch.zeros((4, 4), device=dev, dtype=torch.float64)
-    test_rsg_payoff_table[0,0]=3.0; test_rsg_payoff_table[2,0]=3.0 
-    test_rsg_payoff_table[0,1]=1.0; test_rsg_payoff_table[3,1]=1.0 
-    test_rsg_payoff_table[1,2]=0.0; test_rsg_payoff_table[2,2]=0.0 
-    test_rsg_payoff_table[1,3]=2.0; test_rsg_payoff_table[3,3]=2.0 
-
-    game = RoleSymmetricGame(
-        role_names=r_names,
-        num_players_per_role=n_players_per_role,
-        strategy_names_per_role=s_names_per_role,
-        rsg_config_table=test_rsg_config_table,
-        rsg_payoff_table=test_rsg_payoff_table,
-        device=dev
-    )
-    print(game)
-    print(f"Num Strategies: {game.num_strategies}")
-    print(f"Role Starts: {game.role_starts}")
-
-    mix1 = torch.tensor([1.0, 0.0, 1.0, 0.0], device=dev, dtype=torch.float64)
-    dev_pays1 = game.deviation_payoffs(mix1)
-    print(f"Mixture1: {mix1.tolist()}")
-    print(f"Dev Payoffs1: {dev_pays1.tolist()}") 
-    print(f"Regret1: {game.regret(mix1)}")
-
-    mix2 = torch.tensor([0.5, 0.5, 0.5, 0.5], device=dev, dtype=torch.float64)
-    dev_pays2 = game.deviation_payoffs(mix2)
-    print(f"Mixture2: {mix2.tolist()}")
-    print(f"Dev Payoffs2: {dev_pays2.tolist()}")
-    print(f"Regret2: {game.regret(mix2)}")
-
-    print("Calling dev_payoffs for mix2 again (should be cached):")
-    # Simplified timing for CPU
-    cpu_start_time = time.perf_counter()
-    dev_pays2_cached = game.deviation_payoffs(mix2)
-    cpu_end_time = time.perf_counter()
-    print(f"Time with cache: {(cpu_end_time - cpu_start_time)*1000:.4f} ms")
-    print(f"Dev Payoffs2 (cached): {dev_pays2_cached.tolist()}")
-    
-    RoleSymmetricGame.deviation_payoffs.cache_clear()
-    print("Cache cleared. Calling dev_payoffs for mix2 again (no cache):")
-    cpu_start_time = time.perf_counter()
-    dev_pays2_nocache = game.deviation_payoffs(mix2)
-    cpu_end_time = time.perf_counter()
-    print(f"Time NO cache: {(cpu_end_time - cpu_start_time)*1000:.4f} ms")
-    print(f"Dev Payoffs2 (no cache): {dev_pays2_nocache.tolist()}")
-    
-    r_names3p = ["R1", "R2"]
-    n_players_per_role3p = [2,1]
-    s_names_per_role3p = [["S1","S2"], ["T1","T2"]]
-
-    cfg3p_1 = torch.tensor([1,1,1,0], device=dev, dtype=torch.float64)
-    cfg3p_2 = torch.tensor([2,0,0,1], device=dev, dtype=torch.float64)
-    
-    test_rsg_config_table_3p = torch.stack([cfg3p_1, cfg3p_2])
-    test_rsg_payoff_table_3p = torch.zeros((4,2), device=dev, dtype=torch.float64)
-    test_rsg_payoff_table_3p[0,0]=5.0; test_rsg_payoff_table_3p[1,0]=5.0; test_rsg_payoff_table_3p[2,0]=10.0
-    test_rsg_payoff_table_3p[0,1]=3.0; test_rsg_payoff_table_3p[3,1]=8.0
-    
-    game3p = RoleSymmetricGame(
-        role_names=r_names3p,
-        num_players_per_role=n_players_per_role3p,
-        strategy_names_per_role=s_names_per_role3p,
-        rsg_config_table=test_rsg_config_table_3p,
-        rsg_payoff_table=test_rsg_payoff_table_3p,
-        device=dev
-    )
-    print("\n3-Player Game Test:")
-    mix3p_1 = torch.tensor([1.0, 0.0, 1.0, 0.0], device=dev, dtype=torch.float64)
-    dev_pays3p_1 = game3p.deviation_payoffs(mix3p_1)
-    print(f"Mixture3p_1: {mix3p_1.tolist()}")
-    print(f"Dev Payoffs3p_1: {dev_pays3p_1.tolist()}")
-    print(f"Regret3p_1: {game3p.regret(mix3p_1)}")
-    
-    mix3p_2 = torch.tensor([0.0, 1.0, 0.0, 1.0], device=dev, dtype=torch.float64)
-    dev_pays3p_2 = game3p.deviation_payoffs(mix3p_2)
-    print(f"\nMixture3p_2: {mix3p_2.tolist()}")
-    print(f"Dev Payoffs3p_2: {dev_pays3p_2.tolist()}")
-    print(f"Regret3p_2: {game3p.regret(mix3p_2)}")
-
-    # Add this after equilibrium analysis in your script
-    print("\n🔍 PAYOFF ANALYSIS:")
-    for i, (mixture, regret_val) in enumerate(egta.equilibria[:3]):  # Check first 3 equilibria
-        dev_payoffs = game.deviation_payoffs(mixture)
-        print(f"\nEquilibrium {i+1} deviation payoffs:")
-        print(f"  MOBI_0_100: {dev_payoffs[0].item():.8f}")  
-        print(f"  MOBI_100_0: {dev_payoffs[1].item():.8f}")
-        print(f"  ZI_0_100: {dev_payoffs[2].item():.8f}")
-        print(f"  ZI_100_0: {dev_payoffs[3].item():.8f}")
-        
-        print(f"  Payoff difference (MOBI_0_100 vs ZI_0_100): {abs(dev_payoffs[0] - dev_payoffs[2]).item():.8f}")

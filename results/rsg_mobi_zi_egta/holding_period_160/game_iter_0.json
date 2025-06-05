@@ -1,25 +1,26 @@
 {
   "metadata": {
     "game_type": "role_symmetric",
-    "num_profiles": 1,
-    "payoff_mean": 9995.885069859822,
-    "payoff_std": 9048.470123735653
+    "num_profiles": 80,
+    "payoff_mean": 9463.190576442028,
+    "payoff_std": 10006.247820046185
   },
   "is_role_symmetric": true,
   "strategy_names": [
     "MOBI_0_100",
     "MOBI_100_0",
+    "ZI_0_100",
     "ZI_100_0"
   ],
-  "num_players": 30,
-  "num_strategies": 3,
+  "num_players": 68,
+  "num_strategies": 4,
   "role_names": [
     "MOBI",
     "ZI"
   ],
   "num_players_per_role": [
-    15,
-    15
+    28,
+    40
   ],
   "strategy_names_per_role": [
     [
@@ -27,6 +28,7 @@
       "MOBI_100_0"
     ],
     [
+      "ZI_0_100",
       "ZI_100_0"
     ]
   ]

@@ -1,0 +1,31 @@
+[
+  {
+    "equilibrium_id": 1,
+    "regret": 1.2914708236166916e-07,
+    "welfare": 2.907921441419603e-07,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_100_0": 0.9999998807907104
+      },
+      "ZI": {
+        "ZI_100_0": 1.0
+      }
+    },
+    "mixture_vector": [
+      1.0816265216817555e-07,
+      0.9999998807907104,
+      1.0
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 2,
+    "equilibrium_type": "Pure"
+  }
+]

@@ -25,7 +25,8 @@ class DPRScheduler(Scheduler):
                 num_players: int, 
                 subgame_size: int = 3,
                 batch_size: int = 10,
-                reduction_size: Union[int, Dict[str, int], None] = None, 
+                reduction_size: Optional[int] = None,
+                reduction_size_per_role: Optional[Dict[str, int]] = None,
                 seed: Optional[int] = None,
                 # Role symmetric parameters
                 role_names: Optional[List[str]] = None,
@@ -59,39 +60,61 @@ class DPRScheduler(Scheduler):
         self.num_players_per_role = num_players_per_role or [num_players]
         self.strategy_names_per_role = strategy_names_per_role or [strategies]
         
-        self.reduction_size = reduction_size if reduction_size is not None else num_players
-        
-        # ---------- reduction sizes ----------
-        if isinstance(reduction_size, int) or reduction_size is None:
-            default = reduction_size if reduction_size is not None else num_players
-            self.reduction_size_per_role = {r: default for r in self.role_names}
-        elif isinstance(reduction_size, dict):
-            # make sure every role supplied
-            missing = [r for r in self.role_names if r not in reduction_size]
-            if missing:
-                raise ValueError(f"Missing reduction_size for roles: {missing}")
-            self.reduction_size_per_role = reduction_size.copy()
+        if self.is_role_symmetric:
+            # -------- role–symmetric branch --------
+            # Default: no reduction => n_r = N_r for every role
+            if reduction_size_per_role is None:
+                reduction_size_per_role = {
+                    r: self.num_players_per_role[i]
+                    for i, r in enumerate(self.role_names)
+                }
+            # sanity-check
+            for r, n_r in reduction_size_per_role.items():
+                if n_r < 1:
+                    raise ValueError(f"reduction_size_per_role[{r}] must be ≥ 1")
+
+            self.reduction_size_per_role = reduction_size_per_role
+            self.reduction_size          = None         #  <- disable scalar
         else:
-            raise TypeError("reduction_size must be int, dict, or None")
+            # -------- symmetric branch --------
+            self.reduction_size          = (
+                int(reduction_size) if reduction_size is not None
+                else num_players                            # no reduction
+            )
+            self.reduction_size_per_role = {}  
 
-        self.reduction_size = max(self.reduction_size_per_role.values())
-
-        self.scaling_factor_per_role: Dict[str, float] = {}
-        for r, N_r in zip(self.role_names, self.num_players_per_role):
-            n_r = self.reduction_size_per_role[r]
-            self.scaling_factor_per_role[r] = (N_r - 1) / (n_r - 1) if n_r < N_r else 1.0
-
-        #used only in plain symmetirc case
-        self.scaling_factor = (
-            (self.num_players - 1) / (self.reduction_size - 1)
-            if self.reduction_size < self.num_players
-            else 1.0
-        )
+        # bookkeeping
+        if self.is_role_symmetric:
+            self.scaling_factor_per_role = {}
+            for i, r in enumerate(self.role_names):
+                N_r = self.num_players_per_role[i]
+                n_r = self.reduction_size_per_role[r]
+                self.scaling_factor_per_role[r] = (
+                    1.0 if n_r == N_r else (N_r - 1) / (n_r - 1)
+                )
+            self.scaling_factor = None                     # <- unused
+        else:
+            self.scaling_factor = (
+                1.0 if self.reduction_size == self.num_players
+                else (self.num_players - 1) / (self.reduction_size - 1)
+            )
+            self.scaling_factor_per_role = {}
 
         self.scheduled_profiles: Set[Tuple] = set()
         self.requested_subgames: List[Dict] = []
         
         self._initialize_with_uniform_subgame()
+    
+    def _n_players_for_role(self, role_name: str, role_idx: int) -> int:
+        """
+        Current number of players the *reduced* game keeps for a role.
+        Falls back gracefully to full-game size.
+        """
+        if self.reduction_size_per_role:
+            return self.reduction_size_per_role.get(
+                role_name, self.num_players_per_role[role_idx]
+            )
+        return min(self.num_players_per_role[role_idx], self.reduction_size)
     
     def _initialize_with_uniform_subgame(self):
         """Initialize with a uniform subgame."""
@@ -126,6 +149,26 @@ class DPRScheduler(Scheduler):
             # For symmetric games, convert to old format and generate profiles
             strategies = list(subgame["Player"])
             return self._generate_symmetric_profiles(strategies)
+        
+
+    def _n_players_for_role(self, role_name: str, role_idx: int) -> int:
+        """
+        Centralised lookup of the *current* player-count a reduced game
+        should use for this role.  Falls back gracefully.
+        """
+       
+        if hasattr(self, "reduction_size_per_role") and self.reduction_size_per_role:
+            return int(self.reduction_size_per_role.get(
+                role_name, self.num_players_per_role[role_idx]))
+
+        
+        if hasattr(self, "reduction_size") and self.reduction_size:
+            return int(min(self.num_players_per_role[role_idx],
+                           self.reduction_size))
+
+       
+        return int(self.num_players_per_role[role_idx])
+
     
     def _generate_role_symmetric_profiles(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
         """Generate role symmetric profiles for a subgame."""
@@ -138,13 +181,35 @@ class DPRScheduler(Scheduler):
             if role_name not in subgame or not subgame[role_name]:
                 continue
                 
-            role_strategies = list(subgame[role_name])
+           # role_strategies = list(subgame[role_name])
+           # role_name = self.role_names[role_idx]
+           # num_players_in_role = min(
+           #     self.num_players_per_role[role_idx],
+           #     self.reduction_size_per_role[role_name]
+           # )
             role_name = self.role_names[role_idx]
-            num_players_in_role = min(
-                self.num_players_per_role[role_idx],
-                self.reduction_size_per_role[role_name]
-            )
+            role_strategies = list(subgame[role_name])
 
+            #num_players_in_role = self._n_players_for_role(role_name, role_idx)
+            num_players_in_role = self.num_players_per_role[role_idx]
+
+
+            # use the per-role reduction if it exists, otherwise fall back to the
+            # scalar self.reduction_size
+            if hasattr(self, "reduction_size_per_role") and self.reduction_size_per_role:
+                n_r = self.reduction_size_per_role.get(
+                    role_name,                       # look up this role
+                    self.num_players_per_role[role_idx]  # default → full-game size
+                )
+            else:
+                n_r = self.reduction_size           # old behaviour
+
+            # players we actually keep for this role in the reduced game
+           # num_players_in_role = min(
+              #  self.num_players_per_role[role_idx],
+              #  self.reduction_size_per_role.get(role_name, self.reduction_size)
+           # )
+            #num_players_in_role = self._n_players_for_role(role_name, role_idx)
             
             if num_players_in_role == 0:
                 continue
@@ -352,8 +417,12 @@ class DPRScheduler(Scheduler):
             # Select best deviations per role
             global_strategy_idx = 0
             for role_idx, (role_name, role_strategies) in enumerate(zip(game.role_names, game.strategy_names_per_role)):
-                role_payoffs = scaled_payoffs[global_strategy_idx:global_strategy_idx + len(role_strategies)]
-                
+                #role_payoffs = scaled_payoffs[global_strategy_idx:global_strategy_idx + len(role_strategies)]
+                role_payoffs = torch.nan_to_num(
+                    scaled_payoffs[global_strategy_idx:
+                                global_strategy_idx + len(role_strategies)],
+                    nan=np.inf,  # treat “missing” as best-possible payoff
+                )
                 # Get top strategies for this role
                 sorted_indices = np.argsort(-role_payoffs.cpu().numpy())
                 num_to_select = min(num_deviations, len(role_strategies))
@@ -479,3 +548,26 @@ class DPRScheduler(Scheduler):
             "scaling_factors": self.scaling_factor_per_role,
             "is_role_symmetric": self.is_role_symmetric,
         }
+    def missing_deviations(self, mixture: np.ndarray, game: Game) -> List[List[Tuple[str,str]]]:
+        """
+        Return every unevaluated one-player deviation profile of σ.
+        """
+        support = self._select_support_strategies(game, mixture, threshold=1e-12)
+        missing = []
+        import itertools
+        # build a pure profile over the support (one player per role strategy)
+        base = []
+        for role, strats in support.items():
+            base.append([(role, s) for s in strats])
+        for pure in itertools.product(*base):
+            pure = list(pure)
+            for i, (role_i, strat_i) in enumerate(pure):
+                for other in self.strategy_names_per_role[self.role_names.index(role_i)]:
+                    if other == strat_i:
+                        continue
+                    dev = pure.copy()
+                    dev[i] = (role_i, other)
+                    if not game.has_profile(dev):
+                        missing.append(dev)
+        return missing
+

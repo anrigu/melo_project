@@ -39,6 +39,8 @@ class Game:
             self.role_names = game_instance.role_names
             self.num_players_per_role = game_instance.num_players_per_role
             self.strategy_names_per_role = game_instance.strategy_names_per_role
+            self.role_indices = game_instance.role_indices
+            self.role_starts  = game_instance.role_starts
             # Flatten strategy names for role symmetric games
             all_strategy_names = []
             for strategies in game_instance.strategy_names_per_role:
@@ -70,9 +72,74 @@ class Game:
         """Get number of strategies."""
         return self._num_strategies
     
+    
+        # ------------------------------------------------------------------
+    # canonical sorting helper  – works for both symmetric & role-symmetric
+    def _profile_to_key(self, profile: List[Tuple[str, str]]) -> Tuple[Tuple[str, str], ...]:
+        """
+        Convert a list [(role,strat), …] to a canonical, hashable key.
+        For 1-role symmetric games 'role' will be the same for every entry.
+        """
+        # ignore player-id if it was included upstream
+        return tuple(sorted((r, s) for r, s in profile))
+
+    # ------------------------------------------------------------------
+    def has_profile(self, profile: List[Tuple[str, str]]) -> bool:
+        """
+        True  ↔  every player's payoff for this pure profile
+        already exists in the empirical game tables.
+        """
+        key = self._profile_to_key(profile)
+
+        # ---------- quick check via a cached set ----------
+        if not hasattr(self, "_profile_key_set"):
+            self._profile_key_set: set = set()
+            self._rebuild_profile_key_set()          # defined below
+        if key in self._profile_key_set:
+            return True
+
+        # ---------- fall-back: rebuild & test once ----------
+        self._rebuild_profile_key_set()
+        return key in self._profile_key_set
+
+    def _rebuild_profile_key_set(self):
+        """(re)fill _profile_key_set from  current payoff tables."""
+        pk = set()
+        if self.is_role_symmetric and self.game.rsg_config_table is not None:
+            # build keys from rsg_config_table rows
+            cfg = self.game.rsg_config_table.cpu().numpy()
+            # mapping global index ↦ (role,strat)
+            glob2name = []
+            for role, strats in zip(self.role_names, self.strategy_names_per_role):
+                glob2name.extend([(role, s) for s in strats])
+
+            for row in cfg:
+                pure_profile = []
+                for g_idx, count in enumerate(row.astype(int)):
+                    pure_profile.extend([glob2name[g_idx]] * count)
+                pk.add(tuple(sorted(pure_profile)))
+
+        elif not self.is_role_symmetric and self.game.config_table is not None:
+            cfg = self.game.config_table.cpu().numpy()  # shape: (#configs, num_strats)
+            strats = self.strategy_names
+            for row in cfg:
+                pure_profile = []
+                for s_idx, count in enumerate(row.astype(int)):
+                    pure_profile.extend([(self.role_names[0], strats[s_idx])] * count)
+                pk.add(tuple(sorted(pure_profile)))
+
+        self._profile_key_set = pk
+    # ------------------------------------------------------------------
+
+    
     def deviation_payoffs(self, mixture):
-        """Calculate deviation payoffs for a mixture."""
+        if not torch.is_tensor(mixture):
+            mixture = torch.tensor(mixture, dtype=torch.float32,
+                                device=self.game.device)
+        elif mixture.device != self.game.device:
+            mixture = mixture.to(self.game.device)
         return self.game.deviation_payoffs(mixture)
+
     
     def regret(self, mixture):
         """Calculate regret for a mixture."""
@@ -374,3 +441,43 @@ class Game:
     def __repr__(self):
         game_type = "RoleSymmetricGame" if self.is_role_symmetric else "SymmetricGame"
         return f"Game({game_type}, {self.num_players} players, {self.num_strategies} strategies)" 
+    
+    
+    def get_strategy_name(self, global_idx: int) -> str:
+        """
+        forwarder so helpers can always call Game.get_strategy_name().
+        """
+        if self.is_role_symmetric:                
+            return self.game.get_strategy_name(global_idx)
+        else:                                 
+            return self.strategy_names[global_idx]
+
+
+   
+    def all_strategy_names(self) -> List[str]:
+        return self.strategy_names if not self.is_role_symmetric else [
+            f"{r}:{s}"
+            for r, role_strats in zip(self.role_names, self.strategy_names_per_role)
+            for s in role_strats
+        ]
+
+    def strategies_present_in_payoff_table(self) -> set:
+        """Return the set {'MOBI:MOBI_0_100', ...} that actually appear."""
+        present = set()
+        if self.is_role_symmetric and self.game.rsg_config_table is not None:
+            rows = self.game.rsg_config_table.cpu().numpy()
+            for cfg_row in rows:
+                for g_idx, cnt in enumerate(cfg_row.astype(int)):
+                    if cnt > 0:
+                        role, strat = self.get_strategy_name(g_idx).split(':', 1) \
+                                    if ':' in self.get_strategy_name(g_idx) else \
+                                    (self.role_names[self.role_indices[g_idx]],
+                                    self.get_strategy_name(g_idx))
+                        present.add(f"{role}:{strat}")
+        elif not self.is_role_symmetric and self.game.config_table is not None:
+            rows = self.game.config_table.cpu().numpy()
+            for cfg_row in rows:
+                for idx, cnt in enumerate(cfg_row.astype(int)):
+                    if cnt > 0:
+                        present.add(self.strategy_names[idx])
+        return present

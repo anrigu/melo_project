@@ -50,6 +50,7 @@ class EGTA:
         
         # Detect if simulator supports role symmetric games
         self.is_role_symmetric = hasattr(simulator, 'get_role_info')
+       
         
         if self.is_role_symmetric:
             # Role symmetric game setup
@@ -69,6 +70,12 @@ class EGTA:
             self.strategy_names_per_role = [all_strategies]
         
         # If scheduler is not provided, use appropriate default
+        self.expected_strategies = set(           
+            f"{r}:{s}" if self.is_role_symmetric else s
+            for r, strats in zip(self.role_names, self.strategy_names_per_role)
+            for s in strats
+        )
+
         if scheduler is None:
             if self.is_role_symmetric:
                 self.scheduler = DPRScheduler(
@@ -84,7 +91,7 @@ class EGTA:
                     strategies=all_strategies,
                     num_players=self.num_players,
                     seed=seed
-                )
+                ) 
         else:
             self.scheduler = scheduler
         
@@ -94,6 +101,11 @@ class EGTA:
         self.payoff_data = []
         self.simulated_profiles = set()
         self.equilibria = []
+
+    def has_profile(self, profile: List[Tuple[str,str]]) -> bool:
+        key = tuple(sorted(profile))
+        return key in self.game.payoff_table   # adjust to your storage structure
+
     
     def run(self, 
            max_iterations: int = 10, 
@@ -142,225 +154,93 @@ class EGTA:
                 if key not in quiesce_kwargs:
                     quiesce_kwargs[key] = value
         
+        # --------------------------------------------------------------------
+        # BEGIN survey-compliant outer loop
+        # --------------------------------------------------------------------
         for iteration in range(max_iterations):
-            iteration_start = time.time()
-            
             if verbose:
                 print(f"\nIteration {iteration+1}/{max_iterations}")
-            
-            if isinstance(self.scheduler, DPRScheduler):
-                if self.is_role_symmetric:
-                    original_reduction = self.scheduler.reduction_size_per_role.copy()
 
-                    self.scheduler.reduction_size_per_role = {
-                        r: self.num_players_per_role[i]
-                        for i, r in enumerate(self.role_names)
-                    }
-                    profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+            # ================================================================
+            # 1)  MAKE SURE THE CURRENT RESTRICTED GAME IS COMPLETE
+            # ================================================================
+            while True:
+                # get every profile the scheduler still wants
+                batch = self.scheduler.get_next_batch(self.game)
+                if not batch:
+                    break  # nothing missing – restricted game is complete
 
-                    self.scheduler.reduction_size_per_role = original_reduction
-                else:
-                    original_reduction = self.scheduler.reduction_size
-                    self.scheduler.reduction_size = self.scheduler.num_players
-                    profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
-                    self.scheduler.reduction_size = original_reduction
-            else:
-                profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
-
-            
-            if not profiles_to_simulate:
                 if verbose:
-                    print("No more profiles to simulate. Ending early.")
+                    print(f"  Scheduling {len(batch)} new profiles")
+                new_data = self.simulator.simulate_profiles(batch)
+
+                # update game
+                self.payoff_data.extend(new_data)
+                if self.game is None:
+                    self.game = Game.from_payoff_data(self.payoff_data, device=self.device)
+                else:
+                    self.game.update_with_new_data(new_data)
+
+                self.scheduler.update(self.game)
+                total_profiles += len(new_data)
+                if total_profiles >= self.max_profiles:
+                    break
+
+            # ================================================================
+            # 2)  BUILD CANDIDATE SET Ψ AND EXHAUSTIVELY EVALUATE UD(σ)
+            # ================================================================
+            candidates = self.scheduler._select_equilibrium_candidates(self.game, 50)
+            confirmed, unconfirmed = [], []
+            eps = quiesce_kwargs.get('regret_threshold', 1e-3)
+
+            for σ in candidates:
+                # ask scheduler for ALL missing one-player deviations of σ
+                missing = self.scheduler.missing_deviations(σ, self.game)  # <- new helper
+                if missing:
+                    if verbose:
+                        print(f"  {len(missing)} missing deviations → simulating")
+                    new_data = self.simulator.simulate_profiles(missing)
+                    self.payoff_data.extend(new_data)
+                    self.game.update_with_new_data(new_data)
+                    self.scheduler.update(self.game)
+                    total_profiles += len(new_data)
+
+                σ_reg = float(regret(self.game, torch.tensor(σ, dtype=torch.float32,
+                                                            device=self.device)))
+                if σ_reg <= eps:
+                    confirmed.append((torch.tensor(σ,
+                               dtype=torch.float32,
+                               device=self.game.game.device),σ_reg))
+                else:
+                    unconfirmed.append((σ, σ_reg))
+
+            if verbose:
+                print(f"  Candidates – confirmed: {len(confirmed)}   "
+                    f"unconfirmed: {len(unconfirmed)}")
+
+           
+            all_seen = (
+                self.expected_strategies
+                == self.game.strategies_present_in_payoff_table()   # <-- now a *real* test
+            )
+            if confirmed and not unconfirmed and all_seen:
+                self.equilibria = confirmed
+                if verbose:
+                    print("  All strategies observed and all candidates confirmed – done.")
                 break
-            
-            if verbose:
-                print(f"Simulating {len(profiles_to_simulate)} profiles...")
-            
-            simulation_start = time.time()
-            new_data = self.simulator.simulate_profiles(profiles_to_simulate)
-            simulation_time = time.time() - simulation_start
-            
-            if verbose:
-                print(f"Simulation completed in {simulation_time:.2f} seconds")
-                
-                # Print payoff data for debugging
-                print("\nPayoff data from simulation:")
-                for profile_data in new_data:
-                    if profile_data and len(profile_data[0]) == 4:
-                        role_strategy_counts = {}
-                        for _, role_name, strategy_name, _ in profile_data:
-                            key = f"{role_name}:{strategy_name}"
-                            role_strategy_counts[key] = role_strategy_counts.get(key, 0) + 1
-                        
-                        profile_dist = ", ".join([f"{key}({count})" for key, count in role_strategy_counts.items()])
-                        payoffs = [float(payoff) for _, _, _, payoff in profile_data]
-                    elif profile_data and len(profile_data[0]) == 3:
-                        # Symmetric format: (player_id, strategy_name, payoff)
-                        all_strategies = [strategy for _, strategy, _ in profile_data]
-                        strategy_counts = {}
-                        for strat in set(all_strategies):
-                            strategy_counts[strat] = all_strategies.count(strat)
-                        profile_dist = ", ".join([f"{strat}:{count}" for strat, count in strategy_counts.items()])
-                        payoffs = [float(payoff) for _, _, payoff in profile_data]
-                    else:
-                        # Unknown format
-                        profile_dist = "Unknown format"
-                        payoffs = []
-                    
-                    avg_payoff = sum(payoffs) / len(payoffs) if payoffs else 0
-                    print(f"  Profile: [{profile_dist}], Avg Payoff: {avg_payoff:.4f}, Payoffs: {payoffs}")
-                print()
-            
-            self.payoff_data.extend(new_data)
-            total_profiles += len(new_data)
-            
-            if self.game is None:
-                self.game = Game.from_payoff_data( #builds full game
-                    payoff_data=self.payoff_data,
-                    device=self.device
-                )
-            else:
-                self.game.update_with_new_data(new_data)
-            
-            self.scheduler.update(self.game)
-            
-            if verbose:
-                print("Finding equilibria...")
-            
-            equilibria_start = time.time()
-            
-            # Check if we're using DPR and create reduced game if so
-            if isinstance(self.scheduler, DPRScheduler):
-                if verbose:
-                    print(f"Using DPR: Creating reduced game with {self.scheduler.reduction_size} players...")
-                reduced_game = self._create_reduced_game(self.game, self.scheduler.reduction_size)
-                
-                if self.is_role_symmetric:
-                    sf = self.scheduler.scaling_factor_per_role
-                    pretty = ", ".join(f"{r}: {f:.2f}" for r, f in sf.items())
-                else:
-                    pretty = f"{self.scheduler.scaling_factor:.2f}"
 
-                print(f"Solving equilibria on reduced game (scaling factors – {pretty})")
-
-            else:
-                reduced_game = self.game
-            
-            try:
-                self.equilibria = quiesce_sync(
-                    game=reduced_game,  # Use reduced game for equilibrium finding
-                    num_iters=quiesce_kwargs['num_iters'],
-                    num_random_starts=quiesce_kwargs['num_random_starts'],
-                    regret_threshold=quiesce_kwargs['regret_threshold'],
-                    dist_threshold=quiesce_kwargs['dist_threshold'],
-                    solver=quiesce_kwargs['solver'],
-                    solver_iters=quiesce_kwargs['solver_iters'],
-                    verbose=verbose,
-                    full_game=self.game if isinstance(self.scheduler, DPRScheduler) else None  # Pass full game for DPR for eq checking
-                )
-                
-                if verbose and not reduced_game.is_role_symmetric and reduced_game.num_strategies == 2:
-                    payoff_matrix = reduced_game.get_payoff_matrix()
-                    print("\nReduced Game Payoff Matrix:")
-                    for i in range(2):
-                        print(f"  {reduced_game.strategy_names[i]}: [{payoff_matrix[i, 0].item():.4f}, {payoff_matrix[i, 1].item():.4f}]")
-                    print()
-
-                    
-            except Exception as e:
-                print(f"Error in equilibrium finding: {e}")
-                mixture = torch.ones(reduced_game.num_strategies, device=self.device) / reduced_game.num_strategies
-                eq_mixture = replicator_dynamics(reduced_game, mixture, iters=5000)
-                eq_regret = regret(reduced_game, eq_mixture)
-                
-                # Handle NaN regret
-                if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
-                    eq_regret = torch.tensor(0.01, device=self.device)
-                if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
-                    eq_regret = 0.01
-                    
-                self.equilibria = [(eq_mixture, eq_regret)]
-            
-            equilibria_time = time.time() - equilibria_start
-            
+           
             if verbose:
-                print(f"Found {len(self.equilibria)} equilibria in {equilibria_time:.2f} seconds")
-                
-                for i, (eq_mix, eq_regret) in enumerate(self.equilibria):
-                    if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
-                        continue
-                    if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
-                        continue
-                        
-                    if self.is_role_symmetric:
-                        # Role symmetric game equilibrium display
-                        strat_str_parts = []
-                        global_idx = 0
-                        for role_idx, (role_name, role_strategies) in enumerate(zip(self.game.role_names, self.game.strategy_names_per_role)):
-                            role_parts = []
-                            for strat_name in role_strategies:
-                                if eq_mix[global_idx].item() > 0.01:
-                                    role_parts.append(f"{strat_name}: {eq_mix[global_idx].item():.4f}")
-                                global_idx += 1
-                            if role_parts:
-                                strat_str_parts.append(f"{role_name}[{', '.join(role_parts)}]")
-                        strat_str = ", ".join(strat_str_parts)
-                    else:
-                        # Symmetric game equilibrium display
-                        strat_str = ", ".join([
-                            f"{self.game.strategy_names[s]}: {eq_mix[s].item():.4f}" 
-                            for s in range(self.game.num_strategies)
-                            if eq_mix[s].item() > 0.01
-                        ])
-                    
-                    print(f"  Equilibrium {i+1}: regret={float(eq_regret):.6f}, {strat_str}")
-                    
-                    try:
-                        is_dpr = isinstance(self.scheduler, DPRScheduler)
-                        
-                        if is_dpr:
-                            reduced_payoffs = reduced_game.deviation_payoffs(eq_mix)
-                            reduced_exp_payoff = (eq_mix * reduced_payoffs).sum().item()
-                            
-                            if self.is_role_symmetric:
-                                full_exp_payoff = (eq_mix *
-                                                self.scheduler.scale_payoffs(reduced_payoffs)).sum().item()
-                            else:
-                                scaling_factor = self.scheduler.scaling_factor
-                                full_exp_payoff = reduced_exp_payoff * scaling_factor
+                print("  Expanding subgame …")
 
-                            
-                            print(f"Expected Payoff (Reduced Game): {reduced_exp_payoff:.4f}")
-                            print(f"Expected Payoff (Full Game): {full_exp_payoff:.4f}")
-                        else:
-                            payoffs = self.game.deviation_payoffs(eq_mix)
-                            exp_payoff = (eq_mix * payoffs).sum().item()
-                            
-                            if 'payoff_mean' in self.game.metadata and 'payoff_std' in self.game.metadata:
-                                payoff_mean = self.game.metadata['payoff_mean']
-                                payoff_std = self.game.metadata['payoff_std']
-                                denorm_payoff = exp_payoff * payoff_std + payoff_mean
-                                print(f"    Expected Payoff: {denorm_payoff:.4f}")
-                            else:
-                                print(f"    Expected Payoff: {exp_payoff:.4f}")
-                    except Exception as e:
-                        print(f"    Error calculating expected payoff: {e}")
-            
-            # Save results
-            if iteration % save_frequency == 0 or iteration == max_iterations - 1:
+            # optional snapshot
+            if iteration % save_frequency == 0:
                 self._save_results(iteration)
-            
-            iteration_time = time.time() - iteration_start
-            if verbose:
-                print(f"Iteration completed in {iteration_time:.2f} seconds")
-                print(f"Total profiles: {total_profiles}/{self.max_profiles}")
-            
-            # Check if we've reached the maximum number of profiles
+
             if total_profiles >= self.max_profiles:
                 if verbose:
-                    print(f"Reached maximum number of profiles ({self.max_profiles}). Stopping.")
+                    print(f"Reached profile budget ({self.max_profiles}).")
                 break
-        
         total_time = time.time() - start_time
         if verbose:
             print(f"\nEGTA completed in {total_time:.2f} seconds")
