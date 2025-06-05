@@ -1,5 +1,5 @@
 {
-  "analysis_timestamp": "20250602_130818",
+  "analysis_timestamp": "20250605_142800",
   "holding_periods_analyzed": [
     160
   ],
@@ -7,12 +7,12 @@
   "results": [
     {
       "holding_period": 160,
-      "best_welfare": 0.9818331599235535,
+      "best_welfare": 5.511583367479034e-08,
       "best_regret": 0.0,
       "equilibrium_type": "Pure",
-      "num_equilibria": 1,
-      "results_dir": "results/rsg_mobi_zi_egta/holding_period_160/comprehensive_rsg_results_20250602_130818",
-      "equilibrium_description": "MOBI: MOBI_100_0 | ZI: ZI_100_0"
+      "num_equilibria": 43,
+      "results_dir": "results/rsg_mobi_zi_egta/holding_period_160/comprehensive_rsg_results_20250605_142800",
+      "equilibrium_description": "MOBI: MOBI_0_100 | ZI: ZI_100_0"
     }
   ]
 }
