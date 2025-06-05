@@ -2,8 +2,8 @@
   "metadata": {
     "game_type": "role_symmetric",
     "num_profiles": 1,
-    "payoff_mean": 9504.77601875941,
-    "payoff_std": 8599.517400254985
+    "payoff_mean": 9995.885069859822,
+    "payoff_std": 9048.470123735653
   },
   "is_role_symmetric": true,
   "strategy_names": [

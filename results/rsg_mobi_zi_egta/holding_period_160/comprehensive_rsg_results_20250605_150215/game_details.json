@@ -1,0 +1,24 @@
+{
+  "is_role_symmetric": true,
+  "role_names": [
+    "MOBI",
+    "ZI"
+  ],
+  "num_players_per_role": [
+    15,
+    15
+  ],
+  "strategy_names_per_role": [
+    [
+      "MOBI_0_100",
+      "MOBI_100_0"
+    ],
+    [
+      "ZI_0_100"
+    ]
+  ],
+  "total_strategies": 3,
+  "total_players": 30,
+  "total_profiles_simulated": 1,
+  "game_type": "role_symmetric"
+}

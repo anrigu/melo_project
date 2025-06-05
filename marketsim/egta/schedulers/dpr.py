@@ -25,7 +25,7 @@ class DPRScheduler(Scheduler):
                 num_players: int, 
                 subgame_size: int = 3,
                 batch_size: int = 10,
-                reduction_size: Optional[int] = None,
+                reduction_size: Union[int, Dict[str, int], None] = None, 
                 seed: Optional[int] = None,
                 # Role symmetric parameters
                 role_names: Optional[List[str]] = None,
@@ -61,11 +61,32 @@ class DPRScheduler(Scheduler):
         
         self.reduction_size = reduction_size if reduction_size is not None else num_players
         
-        # Calculate the DPR scaling factor: (N-1)/(n-1)
-        if self.reduction_size < self.num_players:
-            self.scaling_factor = (self.num_players - 1) / (self.reduction_size - 1)
-        else: 
-            self.scaling_factor = 1.0
+        # ---------- reduction sizes ----------
+        if isinstance(reduction_size, int) or reduction_size is None:
+            default = reduction_size if reduction_size is not None else num_players
+            self.reduction_size_per_role = {r: default for r in self.role_names}
+        elif isinstance(reduction_size, dict):
+            # make sure every role supplied
+            missing = [r for r in self.role_names if r not in reduction_size]
+            if missing:
+                raise ValueError(f"Missing reduction_size for roles: {missing}")
+            self.reduction_size_per_role = reduction_size.copy()
+        else:
+            raise TypeError("reduction_size must be int, dict, or None")
+
+        self.reduction_size = max(self.reduction_size_per_role.values())
+
+        self.scaling_factor_per_role: Dict[str, float] = {}
+        for r, N_r in zip(self.role_names, self.num_players_per_role):
+            n_r = self.reduction_size_per_role[r]
+            self.scaling_factor_per_role[r] = (N_r - 1) / (n_r - 1) if n_r < N_r else 1.0
+
+        #used only in plain symmetirc case
+        self.scaling_factor = (
+            (self.num_players - 1) / (self.reduction_size - 1)
+            if self.reduction_size < self.num_players
+            else 1.0
+        )
 
         self.scheduled_profiles: Set[Tuple] = set()
         self.requested_subgames: List[Dict] = []
@@ -118,7 +139,12 @@ class DPRScheduler(Scheduler):
                 continue
                 
             role_strategies = list(subgame[role_name])
-            num_players_in_role = min(self.num_players_per_role[role_idx], self.reduction_size)
+            role_name = self.role_names[role_idx]
+            num_players_in_role = min(
+                self.num_players_per_role[role_idx],
+                self.reduction_size_per_role[role_name]
+            )
+
             
             if num_players_in_role == 0:
                 continue
@@ -287,19 +313,20 @@ class DPRScheduler(Scheduler):
     
     def scale_payoffs(self, payoffs: torch.Tensor) -> torch.Tensor:
         """
-        Apply DPR scaling to convert reduced game payoffs to full game payoffs.
-        Uses the (N-1)/(n-1) scaling factor.
-        
-        Args:
-            payoffs: Payoffs from the reduced game
-        
-        Returns:
-            Scaled payoffs for the full game
+        Apply DPR scaling per role:  (N_r-1)/(n_r-1)
         """
-        if self.scaling_factor == 1.0:
-            return payoffs
-            
-        return payoffs * self.scaling_factor
+        if not self.is_role_symmetric:                 # symmetric game – old path
+            return payoffs * self.scaling_factor
+
+        scaled = payoffs.clone()
+        global_idx = 0
+        for role_idx, role_name in enumerate(self.role_names):
+            n_strats = len(self.strategy_names_per_role[role_idx])
+            factor = self.scaling_factor_per_role[role_name]
+            scaled[global_idx : global_idx + n_strats] *= factor
+            global_idx += n_strats
+        return scaled
+
     
     def _select_deviating_strategies(self, game: Game, mixture: np.ndarray, num_deviations: int = 2) -> Dict[str, Set[str]]:
         """
@@ -446,18 +473,9 @@ class DPRScheduler(Scheduler):
         self.game = game
         
     def get_scaling_info(self) -> Dict[str, Any]:
-        """
-        Get information about the current DPR reduction and scaling.
-        
-        Returns:
-            Dictionary with scaling information
-        """
         return {
-            "full_game_players": self.num_players,
-            "reduced_game_players": self.reduction_size,
-            "scaling_factor": self.scaling_factor,
-            "is_reduced": self.num_players != self.reduction_size,
+            "full_game_players": self.num_players_per_role,
+            "reduced_game_players": [self.reduction_size_per_role[r] for r in self.role_names],
+            "scaling_factors": self.scaling_factor_per_role,
             "is_role_symmetric": self.is_role_symmetric,
-            "role_names": self.role_names,
-            "num_players_per_role": self.num_players_per_role
-        } 
+        }

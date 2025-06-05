@@ -149,12 +149,24 @@ class EGTA:
                 print(f"\nIteration {iteration+1}/{max_iterations}")
             
             if isinstance(self.scheduler, DPRScheduler):
-                original_reduction_size = self.scheduler.reduction_size
-                self.scheduler.reduction_size = self.scheduler.num_players
-                profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
-                self.scheduler.reduction_size = original_reduction_size
+                if self.is_role_symmetric:
+                    original_reduction = self.scheduler.reduction_size_per_role.copy()
+
+                    self.scheduler.reduction_size_per_role = {
+                        r: self.num_players_per_role[i]
+                        for i, r in enumerate(self.role_names)
+                    }
+                    profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+
+                    self.scheduler.reduction_size_per_role = original_reduction
+                else:
+                    original_reduction = self.scheduler.reduction_size
+                    self.scheduler.reduction_size = self.scheduler.num_players
+                    profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+                    self.scheduler.reduction_size = original_reduction
             else:
                 profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
+
             
             if not profiles_to_simulate:
                 if verbose:
@@ -223,8 +235,14 @@ class EGTA:
                     print(f"Using DPR: Creating reduced game with {self.scheduler.reduction_size} players...")
                 reduced_game = self._create_reduced_game(self.game, self.scheduler.reduction_size)
                 
-                if verbose:
-                    print(f"Solving equilibria on reduced game (scaling factor: {self.scheduler.scaling_factor:.2f})")
+                if self.is_role_symmetric:
+                    sf = self.scheduler.scaling_factor_per_role
+                    pretty = ", ".join(f"{r}: {f:.2f}" for r, f in sf.items())
+                else:
+                    pretty = f"{self.scheduler.scaling_factor:.2f}"
+
+                print(f"Solving equilibria on reduced game (scaling factors – {pretty})")
+
             else:
                 reduced_game = self.game
             
@@ -304,8 +322,13 @@ class EGTA:
                             reduced_payoffs = reduced_game.deviation_payoffs(eq_mix)
                             reduced_exp_payoff = (eq_mix * reduced_payoffs).sum().item()
                             
-                            scaling_factor = self.scheduler.scaling_factor
-                            full_exp_payoff = reduced_exp_payoff * scaling_factor
+                            if self.is_role_symmetric:
+                                full_exp_payoff = (eq_mix *
+                                                self.scheduler.scale_payoffs(reduced_payoffs)).sum().item()
+                            else:
+                                scaling_factor = self.scheduler.scaling_factor
+                                full_exp_payoff = reduced_exp_payoff * scaling_factor
+
                             
                             print(f"Expected Payoff (Reduced Game): {reduced_exp_payoff:.4f}")
                             print(f"Expected Payoff (Full Game): {full_exp_payoff:.4f}")

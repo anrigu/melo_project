@@ -222,7 +222,7 @@ def run_role_symmetric_mobi_zi_egta():
             strategies=simulator.get_strategies(),  # All strategies combined
             num_players=simulator.get_num_players(),
             batch_size=batch_size,
-            reduction_size=3,  
+            reduction_size={"MOBI": 4, "ZI": 4},  
             seed=42,
             role_names=role_names,
             num_players_per_role=num_players_per_role,
