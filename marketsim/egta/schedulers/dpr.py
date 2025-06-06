@@ -10,6 +10,9 @@ from typing import Dict, List, Tuple, Any, Optional, Set, Union
 import torch
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
+from functools import lru_cache
+import numpy as np
+
 
 
 class DPRScheduler(Scheduler):
@@ -132,7 +135,7 @@ class DPRScheduler(Scheduler):
             # Symmetric game: choose strategies uniformly at random
             initial_strategies = set(self.rand.sample(self.strategies, self.subgame_size))
             self.requested_subgames.append({"Player": initial_strategies})
-    
+    '''
     def _generate_profiles_for_subgame(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
         """
         Generate all profiles for a role symmetric subgame.
@@ -149,7 +152,59 @@ class DPRScheduler(Scheduler):
             # For symmetric games, convert to old format and generate profiles
             strategies = list(subgame["Player"])
             return self._generate_symmetric_profiles(strategies)
-        
+       '''
+    def _generate_role_symmetric_profiles(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
+        """
+        Generate all full‐length profiles for a role‐symmetric subgame.
+        Uses a cached helper to enumerate {k strategies, n players} partitions exactly once.
+        """
+        profiles: List[List[Tuple[str, str]]] = []
+        role_profile_options = []
+
+        # 1) For each role, build (role_name, [strategies], [all partitions of n_r players])
+        for role_idx, role_name in enumerate(self.role_names):
+            if role_name not in subgame or not subgame[role_name]:
+                continue
+
+            strategies = list(subgame[role_name])
+            # n_r = number of players to keep for this role in the *reduced* game
+            n_r = int(min(
+                self.num_players_per_role[role_idx].item(),
+                self.reduction_size_per_role.get(role_name, self.num_players_per_role[role_idx].item())
+            ))
+
+            k = len(strategies)
+            if n_r == 0 or k == 0:
+                continue
+
+            # Use the cached integer partition helper:
+            raw_partitions = _cached_distribute_players(k, n_r)
+            # Convert each partition (tuple of length k) into a dict {strategy: count}
+            distro_dicts: List[Dict[str, int]] = []
+            for part in raw_partitions:
+                # Only keep those that sum exactly to n_r (should always be true)
+                if sum(part) == n_r:
+                    dd = {strategies[i]: part[i] for i in range(k)}
+                    distro_dicts.append(dd)
+
+            if distro_dicts:
+                role_profile_options.append((role_name, strategies, distro_dicts))
+
+        if not role_profile_options:
+            return []
+
+        # 2) Cartesian‐product over each role’s distributions
+        import itertools
+        for combo in itertools.product(*[opts[2] for opts in role_profile_options]):
+            full_profile: List[Tuple[str, str]] = []
+            for (role_name, strategies, _), distro in zip(role_profile_options, combo):
+                for strat, cnt in distro.items():
+                    full_profile.extend([(role_name, strat)] * cnt)
+            if full_profile:
+                profiles.append(full_profile)
+
+        return profiles
+ 
 
     def _n_players_for_role(self, role_name: str, role_idx: int) -> int:
         """
@@ -181,35 +236,14 @@ class DPRScheduler(Scheduler):
             if role_name not in subgame or not subgame[role_name]:
                 continue
                 
-           # role_strategies = list(subgame[role_name])
-           # role_name = self.role_names[role_idx]
-           # num_players_in_role = min(
-           #     self.num_players_per_role[role_idx],
-           #     self.reduction_size_per_role[role_name]
-           # )
+           
             role_name = self.role_names[role_idx]
             role_strategies = list(subgame[role_name])
 
-            #num_players_in_role = self._n_players_for_role(role_name, role_idx)
-            num_players_in_role = self.num_players_per_role[role_idx]
+            num_players_in_role = int(self.num_players_per_role[role_idx])
 
 
-            # use the per-role reduction if it exists, otherwise fall back to the
-            # scalar self.reduction_size
-            if hasattr(self, "reduction_size_per_role") and self.reduction_size_per_role:
-                n_r = self.reduction_size_per_role.get(
-                    role_name,                       # look up this role
-                    self.num_players_per_role[role_idx]  # default → full-game size
-                )
-            else:
-                n_r = self.reduction_size           # old behaviour
 
-            # players we actually keep for this role in the reduced game
-           # num_players_in_role = min(
-              #  self.num_players_per_role[role_idx],
-              #  self.reduction_size_per_role.get(role_name, self.reduction_size)
-           # )
-            #num_players_in_role = self._n_players_for_role(role_name, role_idx)
             
             if num_players_in_role == 0:
                 continue
@@ -548,6 +582,7 @@ class DPRScheduler(Scheduler):
             "scaling_factors": self.scaling_factor_per_role,
             "is_role_symmetric": self.is_role_symmetric,
         }
+    '''
     def missing_deviations(self, mixture: np.ndarray, game: Game) -> List[List[Tuple[str,str]]]:
         """
         Return every unevaluated one-player deviation profile of σ.
@@ -560,14 +595,48 @@ class DPRScheduler(Scheduler):
         for role, strats in support.items():
             base.append([(role, s) for s in strats])
         for pure in itertools.product(*base):
+            # `pure` is a compact list with ONE (role,strategy) per role
             pure = list(pure)
+
             for i, (role_i, strat_i) in enumerate(pure):
                 for other in self.strategy_names_per_role[self.role_names.index(role_i)]:
                     if other == strat_i:
                         continue
-                    dev = pure.copy()
-                    dev[i] = (role_i, other)
-                    if not game.has_profile(dev):
-                        missing.append(dev)
+
+                    # --- build compact dev profile ---------------------------
+                    dev_compact = pure.copy()
+                    dev_compact[i] = (role_i, other)
+
+                    # --- EXPAND to a full-length profile --------------------
+                    dev_full = []
+                    for role_name, strat_name in dev_compact:
+                        n_players = int(game.num_players_per_role[
+                                        game.role_names.index(role_name)].item())
+                        dev_full.extend([(role_name, strat_name)] * n_players)
+                    # ---------------------------------------------------------
+                    #print(f"Profiles to simulate: {dev_full}")
+                    if not game.has_profile(dev_full):
+                        missing.append(dev_full)
+
         return missing
+
+        '''
+@lru_cache(maxsize=128)
+def _cached_distribute_players(k: int, n: int) -> Tuple[Tuple[int, ...], ...]:
+    """
+    Return all ways to assign `n` players over `k` strategies as tuples of length k.
+    Cached so that (_cached_distribute_players(k,n)) is reused.
+    """
+    distributions = []
+
+    def rec(strats_left: int, players_left: int, current: list):
+        if strats_left == 1:
+            # Assign all remaining players to the last strategy
+            distributions.append(tuple(current + [players_left]))
+            return
+        for x in range(players_left + 1):
+            rec(strats_left - 1, players_left - x, current + [x])
+
+    rec(k, n, [])
+    return tuple(distributions)
 

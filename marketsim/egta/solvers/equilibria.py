@@ -1097,29 +1097,22 @@ async def quiesce(
                     other_pct = int((1.0 - primary_weight) * 100)
                     print(f"Added {weight_pct}/{other_pct} skewed candidate favoring {strategy_name}")
     
-    # Add additional diverse random starting points for maximum exploration
-    additional_random_starts = max(50, num_random_starts * 2)  # More diverse random starts
+    additional_random_starts = max(50, num_random_starts * 2)
     for i in range(additional_random_starts):
         if game.is_role_symmetric:
-            # Generate role symmetric random mixture
             rand_mixture = torch.zeros(game.num_strategies, device=game.game.device)
             global_idx = 0
             
             for role_strategies in game.strategy_names_per_role:
                 num_role_strats = len(role_strategies)
                 if num_role_strats > 0:
-                    # Generate different types of random distributions for diversity
                     if i % 4 == 0:
-                        # Pure random (uniform distribution)
                         role_random = torch.rand(num_role_strats, device=game.game.device)
                     elif i % 4 == 1:
-                        # Dirichlet-like (more extreme distributions)
                         role_random = torch.rand(num_role_strats, device=game.game.device) ** 2
                     elif i % 4 == 2:
-                        # Concentrated (favor one strategy heavily)
                         role_random = torch.rand(num_role_strats, device=game.game.device) ** 0.5
                     else:
-                        # Uniform-ish (less extreme)
                         role_random = torch.rand(num_role_strats, device=game.game.device) + 0.5
                     
                     # Normalize this role to sum to 1
@@ -1127,24 +1120,17 @@ async def quiesce(
                     rand_mixture[global_idx:global_idx + num_role_strats] = role_random
                 global_idx += num_role_strats
         else:
-            # Generate different types of random mixtures for diversity (symmetric games)
             if i % 4 == 0:
-                # Pure random (uniform distribution)
                 rand_mixture = torch.rand(game.num_strategies, device=game.game.device)
             elif i % 4 == 1:
-                # Dirichlet-like (more extreme distributions)
                 rand_mixture = torch.rand(game.num_strategies, device=game.game.device) ** 2
             elif i % 4 == 2:
-                # Concentrated (favor one strategy heavily)
                 rand_mixture = torch.rand(game.num_strategies, device=game.game.device) ** 0.5
             else:
-                # Uniform-ish (less extreme)
                 rand_mixture = torch.rand(game.num_strategies, device=game.game.device) + 0.5
             
-            # Normalize to sum to 1
             rand_mixture = rand_mixture / rand_mixture.sum()
         
-        # Apply MELO/non-MELO biasing for some candidates (only if game has strategy names)
         if hasattr(game, 'strategy_names') and game.strategy_names and i < additional_random_starts // 4:
             melo_mask = torch.zeros(game.num_strategies, dtype=torch.bool, device=game.game.device)
             for idx, strategy_name in enumerate(game.strategy_names):
@@ -1193,7 +1179,6 @@ async def quiesce(
         )
         unconfirmed_candidates.append(rand_candidate)
         
-        # Update maximal subgames
         if len(support) <= restricted_game_size:
             support_set = frozenset(support)
             is_contained = False
@@ -1268,7 +1253,17 @@ async def quiesce(
                         print(f"Added new maximal subgame: {restriction}")
             
             # Create restricted game
-            restricted_game = game.restrict(restriction)
+            #restricted_game = game.restrict(restriction)
+            if hasattr(game.game, "restriction_indices"):
+                parent_rsg = game.game.full_game_reference
+                new_rsg = parent_rsg.restrict(restriction)
+                new_rsg.full_game_reference = parent_rsg
+                restricted_game = Game(new_rsg, game.metadata)
+            else:
+                new_rsg = game.game.restrict(restriction)
+                new_rsg.full_game_reference = game.game
+                restricted_game = Game(new_rsg, game.metadata)
+
             
             # Create initial mixture for the restricted game
             if restricted_game.is_role_symmetric:
@@ -1455,97 +1450,89 @@ async def test_deviations(
     maximal_subgames=None,
     verbose=False
 ):
-    num_strategies = game.num_strategies
-    
-    #if metadata exists and dpr_reduced is True, then we're testing against reduced game
-    is_testing_reduced_game = (hasattr(game, 'metadata') and game.metadata and 
-                              game.metadata.get('dpr_reduced', False) == True)
-    
-    if verbose and hasattr(game, 'metadata') and game.metadata:
-        if game.metadata.get('dpr_reduced', False):
-            print(f"    Testing deviations against REDUCED game ({game.num_players} players)")
-        else:
-            original_players = game.metadata.get('original_players')
-            if original_players and original_players != game.num_players:
-                print(f"Testing deviations against FULL game ({game.num_players} players, was reduced from {original_players})")
-            else:
-                print(f" Testing deviations against FULL game ({game.num_players} players)")
-    elif verbose:
-        print(f"Testing deviations against game ({game.num_players} players)")
-    
+    """
+    Test for beneficial deviations. If `game` is a restricted subgame (has attribute
+    `restriction_indices`), lift both the mixture and any deviating strategy back to
+    the full game before pushing into the queue.
+    """
+    # Determine if we're in a restricted subgame
+    is_restricted = hasattr(game, "restriction_indices")
+    if is_restricted:
+        # 'restriction_indices' maps local subgame indices → full‐game indices
+        full_game = game.full_game_reference  # see note below
+        restriction_list = game.restriction_indices
+
+        # Build a full‐length mixture from the restricted 'mixture'
+        full_mixture = torch.zeros(full_game.num_strategies, device=full_game.game.device)
+        for local_i, full_i in enumerate(restriction_list):
+            full_mixture[full_i] = mixture[local_i]
+    else:
+        full_game = game
+        full_mixture = mixture.clone()
+
+    # Now compute deviation payoffs inside the current 'game' (restricted or full)
     dev_payoffs = game.deviation_payoffs(mixture)
-    
-    if torch.is_tensor(dev_payoffs) and (torch.isnan(dev_payoffs).any() or torch.isinf(dev_payoffs).any()):
+
+    # Clean up any NaN/Inf before computing gains
+    if torch.isnan(dev_payoffs).any() or torch.isinf(dev_payoffs).any():
         if verbose:
-            print(f"Warning: NaN or Inf in deviation payoffs. Fixing values.")
+            print("    Warning: NaN or Inf in deviation payoffs. Clamping.")
         dev_payoffs = torch.nan_to_num(dev_payoffs, nan=0.0, posinf=10.0, neginf=-10.0)
-        #dev_payoffs = torch.clamp(dev_payoffs, min=-10.0, max=10.0)
-        
-    # Calculate expected payoff for the mixture - safely
-    expected_payoff_values = mixture * dev_payoffs
-    if torch.isnan(expected_payoff_values).any() or torch.isinf(expected_payoff_values).any():
-        expected_payoff_values = torch.nan_to_num(expected_payoff_values, nan=0.0, posinf=0.0, neginf=0.0)
-    
-    expected_payoff = expected_payoff_values.sum()
-    
+
+    # Compute expected payoff under 'mixture'
+    expected_payoff = (mixture * dev_payoffs).sum()
+
+    # Gains = u(s) − u(μ)
     gains = dev_payoffs - expected_payoff
-    #gains = torch.clamp(gains, min=-10.0, max=10.0)
-    
+
     has_beneficial = False
     beneficial_strategies = []
+
+    # Build the set of currently‐played strategies in the restricted space
+    support_local = {i for i, p in enumerate(mixture) if p.item() > 0.01}
     
-    for s in range(num_strategies):
-        support = set([i for i, p in enumerate(mixture) if p > 0.01])
-        
-        if s in support:
+    for local_s in range(game.num_strategies):
+        if local_s in support_local:
             continue
-        
-        gain = gains[s].item() if torch.is_tensor(gains[s]) else gains[s]
-        
-        if np.isnan(gain) or np.isinf(gain):
+
+        local_gain = gains[local_s].item()
+        if np.isnan(local_gain) or np.isinf(local_gain):
             if verbose:
-                print(f"    Warning: NaN/Inf gain for strategy {s}. Skipping.")
+                full_s = restriction_list[local_s] if is_restricted else local_s
+                print(f"    Warning: NaN/Inf gain for strategy {full_s}. Skipping.")
             continue
-        
-        if gain > regret_threshold:
+
+        if local_gain > regret_threshold:
             has_beneficial = True
-            beneficial_strategies.append((s, gain))
-            
-            new_support = support.union({s})
-            
-            if len(new_support) <= restricted_game_size:
-                should_explore = True
-                if maximal_subgames is not None:
-                    new_support_set = frozenset(new_support)
-                    for maximal_set in maximal_subgames:
-                        if new_support_set.issubset(maximal_set):
-                            # Skip if the subgame is already contained
-                            if verbose:
-                                print(f"    Skipping deviation to {game.strategy_names[s]} as it's already within a maximal subgame")
-                            should_explore = False
-                            break
-                
-                if should_explore:
-                    # Add to queue for exploration
-                    deviation_queue.push(gain, s, mixture)
-                    
-                    if verbose:
-                        game_type = "REDUCED" if is_testing_reduced_game else "FULL"
-                        print(f"Found beneficial deviation to {game.strategy_names[s]} "
-                              f"with gain {gain:.6f} (vs {game_type} game)")
+
+            if is_restricted:
+                full_s = restriction_list[local_s]
+            else:
+                full_s = local_s
+
+            beneficial_strategies.append((full_s, local_gain))
+
+            new_support_full = {i for i, p in enumerate(full_mixture) if p.item() > 0.01}
+            new_support_full.add(full_s)
+
+            if len(new_support_full) <= restricted_game_size:
+                deviation_queue.push(local_gain, full_s, full_mixture)
+
+                if verbose:
+                    print(f"    Queued deviation to full‐game strategy {full_s} with gain {local_gain:.6f}")
             else:
                 if verbose:
-                    print(f"    Skipping deviation to {game.strategy_names[s]} as it would exceed restricted game size")
-    
-    # If no beneficial deviations, this is an equilibrium
+                    print(f"    Skipping deviation to {full_s} (would exceed restricted size)")
+
+    # If no beneficial deviations in *any* local_s, it's an equilibrium in the current 'game'
     if not has_beneficial:
         if verbose:
-            game_type = "REDUCED" if is_testing_reduced_game else "FULL"
-            print(f"    Found equilibrium with regret {game.regret(mixture):.6f} (vs {game_type} game): "
-                  f"{format_mixture(mixture, game.strategy_names)}")
+            context = "restricted game" if is_restricted else "full game"
+            print(f"    Found equilibrium w.r.t. {context} (regret ≤ {regret_threshold:.6f})")
         return True, []
-        
+
     return False, beneficial_strategies
+
 
 
 async def test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames=None, verbose=False, full_game: Optional[Game] = None):

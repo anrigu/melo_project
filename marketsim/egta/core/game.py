@@ -230,8 +230,10 @@ class Game:
             'payoff_mean': rsg.offset if normalize_payoffs else 0.0,
             'payoff_std': rsg.scale if normalize_payoffs else 1.0
         }
+
+    
         
-        return cls(rsg, metadata)
+        return cls(rsg, metadata) 
     
     @classmethod
     def _create_symmetric_game(cls, 
@@ -411,7 +413,6 @@ class Game:
                 if regret_mixed < 1e-3:
                     equilibria.append((mixed, regret_mixed))
         
-        # If no equilibria found (rare), fall back to replicator dynamics
         if not equilibria:
             print("No equilibria found using direct computation. Falling back to replicator dynamics.")
             from marketsim.egta.solvers.equilibria import replicator_dynamics, regret
@@ -429,14 +430,18 @@ class Game:
     def restrict(self, restriction_indices: List[int]) -> 'Game':
         """Create a restricted game."""
         if self.is_role_symmetric:
-            restricted_game = self.game.restrict(restriction_indices)
+            restricted_rsg = self.game.restrict(restriction_indices)
         else:
-            # For symmetric games, create restriction mask
-            restriction_mask = torch.zeros(self.num_strategies, dtype=torch.bool)
+            restriction_mask = torch.zeros(self.num_strategies, dtype=torch.bool, device=self.game.game.device)
             restriction_mask[restriction_indices] = True
-            restricted_game = self.game.restrict(restriction_mask)
-        
-        return Game(restricted_game, self.metadata)
+            restricted_rsg = self.game.restrict(restriction_mask)
+
+        restricted_rsg.restriction_indices = restriction_indices
+
+        restricted_rsg.full_game_reference = self.game
+
+        return Game(restricted_rsg, self.metadata)
+
     
     def __repr__(self):
         game_type = "RoleSymmetricGame" if self.is_role_symmetric else "SymmetricGame"
