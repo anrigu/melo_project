@@ -139,84 +139,52 @@ def role_aware_normalize(mixture: torch.Tensor, game: Game) -> torch.Tensor:
     return normalized
 
 
-def multi_population_replicator_step(mixture: torch.Tensor, game: Game, offset: float = 0.0, dt: float = 0.01) -> torch.Tensor:
+def multi_population_replicator_step(mixture: torch.Tensor, game: Game, offset: float = 0.0, dt: float = 0.01, regrets: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Perform one step of multi-population replicator dynamics following the exact mathematical formulation.
-    
+    Perform one step of multi-population replicator dynamics using the
+    discrete-time update rule, which is numerically stable and correct.
+
     For each role r and strategy i:
-    dx_{r,i} = x_{r,i} * (u_{r,i}(x) - u_bar_r(x))
-    where u_bar_r(x) = sum_j x_{r,j} * u_{r,j}(x)
+    x_{r,i}(t+1) = x_{r,i}(t) * u_{r,i}(x) / u_bar_r(x)
+    where payoffs u are shifted to be positive.
     
     Args:
         mixture: Current mixture tensor where each role sums to 1
         game: Game instance  
-        offset: Offset parameter
-        dt: Time step size
+        offset: Offset parameter (unused)
+        dt: Time step size (unused)
         
     Returns:
         Updated mixture tensor
     """
-    if not game.is_role_symmetric:
-        # Fall back to standard replicator dynamics for symmetric games
-        payoffs = game.deviation_payoffs(mixture)
-        shifted_payoffs = payoffs - offset
-        return simplex_normalize(mixture * shifted_payoffs)
-    
-    # Multi-population replicator dynamics
-    # Step 1: Compute payoffs for all pure strategies using the full joint state
-    payoffs = game.deviation_payoffs(mixture)  # u_{r,i}(x) for all strategies
-    
-    # Step 2: Apply replicator dynamics separately for each role
-    deriv_pieces = []
+    payoffs = torch.nan_to_num(game.deviation_payoffs(mixture), nan=0.0)
+
+    # For the multiplicative update rule, payoffs must be positive.
+    min_payoff = torch.min(payoffs)
+    shift = -min_payoff + 1 if min_payoff < 0 else 0
+    shifted_payoffs = payoffs + shift
+
+    next_mixture = mixture.clone()
     global_idx = 0
-    
-    for role_idx, role_strategies in enumerate(game.strategy_names_per_role):
+
+    for role_strategies in game.strategy_names_per_role:
         num_role_strats = len(role_strategies)
         if num_role_strats == 0:
+            global_idx += num_role_strats
             continue
-            
+
         role_slice = slice(global_idx, global_idx + num_role_strats)
+        x_r = mixture[role_slice]
+        u_r_shifted = shifted_payoffs[role_slice]
+
+        phi_r_shifted = (x_r * u_r_shifted).sum()
+
+        if phi_r_shifted > 1e-9:
+            next_mixture[role_slice] = x_r * u_r_shifted / phi_r_shifted
         
-        # Extract current role mixture and payoffs: x_r and u_r
-        x_r = mixture[role_slice]  # Should sum to 1
-        u_r = payoffs[role_slice]  # Payoffs for this role's strategies
-        
-        # Compute average payoff for this role: phi_r = sum_j x_{r,j} * u_{r,j}
-        phi_r = (x_r * u_r).sum()
-        
-        # Apply replicator equation for this role: dx_r = x_r * (u_r - phi_r - offset)
-        dx_r = x_r * (u_r - phi_r - offset)
-        
-        deriv_pieces.append(dx_r)
         global_idx += num_role_strats
-    
-    # Step 3: Concatenate derivatives and take Euler step
-    deriv_flat = torch.cat(deriv_pieces)
-    next_mixture = mixture + dt * deriv_flat
-    
-    # Step 4: Renormalize each role slice independently to maintain simplex constraints
-    global_idx = 0
-    for role_idx, role_strategies in enumerate(game.strategy_names_per_role):
-        num_role_strats = len(role_strategies)
-        if num_role_strats == 0:
-            continue
-            
-        role_slice = slice(global_idx, global_idx + num_role_strats)
-        
-        # Clamp to avoid negative values
-        next_mixture[role_slice] = torch.clamp(next_mixture[role_slice], min=1e-10)
-        
-        # Renormalize this role's slice to sum to 1
-        role_sum = next_mixture[role_slice].sum()
-        if role_sum > 1e-10:
-            next_mixture[role_slice] = next_mixture[role_slice] / role_sum
-        else:
-            # If role goes to zero, reset to uniform distribution
-            next_mixture[role_slice] = 1.0 / num_role_strats
-            
-        global_idx += num_role_strats
-    
-    return next_mixture
+
+    return next_mixture, None  # No regrets to return in this version.
 
 
 def create_role_symmetric_mixture(game: Game, device: str) -> torch.Tensor:
@@ -482,22 +450,10 @@ def replicator_dynamics(game: Game,
     
     prev_mixture = None
     for i in range(iters):
-        if game.is_role_symmetric:
-            # Use multi-population replicator dynamics
-            new_mixture = multi_population_replicator_step(mixture.squeeze(1) if is_vector else mixture, game, offset)
-            if is_vector:
-                new_mixture = new_mixture.reshape(-1, 1)
-        else:
-            # Use standard replicator dynamics for symmetric games
-            payoffs = game.deviation_payoffs(mixture)
-            
-            # Handle case where payoffs is 1D but mixture is 2D
-            if len(mixture.shape) == 2 and len(payoffs.shape) == 1:
-                payoffs = payoffs.unsqueeze(1)
-            
-            shifted_payoffs = payoffs - offset
-            new_mixture = simplex_normalize(mixture * shifted_payoffs)
-        
+        new_mixture, _ = multi_population_replicator_step(mixture.squeeze(1) if is_vector else mixture, game)
+        if is_vector:
+            new_mixture = new_mixture.reshape(-1, 1)
+
         # Check for convergence
         if prev_mixture is not None and torch.max(torch.abs(new_mixture - prev_mixture)) < converge_threshold:
             break
@@ -1562,7 +1518,9 @@ async def test_candidate(candidate, game, regret_threshold, deviation_queue, res
         regret_val = test_game.regret(mixture)
         
         # Handle NaN regret
-        if torch.is_tensor(regret_val) and (torch.isnan(regret_val) or torch.isinf(regret_val)):
+        if torch.is_tensor(regret_val) and (
+            torch.isnan(regret_val).any() or torch.isinf(regret_val).any()
+        ):
             if verbose:
                 print(f"    Warning: Detected NaN/Inf regret for candidate. Setting high regret.")
             regret_val = torch.tensor(1.0, device=mixture.device)

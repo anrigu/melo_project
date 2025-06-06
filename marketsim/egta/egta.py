@@ -242,6 +242,40 @@ class EGTA:
                     print(f"Reached profile budget ({self.max_profiles}).")
                 break
         total_time = time.time() - start_time
+
+        # --------------------------------------------------------------------
+        # FINAL EQUILIBRIUM VERIFICATION VIA QUIESCE
+        # --------------------------------------------------------------------
+        try:
+            if verbose:
+                print("\nRunning QUIESCE final verification …")
+
+            # Always pass a full-game reference. When DPR is not used, this is
+            # just `self.game`; when DPR *is* used the reduced game should be
+            # supplied as the first argument and the full game as `full_game`.
+            # In our current architecture we only maintain the full game, so we
+            # invoke quiesce on that object directly.
+
+            quiesce_eqs = quiesce_sync(
+                game=self.game,          # current empirical game (full)
+                full_game=self.game,     # test deviations in the same game
+                verbose=verbose,
+                **quiesce_kwargs,
+            )
+
+            # quiesce_sync returns a list[(mixture, regret)]
+            if quiesce_eqs:
+                self.equilibria = quiesce_eqs
+                if verbose:
+                    print(f"QUIESCE found {len(self.equilibria)} equilibria")
+        except Exception as e:
+            if verbose:
+                print(f"QUIESCE failed: {e}")
+
+        # --------------------------------------------------------------------
+        # PRINT SUMMARY AND RETURN
+        # --------------------------------------------------------------------
+        total_time = time.time() - start_time
         if verbose:
             print(f"\nEGTA completed in {total_time:.2f} seconds")
             print(f"Simulated {total_profiles} profiles")

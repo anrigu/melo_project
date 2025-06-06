@@ -11,6 +11,32 @@ from marketsim.simulator.melo_simulator import MELOSimulatorSampledArrival
 from marketsim.agent.zero_intelligence_agent import ZIAgent
 from marketsim.agent.melo_agent import MeloAgent
 from marketsim.fourheap.constants import BUY, SELL
+import concurrent.futures as cf  # ↳ for parallel repetitions
+
+
+# ---------------------------------------------------------------------------
+# Helper for parallel execution (must be top-level to be picklable)
+# ---------------------------------------------------------------------------
+
+
+def _run_melo_single_rep(args):
+    """Run one MELO simulation repetition and return the `values` dict."""
+
+    (
+        rep_seed,
+        sim_kwargs,
+    ) = args
+
+    # Local seeding to avoid identical streams across workers
+    import random, numpy as np
+
+    random.seed(rep_seed)
+    np.random.seed(rep_seed & 0xFFFF_FFFF)  # within 32-bit range
+
+    sim = MELOSimulatorSampledArrival(**sim_kwargs)
+    sim.run()
+    values = sim.end_sim()[0]  # first element is payoff dict
+    return values
 
 
 class MeloSimulator(Simulator):
@@ -234,103 +260,49 @@ class MeloSimulator(Simulator):
                         # We'll assign them to MOBI role for simplicity
                         role_strategy_counts["MOBI"][strategy_name] = count
         
-        # Prepare result container
-        all_results = []
-        
-        # Run multiple repetitions
-        for rep_idx in tqdm(range(self.reps)):
-            # Create background population
-            num_background = self.num_background_zi + self.num_background_hbl
-            
-            # Initialize simulator with role-based strategy assignments
-            sim = MELOSimulatorSampledArrival(
-                num_background_agents=num_background,
-                sim_time=self.sim_time,
-                num_zi=self.num_background_zi,
-                num_hbl=self.num_background_hbl,
-                num_strategic=self.get_num_players(),
-                num_assets=self.num_assets,
-                lam=self.lam,
-                mean=self.mean,
-                r=self.r,
-                shock_var=self.shock_var,
-                q_max=self.q_max,
-                pv_var=self.pv_var,
-                shade=self.shade,
-                eta=self.eta,
-                lam_r=self.lam_r,
-                holding_period=self.holding_period,
-                lam_melo=self.lam_melo,
-                role_strategy_counts=role_strategy_counts,
-                strategy_params=self.strategy_params,
-                role_names=self.role_names
-            )
-            
-            # Run the simulation
-            sim.run()
-            
-            # Get final values and profits
-            sim_results = sim.end_sim()
-            values = sim_results[0]  # Dictionary of agent values
-            
-            # Collect results for this repetition
-            results = []
-            player_id = 0
-            
-            if is_role_symmetric_profile:
-                # Process results by role (role symmetric format)
-                for role_idx, role_name in enumerate(self.role_names):
-                    role_strategies = role_strategy_counts[role_name]
-                    for strategy_name, count in role_strategies.items():
-                        for _ in range(count):
-                            agent_id = num_background + player_id
-                            
-                            if agent_id in values:
-                                total_payoff = float(values[agent_id])
-                            else:
-                                print(f"Warning: Agent {agent_id} not found in values. Using default payoff.")
-                                total_payoff = 0.0
-                            
-                            results.append((f"player_{player_id}", role_name, strategy_name, total_payoff))
-                            player_id += 1
-            else:
-                # Process results for symmetric format - return as 3-element tuples
-                if self.force_symmetric:
-                    # In symmetric mode, only process MOBI strategies
-                    for strategy_name, count in role_strategy_counts["MOBI"].items():
-                        for _ in range(count):
-                            agent_id = num_background + player_id
-                            
-                            if agent_id in values:
-                                total_payoff = float(values[agent_id])
-                            else:
-                                print(f"Warning: Agent {agent_id} not found in values. Using default payoff.")
-                                total_payoff = 0.0
-                            
-                            # For symmetric games, use 3-element format: (player_id, strategy_name, payoff)
-                            results.append((f"player_{player_id}", strategy_name, total_payoff))
-                            player_id += 1
-                else:
-                    # Original symmetric processing
-                    for original_role_name, strategy_name in profile:
-                        agent_id = num_background + player_id
-                        
-                        if agent_id in values:
-                            total_payoff = float(values[agent_id])
-                        else:
-                            print(f"Warning: Agent {agent_id} not found in values. Using default payoff.")
-                            total_payoff = 0.0
-                        
-                        # For symmetric games, use 3-element format: (player_id, strategy_name, payoff)
-                        results.append((f"player_{player_id}", strategy_name, total_payoff))
-                        player_id += 1
-            
-            all_results.append(results)
-        
+        # ------------------------------------------------------------------
+        # PARALLEL REPETITIONS: spawn up to CPU count workers
+        # ------------------------------------------------------------------
+
+        # Common kwargs for every repetition
+        num_background = self.num_background_zi + self.num_background_hbl
+
+        base_kwargs = dict(
+            num_background_agents=num_background,
+            sim_time=self.sim_time,
+            num_zi=self.num_background_zi,
+            num_hbl=self.num_background_hbl,
+            num_strategic=self.get_num_players(),
+            num_assets=self.num_assets,
+            lam=self.lam,
+            mean=self.mean,
+            r=self.r,
+            shock_var=self.shock_var,
+            q_max=self.q_max,
+            pv_var=self.pv_var,
+            shade=self.shade,
+            eta=self.eta,
+            lam_r=self.lam_r,
+            holding_period=self.holding_period,
+            lam_melo=self.lam_melo,
+            role_strategy_counts=role_strategy_counts,
+            strategy_params=self.strategy_params,
+            role_names=self.role_names,
+        )
+
+        # Dispatch repetitions in parallel
+        with cf.ProcessPoolExecutor() as pool:
+            seeds = [random.randint(0, 2**32 - 1) for _ in range(self.reps)]
+            iter_args = [(s, base_kwargs) for s in seeds]
+            values_per_rep = list(tqdm(pool.map(_run_melo_single_rep, iter_args), total=self.reps))
+
+        # ------------------------------------------------------------------
         # Aggregate results across repetitions
+        # ------------------------------------------------------------------
+
         aggregated_results = []
         
-        if not all_results:
+        if not values_per_rep:
             print("Warning: All simulation repetitions failed! Returning default payoffs of 0.")
             player_id = 0
             if self.force_symmetric:
@@ -357,20 +329,18 @@ class MeloSimulator(Simulator):
             for role_name, strategy_name in profile:
                 # Get payoffs for this player across all repetitions
                 payoffs = []
-                for rep in all_results:
-                    try:
-                        if player_id < len(rep):
-                            payoff = rep[player_id][2]  # payoff is the 3rd element in symmetric
-                            if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
-                                payoffs.append(float(payoff))
-                    except (IndexError, TypeError):
-                        pass
+                for values in values_per_rep:
+                    agent_id = num_background + player_id
+                    if agent_id in values:
+                        payoff = values[agent_id]
+                        if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
+                            payoffs.append(float(payoff))
                 
                 # Calculate average payoff
                 if payoffs:
                     avg_payoff = sum(payoffs) / len(payoffs)
                 else:
-                    print(f"Warning: No valid payoffs for player {player_id} with strategy {strategy_name}. Using default value of 0.")
+                    # agent made no trades; treat as zero-profit
                     avg_payoff = 0.0
                 
                 # Symmetric format: (player_id, strategy_name, payoff)
@@ -381,23 +351,18 @@ class MeloSimulator(Simulator):
             for role_name, strategy_name in profile:
                 # Get payoffs for this player across all repetitions
                 payoffs = []
-                for rep in all_results:
-                    try:
-                        if player_id < len(rep):
-                            if is_role_symmetric_profile:
-                                payoff = rep[player_id][3]  # payoff is the 4th element in role symmetric
-                            else:
-                                payoff = rep[player_id][2]  # payoff is the 3rd element in symmetric
-                            if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
-                                payoffs.append(float(payoff))
-                    except (IndexError, TypeError):
-                        pass
+                for values in values_per_rep:
+                    agent_id = num_background + player_id
+                    if agent_id in values:
+                        payoff = values[agent_id]
+                        if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
+                            payoffs.append(float(payoff))
                 
                 # Calculate average payoff
                 if payoffs:
                     avg_payoff = sum(payoffs) / len(payoffs)
                 else:
-                    print(f"Warning: No valid payoffs for player {player_id} with role {role_name}, strategy {strategy_name}. Using default value of 0.")
+                    # agent made no trades; treat as zero-profit
                     avg_payoff = 0.0
                 
                 if is_role_symmetric_profile:

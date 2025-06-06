@@ -151,8 +151,8 @@ def run_role_symmetric_mobi_zi_egta():
     """
     Run EGTA with role symmetric games where both MOBI and ZI agents are strategic.
     """
-    num_strategic_mobi = 28
-    num_strategic_zi = 40
+    num_strategic_mobi = 15
+    num_strategic_zi = 30
     holding_periods = [160]
     
     all_results = []
@@ -163,8 +163,8 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"{'='*60}")
     
         sim_time = 8000  
-        num_iterations = 10
-        batch_size = 40
+        num_iterations = 3
+        batch_size = 4
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -199,7 +199,7 @@ def run_role_symmetric_mobi_zi_egta():
             lam_melo=0.001,      
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=10,              # Reduced for faster testing
+            reps=1000,              # Reduced for faster testing
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies
         )
@@ -251,8 +251,8 @@ def run_role_symmetric_mobi_zi_egta():
             quiesce_kwargs={
                 'num_iters': 50,
                 'num_random_starts': 60,
-                'regret_threshold': 1e-3,
-                'dist_threshold': 1e-2,
+                'regret_threshold': 1e-4,
+                'dist_threshold': 5e-2,
                 'solver': 'replicator',
                 'solver_iters': 3000,
                 'restricted_game_size': 4
@@ -260,6 +260,16 @@ def run_role_symmetric_mobi_zi_egta():
         )
         end_time = time.time()
         print(f"Role Symmetric EGTA completed in {end_time - start_time:.2f} seconds")
+        
+        # --------------------------------------------------------------
+        #  De-duplicate numerically identical equilibria
+        # --------------------------------------------------------------
+        if egta.equilibria:
+            before = len(egta.equilibria)
+            egta.equilibria = unique_equilibria(egta.equilibria, tol=1e-2)
+            after = len(egta.equilibria)
+            if after < before:
+                print(f"Removed {before-after} numerically identical equilibria (now {after}).")
         
         # Verify equilibria are properly role symmetric
         if egta.equilibria and game.is_role_symmetric:
@@ -354,7 +364,6 @@ def run_role_symmetric_mobi_zi_egta():
                 
                 try:
                     dev_payoffs = game.deviation_payoffs(mixture)
-                    # Calculate expected payoff weighted by mixture
                     expected_welfare = (mixture * dev_payoffs).sum().item()
                 except Exception as e:
                     print(f"Error calculating welfare for equilibrium {i+1}: {e}")
@@ -604,15 +613,20 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
     print(f"Comprehensive role symmetric results saved to: {results_dir}")
     return results_dir
 
+def unique_equilibria(eq_list, tol=1e-3):
+    uniq = []
+    for mix, reg in eq_list:
+        if all(torch.norm(mix - m, p=1) > tol for m,_ in uniq):
+            uniq.append((mix, reg))
+    return uniq
+
 if __name__ == "__main__":
     os.makedirs("results/rsg_mobi_zi_egta", exist_ok=True)
     game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta()
     
-    # Run basin of attraction analysis if we have an equilibrium
     if eq_mixture is not None:
         basin_results = analyze_basins_of_attraction_rsg(game, num_points=50, iters=3000)
         
-        # Save comprehensive results with basin analysis
         results_dir = save_comprehensive_rsg_results(
             egta, game, welfare_data, labels, experiment_params, 
             basin_results=basin_results

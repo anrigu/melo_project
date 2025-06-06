@@ -135,7 +135,7 @@ class DPRScheduler(Scheduler):
             # Symmetric game: choose strategies uniformly at random
             initial_strategies = set(self.rand.sample(self.strategies, self.subgame_size))
             self.requested_subgames.append({"Player": initial_strategies})
-    '''
+    
     def _generate_profiles_for_subgame(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
         """
         Generate all profiles for a role symmetric subgame.
@@ -152,7 +152,7 @@ class DPRScheduler(Scheduler):
             # For symmetric games, convert to old format and generate profiles
             strategies = list(subgame["Player"])
             return self._generate_symmetric_profiles(strategies)
-       '''
+       
     def _generate_role_symmetric_profiles(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
         """
         Generate all full‐length profiles for a role‐symmetric subgame.
@@ -193,7 +193,7 @@ class DPRScheduler(Scheduler):
         if not role_profile_options:
             return []
 
-        # 2) Cartesian‐product over each role’s distributions
+        # 2) Cartesian‐product over each role's distributions
         import itertools
         for combo in itertools.product(*[opts[2] for opts in role_profile_options]):
             full_profile: List[Tuple[str, str]] = []
@@ -455,7 +455,7 @@ class DPRScheduler(Scheduler):
                 role_payoffs = torch.nan_to_num(
                     scaled_payoffs[global_strategy_idx:
                                 global_strategy_idx + len(role_strategies)],
-                    nan=np.inf,  # treat “missing” as best-possible payoff
+                    nan=np.inf,  # treat "missing" as best-possible payoff
                 )
                 # Get top strategies for this role
                 sorted_indices = np.argsort(-role_payoffs.cpu().numpy())
@@ -582,7 +582,7 @@ class DPRScheduler(Scheduler):
             "scaling_factors": self.scaling_factor_per_role,
             "is_role_symmetric": self.is_role_symmetric,
         }
-    '''
+    
     def missing_deviations(self, mixture: np.ndarray, game: Game) -> List[List[Tuple[str,str]]]:
         """
         Return every unevaluated one-player deviation profile of σ.
@@ -603,24 +603,36 @@ class DPRScheduler(Scheduler):
                     if other == strat_i:
                         continue
 
-                    # --- build compact dev profile ---------------------------
+                    # --- build compact dev profile (one deviator) -----------
                     dev_compact = pure.copy()
-                    dev_compact[i] = (role_i, other)
+                    dev_compact[i] = (role_i, other)  # single deviator in role_i
 
-                    # --- EXPAND to a full-length profile --------------------
+                    # --- EXPAND: all but ONE player stay with original strat_i
                     dev_full = []
-                    for role_name, strat_name in dev_compact:
-                        n_players = int(game.num_players_per_role[
-                                        game.role_names.index(role_name)].item())
-                        dev_full.extend([(role_name, strat_name)] * n_players)
-                    # ---------------------------------------------------------
-                    #print(f"Profiles to simulate: {dev_full}")
+                    for role_idx2, (role_name2, strat_name2) in enumerate(dev_compact):
+                        n_players = int(
+                            game.num_players_per_role[role_idx2].item()
+                        )
+
+                        if role_idx2 == i:  # this is the deviating role
+                            # one player uses strat_name2 (the deviation)
+                            dev_full.append((role_name2, strat_name2))
+                            # the remaining players keep the original strategy
+                            orig_strat = pure[i][1]
+                            dev_full.extend(
+                                [(role_name2, orig_strat)] * (n_players - 1)
+                            )
+                        else:
+                            # all players stick with strat_name2
+                            dev_full.extend([(role_name2, strat_name2)] * n_players)
+                     # ---------------------------------------------------------
+                     #print(f"Profiles to simulate: {dev_full}")
                     if not game.has_profile(dev_full):
                         missing.append(dev_full)
 
         return missing
 
-        '''
+        
 @lru_cache(maxsize=128)
 def _cached_distribute_players(k: int, n: int) -> Tuple[Tuple[int, ...], ...]:
     """
