@@ -536,3 +536,63 @@ def test_dpr_scaling_empirical():
     expected_full[2:] *= f2
 
     assert torch.allclose(scheduler.scale_payoffs(pay_reduced), expected_full) 
+
+# ---------- 7. Large synthetic RSG smoke-test ----------------------------
+
+def _build_large_random_game(num_roles=3, strats_per_role=5, players_per_role=3, n_configs=300, seed=0):
+    """Return Game wrapper around a random RoleSymmetricGame of moderate size."""
+    import numpy as np
+    from marketsim.game.role_symmetric_game import RoleSymmetricGame
+
+    rng = np.random.default_rng(seed)
+
+    role_names = [f"R{i}" for i in range(num_roles)]
+    strategies_per_role = [[f"S{j}" for j in range(strats_per_role)] for _ in range(num_roles)]
+
+    num_strategies = num_roles * strats_per_role
+    base_pay = rng.standard_normal(num_strategies)
+
+    cfg_rows = []
+    pay_rows = np.full((num_strategies, n_configs), np.nan, dtype=np.float32)
+
+    for cfg_idx in range(n_configs):
+        counts = []
+        for _ in range(num_roles):
+            counts.extend(rng.multinomial(players_per_role, np.ones(strats_per_role)/strats_per_role))
+        cfg_rows.append(counts)
+
+        counts_arr = np.array(counts)
+        # payoff = base value + small positive externality from own count
+        pay_rows[:, cfg_idx] = base_pay + 0.1 * counts_arr
+
+    cfg_tensor  = torch.tensor(np.array(cfg_rows, dtype=np.float32))
+    pay_tensor  = torch.tensor(pay_rows)
+
+    rsg = RoleSymmetricGame(
+        role_names=role_names,
+        num_players_per_role=[players_per_role]*num_roles,
+        strategy_names_per_role=strategies_per_role,
+        rsg_config_table=cfg_tensor,
+        rsg_payoff_table=pay_tensor,
+    )
+    return Game(rsg)
+
+
+def test_large_rsg_quiesce_smoke():
+    """Ensure QUIESCE returns at least one equilibrium on a moderate-size game."""
+    game = _build_large_random_game()
+
+    eqs = quiesce_sync(
+        game,
+        full_game=game,
+        num_iters=100,
+        num_random_starts=10,
+        regret_threshold=1e-3,
+        dist_threshold=1e-3,
+        restricted_game_size=6,
+        solver="replicator",
+        solver_iters=800,
+        verbose=False,
+    )
+
+    assert len(eqs) >= 1 

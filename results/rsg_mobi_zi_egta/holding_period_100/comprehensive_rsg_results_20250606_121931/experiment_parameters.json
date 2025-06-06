@@ -1,0 +1,45 @@
+{
+  "holding_period": 100,
+  "sim_time": 8000,
+  "num_strategic_mobi": 15,
+  "num_strategic_zi": 30,
+  "num_iterations": 3,
+  "batch_size": 4,
+  "is_role_symmetric": true,
+  "role_names": [
+    "MOBI",
+    "ZI"
+  ],
+  "num_players_per_role": [
+    15,
+    30
+  ],
+  "strategy_names_per_role": [
+    [
+      "MOBI_100_0",
+      "MOBI_0_100"
+    ],
+    [
+      "ZI_100_0",
+      "ZI_0_100"
+    ]
+  ],
+  "simulator_params": {
+    "MOBI_100_0": {
+      "cda_proportion": 1.0,
+      "melo_proportion": 0.0
+    },
+    "MOBI_0_100": {
+      "cda_proportion": 0.0,
+      "melo_proportion": 1.0
+    },
+    "ZI_100_0": {
+      "cda_proportion": 1.0,
+      "melo_proportion": 0.0
+    },
+    "ZI_0_100": {
+      "cda_proportion": 0.0,
+      "melo_proportion": 1.0
+    }
+  }
+}

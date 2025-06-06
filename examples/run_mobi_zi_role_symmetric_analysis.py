@@ -153,7 +153,7 @@ def run_role_symmetric_mobi_zi_egta():
     """
     num_strategic_mobi = 15
     num_strategic_zi = 30
-    holding_periods = [160]
+    holding_periods = [100, 160]
     
     all_results = []
     

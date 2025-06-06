@@ -252,10 +252,8 @@ def replicator_dynamics(game: Game,
         uniform_mixture = create_role_symmetric_mixture(game, device)
         starting_mixtures.append(uniform_mixture)
         
-        # Create role-aware pure strategy mixtures
         for s in range(num_strategies):
             if game.is_role_symmetric:
-                # Find which role this strategy belongs to
                 global_idx = 0
                 strategy_role_idx = None
                 strategy_local_idx = None
@@ -290,7 +288,6 @@ def replicator_dynamics(game: Game,
                     skewed_mixture[s] = 0.8
                 starting_mixtures.append(skewed_mixture)
         
-        # Add MELO/non-MELO biased starting points
         if hasattr(game, 'strategy_names') and game.strategy_names:
             melo_indices = []
             non_melo_indices = []
@@ -302,7 +299,6 @@ def replicator_dynamics(game: Game,
                     non_melo_indices.append(idx)
             
             if melo_indices and game.is_role_symmetric:
-                # Create role symmetric MELO mixture
                 pure_melo = create_role_symmetric_mixture(game, device)
                 global_idx = 0
                 for role_strategies in game.strategy_names_per_role:
@@ -317,11 +313,9 @@ def replicator_dynamics(game: Game,
                             role_non_melo_indices.append(global_idx + i)
                     
                     if role_melo_indices:
-                        # Set this role to favor MELO strategies, but still sum to 1
                         pure_melo[role_melo_indices] = 0.8 / len(role_melo_indices)
                         if role_non_melo_indices:
                             pure_melo[role_non_melo_indices] = 0.2 / len(role_non_melo_indices)
-                        # Renormalize this role to sum to 1
                         role_start = global_idx
                         role_end = global_idx + len(role_strategies)
                         role_sum = pure_melo[role_start:role_end].sum()
@@ -335,7 +329,6 @@ def replicator_dynamics(game: Game,
                 pure_melo[melo_indices] = 1.0 / len(melo_indices)
                 starting_mixtures.append(pure_melo)
         
-        # Generate role symmetric random starting points
         for _ in range(num_random_starts):
             if game.is_role_symmetric:
                 random_mixture = torch.zeros(num_strategies, device=device)
