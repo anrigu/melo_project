@@ -7,8 +7,8 @@
   },
   "is_role_symmetric": true,
   "strategy_names": [
-    "CDA",
-    "MELO"
+    "MELO",
+    "CDA"
   ],
   "num_players": 4,
   "num_strategies": 2,
@@ -22,10 +22,10 @@
   ],
   "strategy_names_per_role": [
     [
-      "CDA"
+      "MELO"
     ],
     [
-      "MELO"
+      "CDA"
     ]
   ]
 }

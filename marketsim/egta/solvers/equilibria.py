@@ -747,93 +747,38 @@ async def quiesce(
     )
     unconfirmed_candidates.append(uniform_candidate)
     
-    # Add joint pure strategy combinations for role symmetric games
-    if game.is_role_symmetric and len(game.role_names) == 2:
-        # Add important joint pure strategy starting points
-        joint_pure_strategies = []
-        
-        # Identify CDA and MELO strategies for each role
-        role_cda_strategies = [[], []]  # [MOBI_cda_strategies, ZI_cda_strategies]
-        role_melo_strategies = [[], []]  # [MOBI_melo_strategies, ZI_melo_strategies]
-        
-        for role_idx, role_strategies in enumerate(game.strategy_names_per_role):
-            for strat_idx, strategy_name in enumerate(role_strategies):
-                global_strat_idx = sum(len(game.strategy_names_per_role[i]) for i in range(role_idx)) + strat_idx
-                
-                if "100_0" in strategy_name:  # CDA strategy
-                    role_cda_strategies[role_idx].append(global_strat_idx)
-                elif "0_100" in strategy_name:  # MELO strategy  
-                    role_melo_strategies[role_idx].append(global_strat_idx)
-        
-        # Add both-CDA joint pure strategy
-        if role_cda_strategies[0] and role_cda_strategies[1]:
-            both_cda_mixture = create_role_symmetric_mixture(game, game.game.device)
-            # Set MOBI to pure CDA, ZI to pure CDA
-            both_cda_mixture[:] = 0.0
-            both_cda_mixture[role_cda_strategies[0][0]] = 1.0  # MOBI_100_0
-            both_cda_mixture[role_cda_strategies[1][0]] = 1.0  # ZI_100_0
-            
-            both_cda_candidate = SubgameCandidate(
-                support=set([role_cda_strategies[0][0], role_cda_strategies[1][0]]),
-                restriction=[role_cda_strategies[0][0], role_cda_strategies[1][0]],
-                mixture=both_cda_mixture
+    # ------------------------------------------------------------------
+    # GENERIC JOINT‐PURE STARTING POINTS FOR ROLE‐SYMMETRIC GAMES
+    # ------------------------------------------------------------------
+    # Previous heuristic looked for substrings like "100_0" to build joint
+    # pure CDA/MELO candidates.  That fails for games whose strategy names
+    # are simply "CDA", "MELO", …  To make the algorithm robust we add *all*
+    # pure joint profiles that select exactly one strategy per role.  For
+    # modest role counts (<4) the Cartesian product is tiny and adds only a
+    # handful of extra candidates.
+
+    if game.is_role_symmetric:
+        # Build list of per-role global strategy indices
+        role_global_indices: List[List[int]] = []
+        g_idx = 0
+        for role_strats in game.strategy_names_per_role:
+            role_global_indices.append(list(range(g_idx, g_idx + len(role_strats))))
+            g_idx += len(role_strats)
+
+        import itertools
+        for combo in itertools.product(*role_global_indices):
+            # combo has one global index per role
+            mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            support = set(combo)
+            for gi in combo:
+                mixture[gi] = 1.0  # pure
+
+            candidate = SubgameCandidate(
+                support=support,
+                restriction=list(support),
+                mixture=mixture,
             )
-            unconfirmed_candidates.append(both_cda_candidate)
-            
-            if verbose:
-                print(f"Added joint pure CDA starting point: both roles play CDA strategies")
-        
-        # Add both-MELO joint pure strategy  
-        if role_melo_strategies[0] and role_melo_strategies[1]:
-            both_melo_mixture = create_role_symmetric_mixture(game, game.game.device)
-            # Set MOBI to pure MELO, ZI to pure MELO
-            both_melo_mixture[:] = 0.0
-            both_melo_mixture[role_melo_strategies[0][0]] = 1.0  # MOBI_0_100
-            both_melo_mixture[role_melo_strategies[1][0]] = 1.0  # ZI_0_100
-            
-            both_melo_candidate = SubgameCandidate(
-                support=set([role_melo_strategies[0][0], role_melo_strategies[1][0]]),
-                restriction=[role_melo_strategies[0][0], role_melo_strategies[1][0]],
-                mixture=both_melo_mixture
-            )
-            unconfirmed_candidates.append(both_melo_candidate)
-            
-            if verbose:
-                print(f"Added joint pure MELO starting point: both roles play MELO strategies")
-        
-        # Add cross-combinations: MOBI-CDA + ZI-MELO
-        if role_cda_strategies[0] and role_melo_strategies[1]:
-            cross1_mixture = create_role_symmetric_mixture(game, game.game.device)
-            cross1_mixture[:] = 0.0
-            cross1_mixture[role_cda_strategies[0][0]] = 1.0   # MOBI_100_0 (CDA)
-            cross1_mixture[role_melo_strategies[1][0]] = 1.0  # ZI_0_100 (MELO)
-            
-            cross1_candidate = SubgameCandidate(
-                support=set([role_cda_strategies[0][0], role_melo_strategies[1][0]]),
-                restriction=[role_cda_strategies[0][0], role_melo_strategies[1][0]],
-                mixture=cross1_mixture
-            )
-            unconfirmed_candidates.append(cross1_candidate)
-            
-            if verbose:
-                print(f"Added cross combination: MOBI-CDA + ZI-MELO")
-        
-        # Add cross-combinations: MOBI-MELO + ZI-CDA
-        if role_melo_strategies[0] and role_cda_strategies[1]:
-            cross2_mixture = create_role_symmetric_mixture(game, game.game.device)
-            cross2_mixture[:] = 0.0
-            cross2_mixture[role_melo_strategies[0][0]] = 1.0  # MOBI_0_100 (MELO)
-            cross2_mixture[role_cda_strategies[1][0]] = 1.0   # ZI_100_0 (CDA)
-            
-            cross2_candidate = SubgameCandidate(
-                support=set([role_melo_strategies[0][0], role_cda_strategies[1][0]]),
-                restriction=[role_melo_strategies[0][0], role_cda_strategies[1][0]],
-                mixture=cross2_mixture
-            )
-            unconfirmed_candidates.append(cross2_candidate)
-            
-            if verbose:
-                print(f"Added cross combination: MOBI-MELO + ZI-CDA")
+            unconfirmed_candidates.append(candidate)
     
     # Add pure MELO and pure non-MELO starting points
     if hasattr(game, 'strategy_names') and game.strategy_names:
