@@ -48,7 +48,7 @@ class MELOSimulatorSampledArrival:
                  ):
 
         if shade is None:
-            shade = [10, 30]
+            shade = [250,500]
         if lam_r is None:
             lam_r = lam
 

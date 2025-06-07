@@ -24,7 +24,7 @@ class MeloAgent(Agent):
                 meloMarket: Market = None,
                 q_max: int = 10,
                 pv_var: float = 5e6,
-                shade: List = [10,30],
+                shade: List = [250,500],
                 cda_proportion: float = 0.5,
                 melo_proportion: float = 0.5,
                 order_quantity: int = 5):
