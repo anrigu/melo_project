@@ -1,18 +1,18 @@
 {
-  "holding_period": 100,
-  "sim_time": 8000,
-  "num_strategic_mobi": 15,
-  "num_strategic_zi": 30,
-  "num_iterations": 3,
-  "batch_size": 4,
+  "holding_period": 50,
+  "sim_time": 10000,
+  "num_strategic_mobi": 28,
+  "num_strategic_zi": 40,
+  "num_iterations": 5,
+  "batch_size": 10,
   "is_role_symmetric": true,
   "role_names": [
     "MOBI",
     "ZI"
   ],
   "num_players_per_role": [
-    15,
-    30
+    28,
+    40
   ],
   "strategy_names_per_role": [
     [

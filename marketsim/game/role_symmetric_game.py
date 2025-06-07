@@ -43,6 +43,7 @@ class RoleSymmetricGame(AbstractGame):
         self.num_players_per_role: torch.Tensor = torch.tensor(num_players_per_role, dtype=torch.long, device=device)
         self.strategy_names_per_role: List[List[str]] = strategy_names_per_role
         self.device: str = device
+        self.is_role_symmetric: bool = True
 
         self.num_roles: int = len(role_names)
         self.num_strategies_per_role: np.ndarray = np.array([len(s) for s in strategy_names_per_role], dtype=int)
@@ -382,7 +383,12 @@ class RoleSymmetricGame(AbstractGame):
         Regret is the maximum gain from unilaterally deviating to a pure strategy.
         This needs to be role-aware. This overrides the AbstractGame.regret method.
         """
-        dev_payoffs = self.deviation_payoffs(mixture) 
+        dev_payoffs = self.deviation_payoffs(mixture)
+
+        # If any payoff is NaN or Inf we cannot trust the regret; return large value
+        if torch.isnan(dev_payoffs).any() or torch.isinf(dev_payoffs).any():
+            return float('inf')
+
         # Ensure mixture is float32 for calculations here if it comes from outside
         if not torch.is_tensor(mixture):
             mixture = torch.tensor(mixture, dtype=torch.float32, device=self.device)

@@ -5,8 +5,8 @@
     "ZI"
   ],
   "num_players_per_role": [
-    15,
-    30
+    28,
+    40
   ],
   "strategy_names_per_role": [
     [
@@ -19,7 +19,7 @@
     ]
   ],
   "total_strategies": 4,
-  "total_players": 45,
-  "total_profiles_simulated": 12,
+  "total_players": 68,
+  "total_profiles_simulated": 17,
   "game_type": "role_symmetric"
 }

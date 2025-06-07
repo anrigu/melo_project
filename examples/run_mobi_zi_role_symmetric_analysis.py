@@ -151,9 +151,9 @@ def run_role_symmetric_mobi_zi_egta():
     """
     Run EGTA with role symmetric games where both MOBI and ZI agents are strategic.
     """
-    num_strategic_mobi = 15
-    num_strategic_zi = 30
-    holding_periods = [100, 160]
+    num_strategic_mobi = 28
+    num_strategic_zi = 40
+    holding_periods = [50]
     
     all_results = []
     
@@ -162,9 +162,9 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"RUNNING ROLE SYMMETRIC EXPERIMENT: HOLDING PERIOD {holding_period}")
         print(f"{'='*60}")
     
-        sim_time = 8000  
-        num_iterations = 3
-        batch_size = 4
+        sim_time = 10000  
+        num_iterations = 5
+        batch_size = 10
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -188,23 +188,27 @@ def run_role_symmetric_mobi_zi_egta():
             num_strategic_mobi=num_strategic_mobi, 
             num_strategic_zi=num_strategic_zi,
             sim_time=sim_time,
-            lam=0.006,           
-            mean=1000000.0,      
+            lam=6e-3,
+            lam_r=6e-3,
+            lam_melo=1e-3,       
+            mean=1e6,      
             r=0.001,              
-            shock_var=100,       
+            shock_var=1e6,       
             q_max=10,            
             pv_var=5000000,      
             shade=[10, 30],      
-            holding_period=holding_period,  
-            lam_melo=0.001,      
+            holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=1000,              # Reduced for faster testing
+            reps=10,
             mobi_strategies=mobi_strategies,
-            zi_strategies=zi_strategies
+            zi_strategies=zi_strategies,
+            log_profile_details=True
+            #force_symmetric=True
         )
         
-        # Get role information
+
+
         role_names, num_players_per_role, strategy_names_per_role = simulator.get_role_info()
         
         print(f"Roles: {role_names}")
@@ -217,9 +221,8 @@ def run_role_symmetric_mobi_zi_egta():
                 params = simulator.strategy_params[strategy]
                 print(f"  {strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
         
-        # Create DPR scheduler for role symmetric games
         scheduler = DPRScheduler(
-            strategies=simulator.get_strategies(),  # All strategies combined
+            strategies=simulator.get_strategies(), 
             num_players=simulator.get_num_players(),
             batch_size=batch_size,
             reduction_size_per_role={"MOBI": 4, "ZI": 4},  
@@ -255,21 +258,33 @@ def run_role_symmetric_mobi_zi_egta():
                 'dist_threshold': 5e-2,
                 'solver': 'replicator',
                 'solver_iters': 3000,
-                'restricted_game_size': 4
+                'restricted_game_size': 1000
             }
         )
         end_time = time.time()
         print(f"Role Symmetric EGTA completed in {end_time - start_time:.2f} seconds")
         
-        # --------------------------------------------------------------
-        #  De-duplicate numerically identical equilibria
-        # --------------------------------------------------------------
+     
         if egta.equilibria:
             before = len(egta.equilibria)
-            egta.equilibria = unique_equilibria(egta.equilibria, tol=1e-2)
+            egta.equilibria = unique_equilibria(egta.equilibria, tol=5e-2)
             after = len(egta.equilibria)
             if after < before:
                 print(f"Removed {before-after} numerically identical equilibria (now {after}).")
+        
+        # ------------------------------------------------------------------
+        #  Fill in any missing deviation rows so welfare/regret use full data
+        # ------------------------------------------------------------------
+
+        complete_deviation_rows(game.game, simulator, scheduler, egta.equilibria)
+
+        # Re-compute welfare using the now-complete payoff table
+        def expected_welfare_raw(g, mix):
+            dev = g.deviation_payoffs(mix)
+            return (mix * dev).sum().item()
+
+        welfare_data = [expected_welfare_raw(game.game, mix) for mix, _ in egta.equilibria]
+        labels = [f"Eq {i+1}" for i in range(len(welfare_data))]
         
         # Verify equilibria are properly role symmetric
         if egta.equilibria and game.is_role_symmetric:
@@ -593,6 +608,25 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
         json.dump(welfare_analysis, f, indent=2)
     print(f"Saved welfare analysis to {welfare_file}")
     
+    # ------------------------------------------------------------------
+    #  NEW: dump every simulated profile's payoffs for reproducibility
+    # ------------------------------------------------------------------
+    if hasattr(egta, "payoff_data") and egta.payoff_data:
+        payoff_path = os.path.join(results_dir, "raw_payoff_data.json")
+        with open(payoff_path, "w") as f:
+            # Default: each profile is a list[(player_id, role, strat, payoff)]
+            json.dump(egta.payoff_data, f, indent=2)
+        print(f"Saved raw payoff data to {payoff_path}")
+    
+    # ------------------------------------------------------------------
+    #  NEW: dump summary statistics per simulated profile if available
+    # ------------------------------------------------------------------
+    if hasattr(egta.simulator, "profile_summaries") and egta.simulator.profile_summaries:
+        summary_path = os.path.join(results_dir, "profile_summaries.json")
+        with open(summary_path, "w") as f:
+            json.dump(egta.simulator.profile_summaries, f, indent=2)
+        print(f"Saved profile summaries to {summary_path}")
+    
     # Save game details
     game_details = {
         "is_role_symmetric": True,
@@ -620,12 +654,55 @@ def unique_equilibria(eq_list, tol=1e-3):
             uniq.append((mix, reg))
     return uniq
 
+# ---------------------------------------------------------------------------
+# Post-EGTA helper: simulate every missing one-player deviation profile that
+# is still NaN in the payoff table so the game becomes fully evaluable.
+# ---------------------------------------------------------------------------
+
+
+def complete_deviation_rows(game, simulator, scheduler, equilibria, batch_size=32, verbose=True):
+    """Simulate all deviation profiles that remain missing for the current game.
+
+    Only considers deviations from the support of the scheduler's candidate
+    mixtures (typically the equilibria found by EGTA).  This is usually enough
+    to guarantee regret/welfare can be computed without NaNs.
+    """
+
+    # Build a set to avoid duplicate simulations
+    missing_profiles = []
+
+    # Use all candidates the scheduler can derive from the equilibria mixture
+    # list; this guarantees every best-response row needed for regret/welfare.
+    for mix, _ in equilibria:
+        profs = scheduler.missing_deviations(mix.cpu().numpy(), game)
+        missing_profiles.extend(profs)
+
+    # Deduplicate (convert profile list → sorted tuple key)
+    uniq_set = set()
+    uniq_profiles = []
+    for p in missing_profiles:
+        key = tuple(sorted(p))
+        if key not in uniq_set:
+            uniq_set.add(key)
+            uniq_profiles.append(p)
+
+    if verbose:
+        print(f"\nCompleting deviation rows – {len(uniq_profiles)} new profiles")
+
+    # Simulate in batches
+    for i in range(0, len(uniq_profiles), batch_size):
+        batch = uniq_profiles[i : i + batch_size]
+        new_data = simulator.simulate_profiles(batch)
+        game.update_with_new_data(new_data, normalize_payoffs=False)
+
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
-    os.makedirs("results/rsg_mobi_zi_egta", exist_ok=True)
+    os.makedirs("results/rsg_mobi_zi_egta_new", exist_ok=True)
     game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta()
     
     if eq_mixture is not None:
-        basin_results = analyze_basins_of_attraction_rsg(game, num_points=50, iters=3000)
+        basin_results = analyze_basins_of_attraction_rsg(game, num_points=100, iters=1000)
         
         results_dir = save_comprehensive_rsg_results(
             egta, game, welfare_data, labels, experiment_params, 

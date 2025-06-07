@@ -1,28 +1,18 @@
 {
-  "analysis_timestamp": "20250606_122318",
+  "analysis_timestamp": "20250607_104103",
   "holding_periods_analyzed": [
-    100,
-    160
+    50
   ],
   "experiment_type": "role_symmetric",
   "results": [
     {
-      "holding_period": 100,
-      "best_welfare": 0.0,
+      "holding_period": 50,
+      "best_welfare": -3.238035333197331e-06,
       "best_regret": 0.0,
-      "equilibrium_type": "Partially Mixed",
-      "num_equilibria": 123,
-      "results_dir": "results/rsg_mobi_zi_egta/holding_period_100/comprehensive_rsg_results_20250606_121931",
-      "equilibrium_description": "MOBI: MOBI_0_100 | ZI: Mixed(ZI_0_100(0.50), ZI_100_0(0.50))"
-    },
-    {
-      "holding_period": 160,
-      "best_welfare": 0.0,
-      "best_regret": 0.0,
-      "equilibrium_type": "Partially Mixed",
-      "num_equilibria": 124,
-      "results_dir": "results/rsg_mobi_zi_egta/holding_period_160/comprehensive_rsg_results_20250606_122318",
-      "equilibrium_description": "MOBI: MOBI_0_100 | ZI: Mixed(ZI_0_100(0.50), ZI_100_0(0.50))"
+      "equilibrium_type": "Pure",
+      "num_equilibria": 22,
+      "results_dir": "results/rsg_mobi_zi_egta/holding_period_50/comprehensive_rsg_results_20250607_104103",
+      "equilibrium_description": "MOBI: MOBI_0_100 | ZI: ZI_0_100"
     }
   ]
 }

@@ -12,6 +12,7 @@ from marketsim.agent.zero_intelligence_agent import ZIAgent
 from marketsim.agent.melo_agent import MeloAgent
 from marketsim.fourheap.constants import BUY, SELL
 import concurrent.futures as cf  # ↳ for parallel repetitions
+import torch
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ def _run_melo_single_rep(args):
     sim = MELOSimulatorSampledArrival(**sim_kwargs)
     sim.run()
     values = sim.end_sim()[0]  # first element is payoff dict
+   # print(f"Values fROM SIM: {values}")
     return values
 
 
@@ -69,7 +71,9 @@ class MeloSimulator(Simulator):
                 mobi_strategies: Optional[List[str]] = None,
                 zi_strategies: Optional[List[str]] = None,
                 # Mode control
-                force_symmetric: bool = False):
+                force_symmetric: bool = False,
+                parallel: bool = False,
+                log_profile_details: bool = False):
         """
         Initialize the MELO simulator interface for role symmetric games.
         
@@ -95,6 +99,8 @@ class MeloSimulator(Simulator):
             mobi_strategies: Strategy names for MOBI role (if None, uses default)
             zi_strategies: Strategy names for ZI role (if None, uses default)
             force_symmetric: If True, forces symmetric game behavior (disables role symmetric mode)
+            parallel: If True, use multiprocessing for parallel repetitions
+            log_profile_details: If True, print profile summary after simulation
         """
         self.num_strategic_mobi = num_strategic_mobi
         self.num_strategic_zi = num_strategic_zi
@@ -116,6 +122,8 @@ class MeloSimulator(Simulator):
         self.reps = reps
         self.order_quantity = 5  # Fixed order quantity for MOBI traders
         self.force_symmetric = force_symmetric
+        self.parallel = parallel
+        self.log_profile_details = log_profile_details
         
         # Define role names and player counts
         self.role_names = ["MOBI", "ZI"]
@@ -181,6 +189,9 @@ class MeloSimulator(Simulator):
             if hasattr(self, 'get_role_info'):
                 delattr(self, 'get_role_info')
     
+        # store summaries so calling code can persist them
+        self.profile_summaries: List[Dict[str, Any]] = []
+    
     def get_num_players(self) -> int:
         """Get the total number of strategic players."""
         if self.force_symmetric:
@@ -206,16 +217,30 @@ class MeloSimulator(Simulator):
                 all_strategies.extend(strategies)
             return all_strategies
     
-    def simulate_profile(self, profile: List[Tuple[str, str]]) -> List[Tuple[str, str, str, float]]:
+    def simulate_profile(
+        self,
+        profile: List[Tuple[str, str]],
+        return_detailed: bool = False,
+    ) -> Union[
+        List[Tuple[str, str, str, float]],
+        Tuple[
+            List[Tuple[str, str, str, float]],  
+            Dict[str, List[float]],              
+            Dict[str, float],                    
+            float,                              
+        ],
+    ]:
         """
         Simulate a profile - handles both role symmetric and symmetric game formats.
         
         Args:
             profile: List of (role_name, strategy_name) tuples
+            return_detailed: If True, return detailed per-agent and per-role averages
             
         Returns:
             List of (player_id, role_name, strategy_name, payoff) tuples or 
             List of (player_id, strategy_name, payoff) tuples for symmetric mode
+            or a tuple containing per-agent payoffs, per-role payoffs, per-role averages, and profile average
         """
         if self.force_symmetric:
             # In symmetric mode, treat all strategies as MOBI strategies
@@ -288,13 +313,23 @@ class MeloSimulator(Simulator):
             role_strategy_counts=role_strategy_counts,
             strategy_params=self.strategy_params,
             role_names=self.role_names,
+            profile_order=profile,
         )
 
-        # Dispatch repetitions in parallel
-        with cf.ProcessPoolExecutor() as pool:
-            seeds = [random.randint(0, 2**32 - 1) for _ in range(self.reps)]
-            iter_args = [(s, base_kwargs) for s in seeds]
-            values_per_rep = list(tqdm(pool.map(_run_melo_single_rep, iter_args), total=self.reps))
+        seeds = [random.randint(0, 2**32 - 1) for _ in range(self.reps)]
+        iter_args = [(s, base_kwargs) for s in seeds]
+
+        if self.parallel and self.reps > 1:
+            # Use a spawn context to avoid stale imports across edits
+            import multiprocessing as mp
+            ctx = mp.get_context("spawn")
+            with cf.ProcessPoolExecutor(mp_context=ctx) as pool:
+                values_per_rep = list(tqdm(pool.map(_run_melo_single_rep, iter_args), total=self.reps))
+        else:
+            # Serial execution – easier to debug and avoids multiprocessing overhead
+            values_per_rep = [
+                _run_melo_single_rep(arg) for arg in tqdm(iter_args, total=self.reps)
+            ]
 
         # ------------------------------------------------------------------
         # Aggregate results across repetitions
@@ -333,8 +368,14 @@ class MeloSimulator(Simulator):
                     agent_id = num_background + player_id
                     if agent_id in values:
                         payoff = values[agent_id]
-                        if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
-                            payoffs.append(float(payoff))
+                        # Accept scalar tensors or plain numbers
+                        if isinstance(payoff, torch.Tensor):
+                            payoff_val = float(payoff.item())
+                        else:
+                            payoff_val = float(payoff)
+
+                        if not np.isnan(payoff_val) and not np.isinf(payoff_val):
+                            payoffs.append(payoff_val)
                 
                 # Calculate average payoff
                 if payoffs:
@@ -348,15 +389,22 @@ class MeloSimulator(Simulator):
                 player_id += 1
         else:
             # Original role symmetric/symmetric processing
+            #print(f"values_per_rep: {values_per_rep}")
             for role_name, strategy_name in profile:
                 # Get payoffs for this player across all repetitions
                 payoffs = []
+
                 for values in values_per_rep:
                     agent_id = num_background + player_id
                     if agent_id in values:
                         payoff = values[agent_id]
-                        if isinstance(payoff, (int, float)) and not np.isnan(payoff) and not np.isinf(payoff):
-                            payoffs.append(float(payoff))
+                        if isinstance(payoff, torch.Tensor):
+                            payoff_val = float(payoff.item())
+                        else:
+                            payoff_val = float(payoff)
+
+                        if not np.isnan(payoff_val) and not np.isinf(payoff_val):
+                            payoffs.append(payoff_val)
                 
                 # Calculate average payoff
                 if payoffs:
@@ -373,14 +421,53 @@ class MeloSimulator(Simulator):
                     aggregated_results.append((f"player_{player_id}", strategy_name, avg_payoff))
                 player_id += 1
         
+        # --------------------------------------------------------------
+        # If caller wants richer diagnostics, compute per-role summaries
+        # --------------------------------------------------------------
+        if return_detailed and not self.force_symmetric:
+            role_payoffs: Dict[str, List[float]] = defaultdict(list)
+            for _, role_name, _, payoff in aggregated_results:
+                role_payoffs[role_name].append(payoff)
+
+            role_avg: Dict[str, float] = {
+                r: (sum(p_list) / len(p_list) if p_list else 0.0)
+                for r, p_list in role_payoffs.items()
+            }
+            profile_avg = (
+                sum([p for _, _, _, p in aggregated_results]) / len(aggregated_results)
+                if aggregated_results else 0.0
+            )
+
+            # optionally log profile summary
+            if self.log_profile_details:
+                self._print_profile_summary(profile, aggregated_results, role_payoffs, role_avg, profile_avg)
+
+            return aggregated_results, role_payoffs, role_avg, profile_avg
+
+        if self.log_profile_details:
+            # build role-wise structures for printing convenience
+            role_payoffs: Dict[str, List[float]] = defaultdict(list)
+            for tup in aggregated_results:
+                if len(tup) == 4:
+                    _, role_name, _, payoff_val = tup
+                    role_payoffs[role_name].append(payoff_val)
+            role_avg = {r: (sum(v)/len(v) if v else 0.0) for r, v in role_payoffs.items()}
+            profile_avg = sum([t[-1] for t in aggregated_results]) / len(aggregated_results) if aggregated_results else 0.0
+            self._print_profile_summary(profile, aggregated_results, role_payoffs, role_avg, profile_avg)
+
         return aggregated_results
     
-    def simulate_profiles(self, profiles: List[List[Tuple[str, str]]]) -> List[List[Tuple[str, str, str, float]]]:
+    def simulate_profiles(
+        self,
+        profiles: List[List[Tuple[str, str]]],
+        return_detailed: bool = False,
+    ) -> List[Any]:
         """
         Simulate multiple role symmetric profiles.
         
         Args:
             profiles: List of role symmetric profiles
+            return_detailed: If True, return detailed per-agent and per-role averages
             
         Returns:
             List of lists of (player_id, role_name, strategy_name, payoff) tuples
@@ -388,6 +475,43 @@ class MeloSimulator(Simulator):
         results = []
         for i, profile in enumerate(profiles):
             print(f"Simulating role symmetric profile {i+1}/{len(profiles)}: {profile}")
-            profile_results = self.simulate_profile(profile)
+            profile_results = self.simulate_profile(profile, return_detailed=return_detailed)
             results.append(profile_results)
         return results 
+
+    # ------------------------------------------------------------------
+    # Helper: pretty-print per-role payoff summary for a single profile
+    # ------------------------------------------------------------------
+    def _print_profile_summary(
+        self,
+        profile: List[Tuple[str, str]],
+        per_agent: List[Tuple[str, str, str, float]],
+        role_payoffs: Dict[str, List[float]],
+        role_avg: Dict[str, float],
+        profile_avg: float,
+    ) -> None:
+        """Prints counts per strategy and payoff stats for each role."""
+
+        # count strategies per role
+        role_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        for role_name, strategy_name in [(r, s) for r, s in profile]:
+            role_counts[role_name][strategy_name] += 1
+
+        print("\n────────────────────────────────────────────")
+        print("Profile summary:")
+        for role_name, strat_counter in role_counts.items():
+            counts_str = ", ".join([f"{k}:{v}" for k, v in strat_counter.items()])
+            avg_pay = role_avg.get(role_name, 0.0)
+            print(f"  Role {role_name} → [{counts_str}],  Avg Payoff: {avg_pay:.4f}")
+            print(f"    Payoffs: {[round(p,4) for p in role_payoffs.get(role_name, [])]}")
+        print(f"  Overall profile average: {profile_avg:.4f}")
+        print("────────────────────────────────────────────")
+
+        # keep structured copy for downstream persistence
+        summary_dict = {
+            "profile_counts": {r: dict(c) for r, c in role_counts.items()},
+            "role_avg": role_avg,
+            "role_payoffs": role_payoffs,
+            "profile_avg": profile_avg,
+        }
+        self.profile_summaries.append(summary_dict) 

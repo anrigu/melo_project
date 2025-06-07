@@ -132,7 +132,7 @@ class EGTA:
         # Set default quiesce parameters if not provided
         if quiesce_kwargs is None:
             quiesce_kwargs = {
-                'num_iters': 100,
+                'num_iters': 1,
                 'num_random_starts': 10,
                 'regret_threshold': 1e-3,
                 'dist_threshold': 1e-2,
@@ -142,7 +142,7 @@ class EGTA:
         else:
             # Ensure all required parameters are present
             default_quiesce_kwargs = {
-                'num_iters': 100,
+                'num_iters': 1,
                 'num_random_starts': 60,
                 'regret_threshold': 1e-2,
                 'dist_threshold': 1e-2,
@@ -250,20 +250,19 @@ class EGTA:
             if verbose:
                 print("\nRunning QUIESCE final verification …")
 
-            # Always pass a full-game reference. When DPR is not used, this is
-            # just `self.game`; when DPR *is* used the reduced game should be
-            # supplied as the first argument and the full game as `full_game`.
-            # In our current architecture we only maintain the full game, so we
-            # invoke quiesce on that object directly.
+            # Ensure final verification runs just one improvement step regardless
+            # of what was requested upstream. This does *not* mutate the
+            # original dictionary passed by the caller.
+            quiesce_args = dict(quiesce_kwargs)
+            quiesce_args["num_iters"] = 1
 
             quiesce_eqs = quiesce_sync(
                 game=self.game,          # current empirical game (full)
                 full_game=self.game,     # test deviations in the same game
                 verbose=verbose,
-                **quiesce_kwargs,
+                **quiesce_args,
             )
 
-            # quiesce_sync returns a list[(mixture, regret)]
             if quiesce_eqs:
                 self.equilibria = quiesce_eqs
                 if verbose:

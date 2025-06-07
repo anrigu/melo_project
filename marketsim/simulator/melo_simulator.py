@@ -48,6 +48,7 @@ class MELOSimulatorSampledArrival:
                  lam_r: float = None,
                  holding_period = 50,
                  lam_melo = 0.1,
+                 profile_order = None,
                  ):
 
         if shade is None:
@@ -105,6 +106,7 @@ class MELOSimulatorSampledArrival:
         self.agents = {}
 
         self.order_tracker = {}
+        self.profile_order = profile_order  # may be None
 
         self.fundamentals = []
 
@@ -170,7 +172,40 @@ class MELOSimulatorSampledArrival:
         # Handle strategic agents - either role-based or legacy strategy-based
         strategic_agent_id = num_zi + num_hbl
         
-        if self.role_strategy_counts and self.role_names:
+        # If explicit player order is provided, respect it to guarantee ID↔profile alignment
+        if profile_order is not None:
+            for role_name, strategy_name in profile_order:
+                params = self.strategy_params[strategy_name]
+
+                if role_name == "MOBI":
+                    self.agents[strategic_agent_id] = (
+                        MeloAgent(
+                            agent_id=strategic_agent_id,
+                            market=self.market,
+                            meloMarket=self.meloMarket,
+                            q_max=q_max,
+                            pv_var=pv_var,
+                            cda_proportion=params["cda_proportion"],
+                            melo_proportion=params["melo_proportion"],
+                        ))
+                else:  # ZI role
+                    self.agents[strategic_agent_id] = (
+                        ZIAgent(
+                            agent_id=strategic_agent_id,
+                            market=self.market,
+                            q_max=q_max,
+                            shade=shade,
+                            pv_var=pv_var,
+                            eta=eta,
+                            cda_proportion=params["cda_proportion"],
+                            melo_proportion=params["melo_proportion"],
+                        ))
+                # schedule first arrival for this strategic agent on MELO timeline
+                self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
+                self.arrival_index_melo += 1
+                strategic_agent_id += 1
+
+        elif self.role_strategy_counts and self.role_names:
             # Role-based strategic agent creation
             for role_name in self.role_names:
                 role_strategies = self.role_strategy_counts[role_name]
