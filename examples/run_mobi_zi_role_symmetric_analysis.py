@@ -153,7 +153,7 @@ def run_role_symmetric_mobi_zi_egta():
     """
     num_strategic_mobi = 28
     num_strategic_zi = 40
-    holding_periods = [50]
+    holding_periods = [50, 100, 150, 200, 250, 300]
     
     all_results = []
     
@@ -163,8 +163,8 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 5
-        batch_size = 10
+        num_iterations = 10
+        batch_size = 20
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -183,7 +183,6 @@ def run_role_symmetric_mobi_zi_egta():
             "ZI_0_100"     # 0% CDA, 100% MELO
         ]
         
-        # Create simulator with role symmetric game parameters
         simulator = MeloSimulator(
             num_strategic_mobi=num_strategic_mobi, 
             num_strategic_zi=num_strategic_zi,
@@ -196,7 +195,7 @@ def run_role_symmetric_mobi_zi_egta():
             shock_var=1e6,       
             q_max=10,            
             pv_var=5000000,      
-            shade=[10, 30],      
+            shade=[250, 500],      
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
@@ -240,7 +239,7 @@ def run_role_symmetric_mobi_zi_egta():
             scheduler=scheduler,
             device=device,
             output_dir=f"results/rsg_mobi_zi_egta/holding_period_{holding_period}",
-            max_profiles=batch_size * num_iterations,
+            max_profiles=1000000,
             seed=42
         )
         
@@ -254,7 +253,7 @@ def run_role_symmetric_mobi_zi_egta():
             quiesce_kwargs={
                 'num_iters': 50,
                 'num_random_starts': 60,
-                'regret_threshold': 1e-4,
+                'regret_threshold': 1e-3,
                 'dist_threshold': 5e-2,
                 'solver': 'replicator',
                 'solver_iters': 3000,
@@ -280,8 +279,14 @@ def run_role_symmetric_mobi_zi_egta():
 
         # Re-compute welfare using the now-complete payoff table
         def expected_welfare_raw(g, mix):
-            dev = g.deviation_payoffs(mix)
-            return (mix * dev).sum().item()
+            """Return expected welfare in original payoff units."""
+            dev_norm = g.deviation_payoffs(mix)           # z-score payoffs
+            w_norm   = (mix * dev_norm).sum().item()
+
+            # If the underlying RoleSymmetricGame was normalised, undo it
+            scale = getattr(g, "scale", 1.0)
+            offset = getattr(g, "offset", 0.0)
+            return w_norm * scale + offset
 
         welfare_data = [expected_welfare_raw(game.game, mix) for mix, _ in egta.equilibria]
         labels = [f"Eq {i+1}" for i in range(len(welfare_data))]
@@ -438,7 +443,6 @@ def run_role_symmetric_mobi_zi_egta():
             regret_val = eq_regret if isinstance(eq_regret, float) else eq_regret.item()
             print(f"Regret: {regret_val:.6f}")
         
-        # Create experiment parameters dictionary
         experiment_params = {
             "holding_period": holding_period,
             "sim_time": sim_time,
@@ -453,7 +457,6 @@ def run_role_symmetric_mobi_zi_egta():
             "simulator_params": simulator.strategy_params
         }
         
-        # Save results for this holding period
         print(f"\n💾 Saving results for holding period {holding_period}...")
         results_dir = save_comprehensive_rsg_results(
             egta, game, welfare_data, labels, experiment_params, 
@@ -508,7 +511,6 @@ def run_role_symmetric_mobi_zi_egta():
     
     print(f"Cross-period summary saved to: {summary_file}")
     
-    # Print summary table
     print("ROLE SYMMETRIC SUMMARY TABLE:")
     print("Holding Period | Equilibrium Type | Welfare | Regret | Description")
     print("-" * 85)
@@ -519,7 +521,7 @@ def run_role_symmetric_mobi_zi_egta():
         regret = result["best_regret"]
         description = result["equilibrium_description"][:40] + "..." if len(result["equilibrium_description"]) > 40 else result["equilibrium_description"]
         
-        welfare_str = f"{welfare:.1f}" if welfare is not None else "N/A"
+        welfare_str = f"{welfare:.6f}" if welfare is not None else "N/A"
         regret_str = f"{regret:.4f}" if regret is not None else "N/A"
         print(f"{hp:14d} | {eq_type:15s} | {welfare_str:7s} | {regret_str:6s} | {description}")
     
@@ -538,7 +540,6 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
         json.dump(experiment_params, f, indent=2)
     print(f"Saved experiment parameters to {params_file}")
     
-    # Save equilibria (role symmetric format)
     equilibria_detailed = []
     for i, (mixture, regret_val) in enumerate(egta.equilibria):
         eq_dict = {
@@ -593,7 +594,6 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
         json.dump(equilibria_detailed, f, indent=2)
     print(f"Saved detailed equilibria to {eq_file}")
     
-    # Save welfare analysis
     welfare_analysis = {
         "welfare_data": welfare_data,
         "labels": labels,
@@ -608,19 +608,14 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
         json.dump(welfare_analysis, f, indent=2)
     print(f"Saved welfare analysis to {welfare_file}")
     
-    # ------------------------------------------------------------------
-    #  NEW: dump every simulated profile's payoffs for reproducibility
-    # ------------------------------------------------------------------
+ 
     if hasattr(egta, "payoff_data") and egta.payoff_data:
         payoff_path = os.path.join(results_dir, "raw_payoff_data.json")
         with open(payoff_path, "w") as f:
             # Default: each profile is a list[(player_id, role, strat, payoff)]
             json.dump(egta.payoff_data, f, indent=2)
         print(f"Saved raw payoff data to {payoff_path}")
-    
-    # ------------------------------------------------------------------
-    #  NEW: dump summary statistics per simulated profile if available
-    # ------------------------------------------------------------------
+
     if hasattr(egta.simulator, "profile_summaries") and egta.simulator.profile_summaries:
         summary_path = os.path.join(results_dir, "profile_summaries.json")
         with open(summary_path, "w") as f:
@@ -654,10 +649,7 @@ def unique_equilibria(eq_list, tol=1e-3):
             uniq.append((mix, reg))
     return uniq
 
-# ---------------------------------------------------------------------------
-# Post-EGTA helper: simulate every missing one-player deviation profile that
-# is still NaN in the payoff table so the game becomes fully evaluable.
-# ---------------------------------------------------------------------------
+
 
 
 def complete_deviation_rows(game, simulator, scheduler, equilibria, batch_size=32, verbose=True):

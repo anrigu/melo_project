@@ -103,7 +103,7 @@ class EGTA:
         self.equilibria = []
 
     def has_profile(self, profile: List[Tuple[str,str]]) -> bool:
-        key = tuple(sorted(profile))
+        key = tuple(sorted((r, s) for r, s in profile))
         return key in self.game.payoff_table   # adjust to your storage structure
 
     
@@ -149,26 +149,21 @@ class EGTA:
                 'solver': 'replicator',
                 'solver_iters': 5000
             }
-            # Fill in any missing parameters with defaults
+       
             for key, value in default_quiesce_kwargs.items():
                 if key not in quiesce_kwargs:
                     quiesce_kwargs[key] = value
         
-        # --------------------------------------------------------------------
-        # BEGIN survey-compliant outer loop
-        # --------------------------------------------------------------------
+
         for iteration in range(max_iterations):
             if verbose:
                 print(f"\nIteration {iteration+1}/{max_iterations}")
 
-            # ================================================================
-            # 1)  MAKE SURE THE CURRENT RESTRICTED GAME IS COMPLETE
-            # ================================================================
+        
             while True:
-                # get every profile the scheduler still wants
                 batch = self.scheduler.get_next_batch(self.game)
                 if not batch:
-                    break  # nothing missing – restricted game is complete
+                    break  
 
                 if verbose:
                     print(f"  Scheduling {len(batch)} new profiles")
@@ -182,27 +177,28 @@ class EGTA:
                     self.game.update_with_new_data(new_data)
 
                 self.scheduler.update(self.game)
+                self.scheduler._profile_key_cache = {}
                 total_profiles += len(new_data)
                 if total_profiles >= self.max_profiles:
                     break
 
-            # ================================================================
-            # 2)  BUILD CANDIDATE SET Ψ AND EXHAUSTIVELY EVALUATE UD(σ)
-            # ================================================================
+         
             candidates = self.scheduler._select_equilibrium_candidates(self.game, 50)
             confirmed, unconfirmed = [], []
             eps = quiesce_kwargs.get('regret_threshold', 1e-3)
 
-            for σ in candidates:
-                # ask scheduler for ALL missing one-player deviations of σ
-                missing = self.scheduler.missing_deviations(σ, self.game)  # <- new helper
+            for σ in candidates: #ask scheduler for missing deviations
+                missing = self.scheduler.missing_deviations(σ, self.game)
+                if verbose:
+                    print(f"missing = {len(missing)}")
                 if missing:
                     if verbose:
-                        print(f"  {len(missing)} missing deviations → simulating")
+                        print(f"{len(missing)} missing deviations → simulating")
                     new_data = self.simulator.simulate_profiles(missing)
                     self.payoff_data.extend(new_data)
                     self.game.update_with_new_data(new_data)
                     self.scheduler.update(self.game)
+                    self.scheduler._profile_key_cache = {}
                     total_profiles += len(new_data)
 
                 σ_reg = float(regret(self.game, torch.tensor(σ, dtype=torch.float32,
@@ -218,10 +214,9 @@ class EGTA:
                 print(f"  Candidates – confirmed: {len(confirmed)}   "
                     f"unconfirmed: {len(unconfirmed)}")
 
-           
             all_seen = (
                 self.expected_strategies
-                == self.game.strategies_present_in_payoff_table()   # <-- now a *real* test
+                == self.game.strategies_present_in_payoff_table()  
             )
             if confirmed and not unconfirmed and all_seen:
                 self.equilibria = confirmed
@@ -255,6 +250,8 @@ class EGTA:
             # original dictionary passed by the caller.
             quiesce_args = dict(quiesce_kwargs)
             quiesce_args["num_iters"] = 1
+            quiesce_args["dist_threshold"] = 1e-3
+            quiesce_args["num_random_starts"] = 20
 
             quiesce_eqs = quiesce_sync(
                 game=self.game,          # current empirical game (full)
