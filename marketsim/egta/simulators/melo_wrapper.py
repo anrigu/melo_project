@@ -332,7 +332,11 @@ class MeloSimulator(Simulator):
         obs = Observation(
             profile_key=prof_key,
             payoffs=np.asarray(aggregated_payoffs, dtype=float),
-            aux={"runtime": wall_clock, "seed": seeds[0] if seeds else 0},
+            aux={
+                "runtime": wall_clock,
+                "seed": seeds[0] if seeds else 0,
+                "n_raw": len(values_per_rep),  # effective number of repetitions
+            },
         )
         return obs
     

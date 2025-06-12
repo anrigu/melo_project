@@ -51,22 +51,20 @@ class DeviationPriorityQueue:
     def push(self, gain: float, strategy: int, mixture: torch.Tensor):
         """
         Push a deviation to the queue.
-        
-        Args:
-            gain: Gain from deviation
-            strategy: Strategy index
-            mixture: Base strategy mixture
+        Adds a numeric tie-breaker so Python's heap is stable and
+        caps non-finite gains to keep ordering predictable.
         """
-        heapq.heappush(self.queue, (-float(gain), strategy, mixture))
+        import numpy as _np  # local to avoid polluting namespace
+        if not _np.isfinite(gain):
+            gain = 1e12  # large but finite
+        # id(mixture) is deterministic within a run and breaks ties
+        heapq.heappush(self.queue, (-float(gain), id(mixture), strategy, mixture))
         
     def pop(self) -> Tuple[float, int, torch.Tensor]:
         """
         Pop the deviation with highest gain.
-        
-        Returns:
-            Tuple of (gain, strategy, mixture)
         """
-        neg_gain, strategy, mixture = heapq.heappop(self.queue)
+        neg_gain, _tie, strategy, mixture = heapq.heappop(self.queue)
         return -neg_gain, strategy, mixture
         
     def is_empty(self) -> bool:
@@ -692,6 +690,9 @@ async def quiesce(
     confirmed_eq = []
     unconfirmed_candidates = []
     deviation_queue = DeviationPriorityQueue()
+    # Keep track of every restriction we have already explored so we don't
+    # waste time solving the same sub-game twice.
+    explored_restrictions: Set[frozenset] = set()
     
     if maximal_subgames is None:
         maximal_subgames = set() 
@@ -1152,24 +1153,26 @@ async def quiesce(
             
             new_support = support.union({strategy})
             
+            # --------------------------------------------------------------
+            # Skip oversized restrictions early – defer to back-up queue
+            # --------------------------------------------------------------
+            if len(new_support) > restricted_game_size:
+                if verbose:
+                    print("  Skipping deviation: support size exceeds restricted_game_size")
+                # no push back – it will be considered again if another gain arises
+                continue
+            
             restriction = list(new_support)
             restriction_set = frozenset(restriction)
-            
-            is_contained = False
-            for maximal_set in maximal_subgames:
-                if restriction_set.issubset(maximal_set):
-                    is_contained = True
-                    break
-            
-            if not is_contained:
-                for maximal_set in list(maximal_subgames):
-                    if maximal_set.issubset(restriction_set):
-                        maximal_subgames.remove(maximal_set)
-                
-                if len(restriction) <= restricted_game_size:
-                    maximal_subgames.add(restriction_set)
-                    if verbose:
-                        print(f"Added new maximal subgame: {restriction}")
+
+            # --------------------------------------------------------------
+            # Skip if we've already solved this exact restriction
+            # --------------------------------------------------------------
+            if restriction_set in explored_restrictions:
+                if verbose:
+                    print("  Restriction already explored – skipping")
+                continue
+            explored_restrictions.add(restriction_set)
             
             # Create restricted game
             #restricted_game = game.restrict(restriction)
@@ -1245,6 +1248,9 @@ async def quiesce(
             for i, s in enumerate(restriction):
                 full_mixture[s] = equilibrium[i]
             
+            # Trim dust probabilities and renormalise per role
+            full_mixture = trim_mixture_support(full_mixture, game)
+            
             # Test regret against the appropriate game (full game if using DPR)
             reg_raw   = test_game.regret(full_mixture)
             regret_val = reg_raw.item() if torch.is_tensor(reg_raw) else float(reg_raw)
@@ -1272,11 +1278,11 @@ async def quiesce(
 
 def quiesce_sync(
     game,
-    num_iters=1000,
+    num_iters=10,
     num_random_starts=0,
     regret_threshold=1e-3,
     dist_threshold=0.05,
-    restricted_game_size=4,
+    restricted_game_size=3,
     solver="replicator_dynamics",
     solver_iters=1000,
     verbose=False,
@@ -1449,20 +1455,42 @@ async def test_candidate(
         )
         prof_dev = tuple(sorted((set(prof_base) - {(role,strat)}) | {(role,strat)}))
 
-        # collect one‐number‐per‐run samples (player 0’s payoff)
-        samp_base = [obs.payoffs[0] for obs in obs_store.get(prof_base, [])]
-        samp_dev  = [obs.payoffs[0] for obs in obs_store.get(prof_dev,  [])]
+        # collect one‐number‐per‐run samples (player 0's payoff)
+        obs_base = obs_store.get(prof_base, [])
+        obs_dev  = obs_store.get(prof_dev,  [])
+
+        # ------------------------------------------------------
+        # Extract values *and* effective sample sizes
+        # Each Observation may represent an average of k runs
+        # recorded as aux["n_raw"]. Default k = 1.
+        # ------------------------------------------------------
+        def _vals_and_n(obs_list):
+            vals  = []
+            n_eff = 0
+            for ob in obs_list:
+                vals.append(ob.payoffs[0])
+                n_eff += getattr(ob, "aux", {}).get("n_raw", 1)
+            return vals, n_eff
+
+        samp_base, n_base = _vals_and_n(obs_base)
+        samp_dev,  n_dev  = _vals_and_n(obs_dev)
 
         if verbose:
             print(
                 f" ↳ dev {role}:{strat:<10} gain≈{est_gain:+.3e} "
-                f"samples=({len(samp_base)},{len(samp_dev)})", end=" "
+                f"samples=({n_base},{n_dev})", end=" "
             )
 
         # --- if under‐sampled, schedule more and mark inconclusive ---
-        if len(samp_base) < MIN_SAMPLES or len(samp_dev) < MIN_SAMPLES:
+        if n_base < MIN_SAMPLES or n_dev < MIN_SAMPLES:
             all_decisive = False
-            ub = hoeffding_upper_bound(samp_dev, alpha) if samp_dev else np.inf
+            # Conservative upper bound uses effective n_dev
+            span = (max(samp_dev) - min(samp_dev)) if samp_dev else 1.0
+            import math, numpy as _np
+            if n_dev == 0:  # no samples yet – push large gain
+                ub = _np.inf
+            else:
+                ub = span * math.sqrt(math.log(2 / alpha) / (2 * n_dev))
             gain_to_push = float(max(ub, est_gain))
             if not np.isfinite(gain_to_push):
                 gain_to_push = 1e12
@@ -1533,3 +1561,13 @@ def format_mixture(mixture, strategy_names, threshold=0.01):
         parts.append(f"{name}:{prob:.4f}")
     
     return ", ".join(parts) 
+
+# ---------------------------------------------------------------------------
+#  Helper – trim tiny probabilities and re-normalise per role
+# ---------------------------------------------------------------------------
+
+def trim_mixture_support(mix: torch.Tensor, game: Game, thresh: float = 1e-4) -> torch.Tensor:
+    """Zero-out entries < *thresh* then role-normalise again."""
+    trimmed = mix.clone()
+    trimmed[trimmed < thresh] = 0.0
+    return role_aware_normalize(trimmed, game) 

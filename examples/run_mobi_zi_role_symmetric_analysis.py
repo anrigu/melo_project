@@ -164,7 +164,7 @@ def run_role_symmetric_mobi_zi_egta():
     
         sim_time = 10000  
         num_iterations = 2
-        batch_size = 5 
+        batch_size = 20 
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -242,22 +242,23 @@ def run_role_symmetric_mobi_zi_egta():
             max_profiles=1000000,
             seed=42
         )
+        egta.always_complete_deviations = True      #  ←  add this line
         
         print("Running Role Symmetric EGTA...")
         start_time = time.time()
         game = egta.run(
             max_iterations=num_iterations,
-            profiles_per_iteration=256,
+            profiles_per_iteration=20,
             save_frequency=1,
             verbose=True,
             quiesce_kwargs={
                 'num_iters': 50,
                 'num_random_starts': 0,
-                'regret_threshold': 1e-10,
+                'regret_threshold': 1e-6,
                 'dist_threshold': .01,
                 'solver': 'replicator',
                 'solver_iters': 3000,
-                'restricted_game_size': 3
+                'restricted_game_size': 4
             }
         )
         end_time = time.time()

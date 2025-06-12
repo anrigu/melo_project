@@ -321,6 +321,28 @@ class EGTA:
             else:
                 logger.info("  • No equilibria confirmed this iteration")
 
+            # ----------------------------------------------------------
+            # Optionally schedule *all* one-player deviations that still
+            # lack observations so the next simulation batch will gather
+            # the data required for statistical tests to finish.
+            # ----------------------------------------------------------
+            if getattr(self, "always_complete_deviations", False) and self.equilibria:
+                missing_profiles: List[List[Tuple[str, str]]] = []
+                for mix, _ in self.equilibria:
+                    missing_profiles.extend(
+                        self.scheduler.missing_deviations(mix.cpu().numpy(), self.game)
+                    )
+
+                # Convert those profiles into subgame descriptors so the
+                # scheduler can generate them in get_next_batch().
+                for prof in missing_profiles:
+                    # Build per-role strategy sets from the profile list
+                    sub: Dict[str, set] = {}
+                    for role, strat in prof:
+                        sub.setdefault(role, set()).add(strat)
+                    # Only add if it doesn't exceed scheduler's subgame_size
+                    self.scheduler.requested_subgames.append(sub)
+
             # early exit if all strategies seen and equilibria stable
             all_seen = (self.expected_strategies == self.game.strategies_present_in_payoff_table())
             if self.equilibria and all_seen:
