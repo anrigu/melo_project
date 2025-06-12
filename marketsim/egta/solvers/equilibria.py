@@ -999,7 +999,7 @@ async def quiesce(
                     other_pct = int((1.0 - primary_weight) * 100)
                     print(f"Added {weight_pct}/{other_pct} skewed candidate favoring {strategy_name}")
     
-    additional_random_starts = max(50, num_random_starts * 2)
+    additional_random_starts = num_random_starts
     for i in range(additional_random_starts):
         if game.is_role_symmetric:
             rand_mixture = torch.zeros(game.num_strategies, device=game.game.device)
@@ -1108,11 +1108,24 @@ async def quiesce(
             
         new_unconfirmed = []
         for candidate in unconfirmed_candidates:
-            is_eq, _ = await test_candidate(candidate, game, regret_threshold,
-                                        deviation_queue, restricted_game_size,
-                                        maximal_subgames, verbose,
-                                        full_game=test_game,
-                                        obs_store=obs_store)
+            init_regret = game.regret(candidate.mixture)
+            print(f"[candidate] initial regret = {init_regret:.3e}")
+            # record the point‐estimate regret but do NOT reject here:
+            candidate.regret = init_regret
+
+            # now let every candidate go through the full statistical check
+            print(f"Observaion store: {obs_store}")
+            is_eq, _ = await test_candidate(
+                candidate,
+                game,
+                regret_threshold,
+                deviation_queue,
+                restricted_game_size,
+                maximal_subgames,
+                verbose,
+                full_game=test_game,
+                obs_store=obs_store
+            )
             
             if is_eq:
                 is_distinct = True
@@ -1357,199 +1370,138 @@ def _gather_samples(obs_by_profile: Dict[Tuple[int, ...], List[Observation]],
     return [o.payoffs for o in obs_by_profile.get(profile_key, [])]
 
 
-# ------------------------------------------------------------------  
-#  Statistical one–deviation check used by test_candidate  
-# ------------------------------------------------------------------
-async def test_candidate(candidate, game, regret_threshold, deviation_queue,
-                         restricted_game_size, maximal_subgames=None,
-                         verbose=False, *,
-                         full_game:  Optional[Any] = None,
-                         obs_store:  Optional[Dict[Tuple[int, ...],
-                                                   List[Observation]]] = None,
-                         alpha: float = 0.05):
+# in marketsim/egta/solvers/equilibria.py, replace your existing test_candidate with this:
+
+async def test_candidate(
+    candidate,
+    game,
+    regret_threshold,
+    deviation_queue,
+    restricted_game_size,
+    maximal_subgames=None,
+    verbose: bool = False,
+    *,
+    full_game=None,
+    obs_store: Optional[Dict[Tuple[int, ...], List[Observation]]] = None,
+    alpha: float = 0.05
+) -> Tuple[bool, List[Tuple[int, float]]]:
     """
     True/False: is `candidate` an equilibrium?
     Also returns list of profitable deviations (empty if EQ).
+    Implements a statistical one‐deviation test: we only accept/reject
+    after running significance tests on each deviation (or gathering more samples).
     """
-    from marketsim.egta.egta import statistical_test          # <- your util
+    import numpy as np
+    import torch
+    from marketsim.egta.stats import statistical_test, hoeffding_upper_bound, MIN_SAMPLES
 
-    mixture   = candidate.mixture
+    mix       = candidate.mixture
     test_game = full_game or game
 
-    # ---------------------------------- fast point-estimate filter
-    reg_raw       = test_game.regret(mixture)
-    point_regret  = reg_raw.item() if torch.is_tensor(reg_raw) else float(reg_raw)
-    if point_regret > regret_threshold:
-        return False, []                                     
-
-    if obs_store is None:                                   
-        return True, []
-
-    dev_payoffs = test_game.deviation_payoffs(mixture)
-    exp_payoff  = (mixture * dev_payoffs).sum().item()
-
-    profitable: List[Tuple[int, float]] = []          
-
-    for s in range(test_game.num_strategies):
-        if mixture[s] > 1e-8:
-            continue                                  
-
-        est_gain = dev_payoffs[s].item() - exp_payoff
-        if est_gain <= regret_threshold:            
-            continue
-
-        # ------------- build profile keys for the two pure profiles ---------
-        # current mix's support (pure profile of strategies w/ prob > 0)
-        prof_base = tuple(sorted((r, a)
-                        for (r, a), p in zip(game.all_strategy_names(), mixture)
-                        if p > 1e-10))
-
-        role_s, strat_s = game.get_strategy_name(s) \
-                          if isinstance(game.get_strategy_name(s), tuple) \
-                          else (game.role_names[0], game.get_strategy_name(s))
-
-        prof_dev = tuple(sorted(set(prof_base) - {(role_s, strat_s)}
-                                           | {(role_s, strat_s)}))
-
-        samp_base = [obs.payoffs.mean()
-                     for obs in obs_store.get(prof_base, [])]
-        samp_dev  = [obs.payoffs.mean()
-                     for obs in obs_store.get(prof_dev,  [])]
-
-        # ---------------- run the statistical test every time ---------------
-        if statistical_test(samp_base, samp_dev, alpha):
-            # significant positive gain  → profitable deviation
-            profitable.append((s, est_gain))
-        else:
-            # inconclusive (too little data or not significant) → schedule
-            deviation_queue.push(est_gain, s, mixture)
-
-    # ------------------------------------------------------------------------
-    # decide equilibrium status
-    # ------------------------------------------------------------------------
-    if not profitable:                       # no profitable deviations found
-        #
-        # candidate.regret = point_regret
-        return True, []                      # mixture is an equilibrium
-
-    # otherwise queue *largest* profitable deviation for exploration
-    s_best, gain_best = max(profitable, key=lambda x: x[1])
-    deviation_queue.push(gain_best, s_best, mixture)
-    return False, profitable                # candidate rejected
-
-
-
-
-async def test_candidate(
-        candidate, game, regret_threshold, deviation_queue,
-        restricted_game_size, maximal_subgames=None, verbose=True, *,
-        full_game=None,
-        obs_store: Optional[Dict[Tuple[int, ...], List[Observation]]] = None,
-        alpha: float = 0.05):
-
-    # ------------------------------------------------------------------
-    # utilities
-    # ------------------------------------------------------------------
-    from marketsim.egta.egta import statistical_test, hoeffding_upper_bound
-    import numpy as np
-
-    mix = candidate.mixture
-    reg_val = game.regret(mix)
-    point_regret = float(reg_val.item() if torch.is_tensor(reg_val) else reg_val)
-
+    # ------------------------------------------------------------
+    # 1) Fast point‐estimate filter
+    # ------------------------------------------------------------
+    reg_raw      = test_game.regret(mix)
+    point_regret = reg_raw.item() if torch.is_tensor(reg_raw) else float(reg_raw)
     if verbose:
         print(f"[candidate] initial regret = {point_regret:.3e}")
-
-    # Fast deterministic filter
     if point_regret > regret_threshold:
         if verbose:
-            print("  ↳ exceeds threshold – reject immediately")
+            print(f"  ↳ {point_regret:.3e} > {regret_threshold:.3e} → reject immediately")
         return False, []
 
-    # If we have no variance data, fall back to deterministic acceptance
+    # ------------------------------------------------------------
+    # 2) If no obs_store, fall back to deterministic accept
+    # ------------------------------------------------------------
     if obs_store is None:
         if verbose:
-            print("  ↳ no observation store – deterministic mode only")
+            print("  ↳ no obs_store → deterministic accept")
         candidate.regret = point_regret
         return True, []
 
-    # ------------------------------------------------------------------
-    # statistical one-deviation check
-    # ------------------------------------------------------------------
-    dev_payoffs = game.deviation_payoffs(mix)
-    base_pay    = (mix * dev_payoffs).sum().item()
+    # ------------------------------------------------------------
+    # 3) Statistical one‐deviation tests
+    # ------------------------------------------------------------
+    dev_payoffs = test_game.deviation_payoffs(mix)
+    base_payoff = (mix * dev_payoffs).sum().item()
 
-    profitable : list[tuple[int, float]] = []   # deviations proved profitable
-    all_decisive = True                        # becomes False if any test inconclusive
+    profitable = []    # list of (strategy_index, estimated_gain) that passed significance
+    all_decisive = True
 
-    for s in range(game.num_strategies):
-        if mix[s] > 1e-8:                       # already in support
+    for s in range(test_game.num_strategies):
+        # skip strategies already in support
+        if s in candidate.support:
+             continue
+
+        est_gain = dev_payoffs[s].item() - base_payoff
+        if est_gain <= 0:
             continue
 
-        est_gain = dev_payoffs[s].item() - base_pay
-        if est_gain <= 0:
-            continue                            # can't help even in expectation
-
-        # ------------------------------------------------------------------
         # build profile keys
-        role, strat = (game.get_strategy_name(s) if isinstance(
-                        game.get_strategy_name(s), tuple)
-                        else (game.role_names[0], game.get_strategy_name(s)))
+        prof_base = tuple(sorted(
+            (r,a) for (r,a), p in zip(game.all_strategy_names(), mix) if p > 1e-10
+        ))
+        # replace one profile member with the deviation
+        role, strat = (
+            game.get_strategy_name(s)
+            if isinstance(game.get_strategy_name(s), tuple)
+            else (game.role_names[0], game.get_strategy_name(s))
+        )
+        prof_dev = tuple(sorted((set(prof_base) - {(role,strat)}) | {(role,strat)}))
 
-        prof_base = tuple(sorted((r, a)
-                     for (r, a), p in zip(game.all_strategy_names(), mix)
-                     if p > 1e-10))
-        prof_dev  = tuple(sorted(set(prof_base) -
-                                 {(role, strat)} | {(role, strat)}))
-
-        samp_base = [o.payoffs.mean() for o in obs_store.get(prof_base, [])]
-        samp_dev  = [o.payoffs.mean() for o in obs_store.get(prof_dev , [])]
-
-        sig = statistical_test(samp_base, samp_dev, alpha)
+        # collect one‐number‐per‐run samples (player 0’s payoff)
+        samp_base = [obs.payoffs[0] for obs in obs_store.get(prof_base, [])]
+        samp_dev  = [obs.payoffs[0] for obs in obs_store.get(prof_dev,  [])]
 
         if verbose:
-            print(f" ↳ dev {role}:{strat:<10} gain≈{est_gain:+.3e} "
-                  f"samples=({len(samp_base)},{len(samp_dev)}) "
-                  f"{'SIG' if sig else 'not-sig'}")
+            print(
+                f" ↳ dev {role}:{strat:<10} gain≈{est_gain:+.3e} "
+                f"samples=({len(samp_base)},{len(samp_dev)})", end=" "
+            )
 
-        if sig:                                      # proved profitable
-            profitable.append((s, est_gain))
-        else:
-            all_decisive = False                     # at least one test unclear
-            # optimistic priority → gather more data next
-            ub = (hoeffding_upper_bound(samp_dev, alpha) if samp_dev else np.inf)
+        # --- if under‐sampled, schedule more and mark inconclusive ---
+        if len(samp_base) < MIN_SAMPLES or len(samp_dev) < MIN_SAMPLES:
+            all_decisive = False
+            ub = hoeffding_upper_bound(samp_dev, alpha) if samp_dev else np.inf
             gain_to_push = float(max(ub, est_gain))
             if not np.isfinite(gain_to_push):
-                gain_to_push = 1e12          # huge but finite
-
+                gain_to_push = 1e12
             deviation_queue.push(gain_to_push, s, mix)
+            if verbose:
+                print(f"<{MIN_SAMPLES} samples → scheduled more")
+            continue
 
-    # ------------------------------------------------------------------
-    # decide mixture status
-    # ------------------------------------------------------------------
-    if profitable:                                   # mixture fails
-        # push the best proved deviation first
-        s_best, g_best = max(profitable, key=lambda x: x[1])
-        deviation_queue.push(float(g_best), s_best, mix)
+        # --- run the test ---
+        sig = statistical_test(samp_base, samp_dev, alpha)
         if verbose:
-            names = ", ".join(game.get_strategy_name(i)[1]
-                               if isinstance(game.get_strategy_name(i), tuple)
-                               else game.get_strategy_name(i)
-                               for i, _ in profitable)
-            print(f"  ↳ deviations proved profitable: {names} → reject mixture")
+            print("SIG" if sig else "not-sig")
+
+        if sig:
+            profitable.append((s, est_gain))
+        # else: enough data & non‐profitable → no action
+
+    # ------------------------------------------------------------
+    # 4) Decide equilibrium status
+    # ------------------------------------------------------------
+    if profitable:
+        # reject: queue only the best proved deviation
+        s_best, gain_best = max(profitable, key=lambda x: x[1])
+        deviation_queue.push(float(gain_best), s_best, mix)
+        if verbose:
+            print("  ↳ proved profitable → reject")
         return False, profitable
 
-    if not all_decisive:                             # still inconclusive tests
+    if not all_decisive:
+        # still waiting on more data for at least one deviation
         if verbose:
-            print("  ↳ tests inconclusive – more samples scheduled")
+            print("  ↳ some tests inconclusive → more sampling")
         return False, []
 
-    # every test decisive & no profitable deviation ⇒ accept equilibrium
-    if verbose:
-        print("  ↳ all deviations tested non-profitable – accept as equilibrium")
+    # every test decisive & non‐profitable → accept!
     candidate.regret = point_regret
+    if verbose:
+        print("  ↳ all deviations tested non-profitable → accept")
     return True, []
-
 
 
 

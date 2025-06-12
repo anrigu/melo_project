@@ -15,11 +15,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from marketsim.egta.simulators.melo_wrapper import MeloSimulator
 from marketsim.egta.core.game import Game
-from marketsim.egta.egta import EGTA
+from marketsim.egta.egta import EGTA, Observation
 from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.solvers.equilibria import replicator_dynamics, regret
 import math
+
 
 def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
     """
@@ -251,9 +252,9 @@ def run_role_symmetric_mobi_zi_egta():
             verbose=True,
             quiesce_kwargs={
                 'num_iters': 50,
-                'num_random_starts': 60,
+                'num_random_starts': 0,
                 'regret_threshold': 1e-10,
-                'dist_threshold': 10e-2,
+                'dist_threshold': .01,
                 'solver': 'replicator',
                 'solver_iters': 3000,
                 'restricted_game_size': 1000

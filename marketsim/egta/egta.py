@@ -211,9 +211,17 @@ class EGTA:
         verbose: bool = True,
         quiesce_kwargs: Optional[Dict[str, Any]] = None,
     ) -> "Game":
+        import asyncio
+        import nest_asyncio
+        import marketsim.egta.solvers.equilibria as eq_mod
+        from marketsim.egta.solvers.equilibria import quiesce
+
         # set up logging
         if verbose:
             logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+
+        # allow nested event loops so we can call await quiesce()
+        nest_asyncio.apply()
 
         total_profiles = 0
         start_time = time.time()
@@ -221,12 +229,13 @@ class EGTA:
         # default quiesce parameters
         if quiesce_kwargs is None:
             quiesce_kwargs = dict(
-                num_iters         = 1,
-                num_random_starts = 10,
-                regret_threshold  = 1e-3,
-                dist_threshold    = 1e-2,
-                solver            = "replicator",
-                solver_iters      = 5_000,
+                num_iters             = 1,
+                num_random_starts     = 0,
+                regret_threshold      = 1e-3,
+                dist_threshold        = 0.005,
+                restricted_game_size  = 4,
+                solver                = "replicator",
+                solver_iters          = 5_000,
             )
         eps = quiesce_kwargs["regret_threshold"]
 
@@ -244,14 +253,12 @@ class EGTA:
                     break
 
                 logger.info(f"Got batch of {len(batch)} profiles → simulating…")
-                # show each profile under tqdm
                 for idx, profile in enumerate(
                     tqdm(batch, desc="  profiles", unit="profile", leave=False)
                 ):
                     if verbose:
-                        role_mode = getattr(self, "is_role_symmetric", False)
                         counts = Counter(profile)
-                        if role_mode:
+                        if self.is_role_symmetric:
                             parts = [f"{r}:{s}×{c}" for (r, s), c in counts.items()]
                         else:
                             parts = [f"{s}×{c}" for s, c in counts.items()]
@@ -266,13 +273,11 @@ class EGTA:
                 dt = time.time() - t0
                 logger.info(f"    ✓ simulation done in {dt:.1f}s")
 
-                # record payoffs
                 prev = len(self.payoff_data)
                 self._record_observations(raw)
                 new_rows = self.payoff_data[prev:]
                 logger.info(f"    • recorded {len(new_rows)} new observations")
 
-                # update game & scheduler
                 if self.game is None:
                     logger.info("    • building initial Game from data")
                     self.game = Game.from_payoff_data(new_rows, device=self.device)
@@ -285,87 +290,59 @@ class EGTA:
                 logger.info(f"Total profiles simulated so far: {total_profiles}")
 
                 if total_profiles >= self.max_profiles:
-                    logger.info(f"Reached max_profiles={self.max_profiles}, breaking out of simulation loop.")
+                    logger.info(f"Reached max_profiles={self.max_profiles}, breaking out.")
                     break
 
-            # (2) evaluate equilibrium candidates
-            true_game = (
-                self.game.full_game_reference
-                if hasattr(self.game, "full_game_reference") and self.game.full_game_reference is not None
-                else self.game
-            )
-            logger.info("Selecting equilibrium candidates (up to 50)…")
-            candidates = self.scheduler._select_equilibrium_candidates(self.game, 50)
-            logger.info(f"  • {len(candidates)} candidates selected")
+            # (2) interleaved, async QUIESCE with on-demand sampling & stats tests
+            true_game = getattr(self.game, "full_game_reference", self.game)
+            logger.info("Running interleaved QUIESCE …")
 
-            confirmed, unconfirmed = [], []
-            for idx, σ in enumerate(candidates, start=1):
-                # ensure all deviations are present
-                missing = self.scheduler.missing_deviations(σ, self.game)
-                if missing:
-                    logger.info(f"  • candidate {idx}: {len(missing)} missing deviations → simulating")
-                    with silence_io():
-                        raw = self.simulator.simulate_profiles(missing)
-                    prev = len(self.payoff_data)
-                    self._record_observations(raw)
-                    self.game.update_with_new_data(self.payoff_data[prev:])
-                    logger.info("    ✓ missing deviations recorded")
+            # let test_candidate reach back to this EGTA instance
+            eq_mod.CURRENT_EGTA = self
 
-                σ_reg = float(
-                    regret(true_game, torch.tensor(σ, dtype=torch.float32, device=self.device))
+            confirmed_eqs = asyncio.get_event_loop().run_until_complete(
+                quiesce(
+                    game=self.game,
+                    full_game=true_game,
+                    obs_store=self._obs_by_profile,
+                    num_iters=quiesce_kwargs["num_iters"],
+                    num_random_starts=quiesce_kwargs.get("num_random_starts", 0),
+                    regret_threshold=quiesce_kwargs["regret_threshold"],
+                    dist_threshold=quiesce_kwargs["dist_threshold"],
+                    restricted_game_size=quiesce_kwargs["restricted_game_size"],
+                    solver=quiesce_kwargs["solver"],
+                    solver_iters=quiesce_kwargs["solver_iters"],
+                    verbose=verbose,
                 )
-                logger.info(f"  • candidate {idx}/{len(candidates)} regret = {σ_reg:.6e}")
-                if σ_reg <= eps:
-                    confirmed.append((σ, σ_reg))
-                else:
-                    unconfirmed.append((σ, σ_reg))
+            )
+            if confirmed_eqs:
+                self.equilibria = confirmed_eqs
+                logger.info(f"  ✓ QUIESCE confirmed {len(confirmed_eqs)} equilibria")
+            else:
+                logger.info("  • No equilibria confirmed this iteration")
 
-            if confirmed:
-                self.equilibria = [
-                    (torch.tensor(σ, dtype=torch.float32, device=self.device), r)
-                    for σ, r in confirmed
-                ]
-
-            logger.info(f"Candidates → confirmed: {len(confirmed)} | unconfirmed: {len(unconfirmed)}")
-
-            # early exit?
+            # early exit if all strategies seen and equilibria stable
             all_seen = (self.expected_strategies == self.game.strategies_present_in_payoff_table())
-            if confirmed and not unconfirmed and all_seen:
-                logger.info("All strategies observed and all candidates confirmed → exiting main loop")
+            if self.equilibria and all_seen:
+                logger.info("All strategies observed and equilibria confirmed → exiting loop")
                 break
 
-            # (3) snapshot
+            # snapshot
             if it % save_frequency == 0:
                 logger.info(f"Saving intermediate results at iteration {it}")
                 self._save_results(it)
 
             if total_profiles >= self.max_profiles:
-                logger.info("Reached profile budget → exiting iteration loop")
+                logger.info("Reached profile budget → exiting loop")
                 break
 
-        # (4) final QUIESCE
-        logger.info("Running QUIESCE final verification …")
-        try:
-            q_args = dict(quiesce_kwargs, num_iters=1, dist_threshold=1e-3, num_random_starts=0)
-            eqs = quiesce_sync(
-                game=self.game,
-                full_game=true_game,
-                obs_store=self._obs_by_profile,
-                verbose=verbose,
-                **q_args,
-            )
-            if eqs:
-                self.equilibria = eqs
-                logger.info(f"QUIESCE found {len(eqs)} equilibria")
-        except Exception as e:
-            logger.warning(f"QUIESCE failed with error: {e}")
-
-        # (5) summary
+        # (3) final summary
         elapsed = time.time() - start_time
-        logger.info(f"EGTA completed in {elapsed:.2f}s – "
-                    f"simulated {total_profiles} profiles – "
-                    f"found {len(self.equilibria)} equilibria")
-
+        logger.info(
+            f"EGTA completed in {elapsed:.2f}s – "
+            f"simulated {total_profiles} profiles – "
+            f"found {len(self.equilibria)} equilibria"
+        )
         return self.game
 
 

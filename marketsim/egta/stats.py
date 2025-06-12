@@ -2,7 +2,7 @@ import math
 import numpy as np
 from typing import Sequence
 
-MIN_SAMPLES = 0
+MIN_SAMPLES = 10
 
 
 def hoeffding_upper_bound(mean: float, n: int, alpha: float = .05) -> float:

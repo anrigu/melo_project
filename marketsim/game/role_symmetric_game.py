@@ -7,6 +7,10 @@ from abc import ABC, abstractmethod
 from .abstract_game import AbstractGame
 from collections import defaultdict, Counter
 from marketsim.game.symmetric_game import SymmetricGame
+# ← add this
+from marketsim.egta.utils.observations import Observation
+
+
 
 class RoleSymmetricGame(AbstractGame):
     """
