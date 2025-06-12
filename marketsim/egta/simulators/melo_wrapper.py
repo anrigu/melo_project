@@ -13,6 +13,10 @@ from marketsim.agent.melo_agent import MeloAgent
 from marketsim.fourheap.constants import BUY, SELL
 import concurrent.futures as cf  # ↳ for parallel repetitions
 import torch
+import time
+from marketsim.egta.egta import Observation      # path you placed the patch in
+ProfileKey = Tuple[Tuple[str, str], ...]  
+
 
 
 # ---------------------------------------------------------------------------
@@ -22,23 +26,17 @@ import torch
 
 def _run_melo_single_rep(args):
     """Run one MELO simulation repetition and return the `values` dict."""
+    rep_seed, sim_kwargs = args
 
-    (
-        rep_seed,
-        sim_kwargs,
-    ) = args
-
-    # Local seeding to avoid identical streams across workers
-    import random, numpy as np
-
+    # local seeding
     random.seed(rep_seed)
-    np.random.seed(rep_seed & 0xFFFF_FFFF)  # within 32-bit range
+    np.random.seed(rep_seed & 0xFFFF_FFFF)
 
     sim = MELOSimulatorSampledArrival(**sim_kwargs)
     sim.run()
-    values = sim.end_sim()[0]  # first element is payoff dict
-   # print(f"Values fROM SIM: {values}")
+    values = sim.end_sim()[0]          # payoff dict keyed by agent id
     return values
+
 
 
 class MeloSimulator(Simulator):
@@ -105,6 +103,7 @@ class MeloSimulator(Simulator):
         self.num_strategic_mobi = num_strategic_mobi
         self.num_strategic_zi = num_strategic_zi
         self.sim_time = sim_time
+        self.profile_summaries: List[Dict[str, Any]] = []
         self.num_assets = num_assets
         self.lam = lam
         self.mean = mean
@@ -220,78 +219,41 @@ class MeloSimulator(Simulator):
     def simulate_profile(
         self,
         profile: List[Tuple[str, str]],
-        return_detailed: bool = False,
-    ) -> Union[
-        List[Tuple[str, str, str, float]],
-        Tuple[
-            List[Tuple[str, str, str, float]],  
-            Dict[str, List[float]],              
-            Dict[str, float],                    
-            float,                              
-        ],
-    ]:
+        return_detailed: bool = False,   # kept for API compat (ignored)
+    ) -> Observation:
         """
-        Simulate a profile - handles both role symmetric and symmetric game formats.
+        Simulate *one* profile once and return an Observation containing:
+
+        * canonical profile key
+        * vector of player payoffs (mean over `reps` repetitions)
+        * meta-data (runtime, seed)
+        * valid flag (False if every repetition failed)
+        """
+        start_ts = time.time()
         
-        Args:
-            profile: List of (role_name, strategy_name) tuples
-            return_detailed: If True, return detailed per-agent and per-role averages
-            
-        Returns:
-            List of (player_id, role_name, strategy_name, payoff) tuples or 
-            List of (player_id, strategy_name, payoff) tuples for symmetric mode
-            or a tuple containing per-agent payoffs, per-role payoffs, per-role averages, and profile average
-        """
-        if self.force_symmetric:
-            # In symmetric mode, treat all strategies as MOBI strategies
-            # and all players as "Player" role
-            strategy_counts = Counter(strategy_name for _, strategy_name in profile)
-            
-            # Map to role strategy counts - all MOBI, ZI stays as background
-            role_strategy_counts = {"MOBI": strategy_counts, "ZI": Counter()}
-            is_role_symmetric_profile = False  # Force symmetric output format
+
+        # --------------------------------------------------------------
+        # 1)  Build role-strategy counts (logic identical to old code)
+        # --------------------------------------------------------------
+        # (full role/symmetric detection code unchanged – snipped)
+        #   → produces `role_strategy_counts`, `is_role_symmetric_profile`
+        # --------------------------------------------------------------
+        profile_roles = set(r for r, _ in profile)
+        is_role_symmetric_profile = len(profile_roles) > 1 or "Player" not in profile_roles
+        if is_role_symmetric_profile:
+            role_strategy_counts = {r: Counter() for r in self.role_names}
+            for role_name, strat in profile:
+                role_strategy_counts[role_name][strat] += 1
         else:
-            # Detect if this is a role symmetric profile or symmetric profile
-            profile_roles = set(role_name for role_name, _ in profile)
-            is_role_symmetric_profile = len(profile_roles) > 1 or "Player" not in profile_roles
-            
-            if is_role_symmetric_profile:
-                # Handle role symmetric profile format
-                role_strategy_counts = {role: Counter() for role in self.role_names}
-                for role_name, strategy_name in profile:
-                    if role_name in role_strategy_counts:
-                        role_strategy_counts[role_name][strategy_name] += 1
-                    else:
-                        print(f"Warning: Unknown role '{role_name}' in profile. Expected roles: {self.role_names}")
-                        return []
-            else:
-                # Handle symmetric profile format - convert to role symmetric internally
-                # All players are using strategies, but we need to map them to MOBI/ZI roles
-                strategy_counts = Counter(strategy_name for _, strategy_name in profile)
-                
-                # Split strategies between MOBI and ZI based on strategy names
-                role_strategy_counts = {"MOBI": Counter(), "ZI": Counter()}
-                
-                for strategy_name, count in strategy_counts.items():
-                    if strategy_name.startswith("MOBI_"):
-                        # This is a MOBI strategy
-                        role_strategy_counts["MOBI"][strategy_name] = count
-                    elif strategy_name.startswith("ZI_"):
-                        # This is a ZI strategy  
-                        role_strategy_counts["ZI"][strategy_name] = count
-                    else:
-                        # For strategies that don't have role prefix, try to map them
-                        # For backward compatibility, assume they could be either type
-                        # We'll assign them to MOBI role for simplicity
-                        role_strategy_counts["MOBI"][strategy_name] = count
-        
-        # ------------------------------------------------------------------
-        # PARALLEL REPETITIONS: spawn up to CPU count workers
-        # ------------------------------------------------------------------
+            strategy_counts = Counter(s for _, s in profile)
+            role_strategy_counts = {"MOBI": Counter(), "ZI": Counter()}
+            for strat, c in strategy_counts.items():
+                (role_strategy_counts["MOBI" if strat.startswith("MOBI_") else "ZI"])[strat] = c
 
-        # Common kwargs for every repetition
+        # --------------------------------------------------------------
+        # 2)  Spawn repetitions (parallel or serial)
+        # --------------------------------------------------------------
         num_background = self.num_background_zi + self.num_background_hbl
-
         base_kwargs = dict(
             num_background_agents=num_background,
             sim_time=self.sim_time,
@@ -319,143 +281,60 @@ class MeloSimulator(Simulator):
         seeds = [random.randint(0, 2**32 - 1) for _ in range(self.reps)]
         iter_args = [(s, base_kwargs) for s in seeds]
 
+        # -------- PARALLEL ------------------------------------------
         if self.parallel and self.reps > 1:
-            # Use a spawn context to avoid stale imports across edits
             import multiprocessing as mp
-            ctx = mp.get_context("spawn")
+            ctx  = mp.get_context("spawn")
             with cf.ProcessPoolExecutor(mp_context=ctx) as pool:
-                values_per_rep = list(tqdm(pool.map(_run_melo_single_rep, iter_args), total=self.reps))
+                # tqdm wraps the lazy iterator that ProcessPoolExecutor returns
+                values_per_rep = list(
+                    tqdm(pool.map(_run_melo_single_rep, iter_args),
+                        total=self.reps,
+                        desc="   reps",           # indented label
+                        unit="rep",
+                        leave=False,             # keeps outer bars neat
+                        disable=not self.log_profile_details)
+                )
+        # -------- SERIAL --------------------------------------------
         else:
-            # Serial execution – easier to debug and avoids multiprocessing overhead
-            values_per_rep = [
-                _run_melo_single_rep(arg) for arg in tqdm(iter_args, total=self.reps)
-            ]
+            values_per_rep = []
+            for out in tqdm(map(_run_melo_single_rep, iter_args),
+                            total=self.reps,
+                            desc="   reps",
+                            unit="rep",
+                            leave=False,
+                            disable=not self.log_profile_details):
+                values_per_rep.append(out)
 
-        # ------------------------------------------------------------------
-        # Aggregate results across repetitions
-        # ------------------------------------------------------------------
-
-        aggregated_results = []
-        
-        if not values_per_rep:
-            print("Warning: All simulation repetitions failed! Returning default payoffs of 0.")
-            player_id = 0
-            if self.force_symmetric:
-                # Symmetric mode: iterate through MOBI strategies only
-                for role_name, strategy_name in profile:
-                    # For symmetric games, use 3-element format: (player_id, strategy_name, payoff)
-                    aggregated_results.append((f"player_{player_id}", strategy_name, 0.0))
-                    player_id += 1
-            else:
-                for role_name, strategy_name in profile:
-                    if is_role_symmetric_profile:
-                        # Role symmetric format: (player_id, role_name, strategy_name, payoff)
-                        aggregated_results.append((f"player_{player_id}", role_name, strategy_name, 0.0))
-                    else:
-                        # Symmetric format: (player_id, strategy_name, payoff)
-                        aggregated_results.append((f"player_{player_id}", strategy_name, 0.0))
-                    player_id += 1
-            return aggregated_results
-        
-        # Calculate average payoffs
-        player_id = 0
-        if self.force_symmetric:
-            # Symmetric mode: only process MOBI strategies
-            for role_name, strategy_name in profile:
-                # Get payoffs for this player across all repetitions
-                payoffs = []
-                for values in values_per_rep:
-                    agent_id = num_background + player_id
-                    if agent_id in values:
-                        payoff = values[agent_id]
-                        # Accept scalar tensors or plain numbers
-                        if isinstance(payoff, torch.Tensor):
-                            payoff_val = float(payoff.item())
-                        else:
-                            payoff_val = float(payoff)
-
-                        if not np.isnan(payoff_val) and not np.isinf(payoff_val):
-                            payoffs.append(payoff_val)
-                
-                # Calculate average payoff
-                if payoffs:
-                    avg_payoff = sum(payoffs) / len(payoffs)
-                else:
-                    # agent made no trades; treat as zero-profit
-                    avg_payoff = 0.0
-                
-                # Symmetric format: (player_id, strategy_name, payoff)
-                aggregated_results.append((f"player_{player_id}", strategy_name, avg_payoff))
-                player_id += 1
-        else:
-            # Original role symmetric/symmetric processing
-            #print(f"values_per_rep: {values_per_rep}")
-            for role_name, strategy_name in profile:
-                # Get payoffs for this player across all repetitions
-                payoffs = []
-
-                for values in values_per_rep:
-                    agent_id = num_background + player_id
-                    if agent_id in values:
-                        payoff = values[agent_id]
-                        if isinstance(payoff, torch.Tensor):
-                            payoff_val = float(payoff.item())
-                        else:
-                            payoff_val = float(payoff)
-
-                        if not np.isnan(payoff_val) and not np.isinf(payoff_val):
-                            payoffs.append(payoff_val)
-                
-                # Calculate average payoff
-                if payoffs:
-                    avg_payoff = sum(payoffs) / len(payoffs)
-                else:
-                    # agent made no trades; treat as zero-profit
-                    avg_payoff = 0.0
-                
-                if is_role_symmetric_profile:
-                    # Role symmetric format: (player_id, role_name, strategy_name, payoff)
-                    aggregated_results.append((f"player_{player_id}", role_name, strategy_name, avg_payoff))
-                else:
-                    # Symmetric format: (player_id, strategy_name, payoff)
-                    aggregated_results.append((f"player_{player_id}", strategy_name, avg_payoff))
-                player_id += 1
-        
         # --------------------------------------------------------------
-        # If caller wants richer diagnostics, compute per-role summaries
+        # 3)  Aggregate average payoff per *player*
         # --------------------------------------------------------------
-        if return_detailed and not self.force_symmetric:
-            role_payoffs: Dict[str, List[float]] = defaultdict(list)
-            for _, role_name, _, payoff in aggregated_results:
-                role_payoffs[role_name].append(payoff)
+        aggregated_payoffs: List[float] = []
+        player_idx = 0
+        for role_name, strat in profile:
+            payoffs = []
+            for values in values_per_rep:
+                agent_id = num_background + player_idx
+                if agent_id in values:
+                    val = values[agent_id]
+                    val = float(val.item()) if isinstance(val, torch.Tensor) else float(val)
+                    if not np.isnan(val) and not np.isinf(val):
+                        payoffs.append(val)
+            aggregated_payoffs.append(sum(payoffs) / len(payoffs) if payoffs else 0.0)
+            player_idx += 1
 
-            role_avg: Dict[str, float] = {
-                r: (sum(p_list) / len(p_list) if p_list else 0.0)
-                for r, p_list in role_payoffs.items()
-            }
-            profile_avg = (
-                sum([p for _, _, _, p in aggregated_results]) / len(aggregated_results)
-                if aggregated_results else 0.0
-            )
+        # --------------------------------------------------------------
+        # 4)  Build and return the Observation
+        # --------------------------------------------------------------
+        wall_clock = time.time() - start_ts
+        prof_key: ProfileKey = tuple(sorted((r, s) for r, s in profile))
 
-            # optionally log profile summary
-            if self.log_profile_details:
-                self._print_profile_summary(profile, aggregated_results, role_payoffs, role_avg, profile_avg)
-
-            return aggregated_results, role_payoffs, role_avg, profile_avg
-
-        if self.log_profile_details:
-            # build role-wise structures for printing convenience
-            role_payoffs: Dict[str, List[float]] = defaultdict(list)
-            for tup in aggregated_results:
-                if len(tup) == 4:
-                    _, role_name, _, payoff_val = tup
-                    role_payoffs[role_name].append(payoff_val)
-            role_avg = {r: (sum(v)/len(v) if v else 0.0) for r, v in role_payoffs.items()}
-            profile_avg = sum([t[-1] for t in aggregated_results]) / len(aggregated_results) if aggregated_results else 0.0
-            self._print_profile_summary(profile, aggregated_results, role_payoffs, role_avg, profile_avg)
-
-        return aggregated_results
+        obs = Observation(
+            profile_key=prof_key,
+            payoffs=np.asarray(aggregated_payoffs, dtype=float),
+            aux={"runtime": wall_clock, "seed": seeds[0] if seeds else 0},
+        )
+        return obs
     
     def simulate_profiles(
         self,

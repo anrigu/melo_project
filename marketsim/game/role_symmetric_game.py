@@ -72,6 +72,75 @@ class RoleSymmetricGame(AbstractGame):
         self.scale: float = scale
 
     @classmethod
+    def from_observations(
+        cls,
+        repo: "ObservationRepo",
+        *,
+        min_obs: int = 1,
+        device: str = "cpu",
+        normalize: bool = True,
+    ) -> "RoleSymmetricGame":
+        """Aggregate valid observations in *repo* into RSG tables."""
+
+        role_names, num_players_per_role, strategy_names_per_role = repo.get_metadata()
+
+        # Build global index map (role,strat) -> col idx
+        global_idx: Dict[Tuple[str, str], int] = {}
+        g_counter = 0
+        for r, strat_list in zip(role_names, strategy_names_per_role):
+            for s in strat_list:
+                global_idx[(r, s)] = g_counter
+                g_counter += 1
+        n_strats = g_counter
+
+        configs: List[Tuple[int, ...]] = []
+        payoff_rows: List[List[float]] = []  # list over configs, each is len=n_strats
+
+        for prof_key in repo.profiles():
+            obs_list = repo.get(prof_key)
+            if len(obs_list) < min_obs:
+                continue
+
+            # aggregate counts for this profile key once (they are identical across obs)
+            counts = [0] * n_strats
+            for (role, strat) in prof_key:
+                counts[global_idx[(role, strat)]] += 1
+            configs.append(tuple(counts))
+
+            # collect payoffs per strat across observations
+            by_strat: List[List[float]] = [[] for _ in range(n_strats)]
+            for o in obs_list:
+                for (role, strat), payoff in zip(o.profile, o.payoffs):
+                    by_strat[global_idx[(role, strat)]].append(float(payoff))
+            payoff_rows.append([np.mean(lst) if lst else np.nan for lst in by_strat])
+
+        if not configs:
+            raise ValueError("No profiles with ≥min_obs observations in repo.")
+
+        payoff_arr = torch.tensor(payoff_rows, device=device, dtype=torch.float32)
+        if normalize:
+            mean = payoff_arr.nanmean(dim=0, keepdim=True)
+            std = payoff_arr.nanstd(dim=0, keepdim=True).clamp_min_(1.0)
+            payoff_arr = (payoff_arr - mean) / std
+            offset, scale = float(mean.mean()), float(std.mean())
+        else:
+            offset, scale = 0.0, 1.0
+
+        config_tensor = torch.tensor(configs, device=device, dtype=torch.float32)
+        payoff_tensor = payoff_arr.transpose(0, 1)  # shape (n_strats, n_configs)
+
+        return cls(
+            role_names=role_names,
+            num_players_per_role=num_players_per_role,
+            strategy_names_per_role=strategy_names_per_role,
+            rsg_config_table=config_tensor,
+            rsg_payoff_table=payoff_tensor,
+            device=device,
+            offset=offset,
+            scale=scale,
+        )
+
+    @classmethod
     def from_payoff_data_rsg(
         cls,
         payoff_data: List[List[Tuple[str, str, str, float]]], # Each item: (player_id_str, role_name, strategy_name, payoff_val)
@@ -577,14 +646,15 @@ class RoleSymmetricGame(AbstractGame):
 
         valid_config_rows_mask = torch.ones(filtered_rsg_config_table_cols.shape[0], dtype=torch.bool, device=self.device)
         for i in range(filtered_rsg_config_table_cols.shape[0]):
-            current_restricted_config_counts = filtered_rsg_config_table_cols[i, :]
+            current_counts = filtered_rsg_config_table_cols[i, :]
             for r_new_idx in range(temp_restricted_rsg.num_roles):
-                new_role_slice = slice(temp_restricted_rsg.role_starts[r_new_idx],
-                                       temp_restricted_rsg.role_starts[r_new_idx] + temp_restricted_rsg.num_strategies_per_role[r_new_idx])
-                expected_players_in_new_role = temp_restricted_rsg.num_players_per_role[r_new_idx]
-                actual_players_in_new_role = current_restricted_config_counts[new_role_slice].sum()
-                
-                if not torch.isclose(actual_players_in_new_role, expected_players_in_new_role.to(actual_players_in_new_role.dtype), atol=1e-6):
+                new_slice = slice(
+                    temp_restricted_rsg.role_starts[r_new_idx],
+                    temp_restricted_rsg.role_starts[r_new_idx] + temp_restricted_rsg.num_strategies_per_role[r_new_idx],
+                )
+                expected = temp_restricted_rsg.num_players_per_role[r_new_idx]
+                actual = current_counts[new_slice].sum()
+                if not torch.isclose(actual, expected.to(actual.dtype), atol=1e-6, rtol=1e-4):
                     valid_config_rows_mask[i] = False
                     break
         

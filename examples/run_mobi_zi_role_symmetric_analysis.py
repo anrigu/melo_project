@@ -125,7 +125,6 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
     plt.savefig('rsg_basin_of_attraction.png', bbox_inches='tight')
     plt.show()
     
-    # Calculate basin sizes
     basin_counts = {}
     for eq in converged_to_eq:
         basin_counts[eq] = basin_counts.get(eq, 0) + 1
@@ -153,7 +152,7 @@ def run_role_symmetric_mobi_zi_egta():
     """
     num_strategic_mobi = 28
     num_strategic_zi = 40
-    holding_periods = [50, 100, 150, 200, 250, 300]
+    holding_periods = [50]
     
     all_results = []
     
@@ -163,8 +162,8 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 10
-        batch_size = 20
+        num_iterations = 2
+        batch_size = 5
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -172,7 +171,7 @@ def run_role_symmetric_mobi_zi_egta():
         
         mobi_strategies = [
             "MOBI_100_0",   # 100% CDA, 0% MELO
-            #"MOBI_50_50",   # 50% CDA, 50% MELO
+            "MOBI_50_50",   # 50% CDA, 50% MELO
             "MOBI_0_100"   # 0% CDA, 100% MELO
         ]
         
@@ -684,8 +683,22 @@ def complete_deviation_rows(game, simulator, scheduler, equilibria, batch_size=3
     # Simulate in batches
     for i in range(0, len(uniq_profiles), batch_size):
         batch = uniq_profiles[i : i + batch_size]
-        new_data = simulator.simulate_profiles(batch)
-        game.update_with_new_data(new_data, normalize_payoffs=False)
+        raw = simulator.simulate_profiles(batch)
+
+        # Convert any Observation objects into legacy per-agent rows expected by
+        # RoleSymmetricGame.update_with_new_data.  Keep lists of tuples as-is.
+        legacy_rows = []
+        for item in raw:
+            if isinstance(item, Observation):
+                prof_key = item.profile_key
+                row = []
+                for idx, ((role, strat), pay) in enumerate(zip(prof_key, item.payoffs)):
+                    row.append((f"p{idx}", role, strat, float(pay)))
+                legacy_rows.append(row)
+            else:
+                legacy_rows.append(item)  # already in legacy format
+
+        game.update_with_new_data(legacy_rows, normalize_payoffs=False)
 
 # ---------------------------------------------------------------------------
 

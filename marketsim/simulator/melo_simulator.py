@@ -11,6 +11,8 @@ import torch.distributions as dist
 import torch
 import math
 from collections import defaultdict, Counter
+from tqdm.auto import tqdm
+
 
 def sample_arrivals(p, num_samples):
     # Ensure p is a float tensor - this fixes the torch.finfo error

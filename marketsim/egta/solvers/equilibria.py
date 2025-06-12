@@ -4,12 +4,14 @@ Modernized implementations based on Bryce's original code but using PyTorch.
 """
 import torch
 import numpy as np
-from typing import Dict, List, Tuple, Union, Optional, Callable, Set
+from typing import Dict, List, Tuple, Union, Optional, Callable, Set, Any
 import time
 import heapq
 import asyncio
 from marketsim.egta.core.game import Game
 from marketsim.custom_math.simplex_operations import simplex_normalize, simplex_projection
+from marketsim.egta.utils.observations import Observation
+from marketsim.egta.stats import statistical_test, hoeffding_upper_bound, MIN_SAMPLES
 
 
 class SubgameCandidate:
@@ -55,7 +57,7 @@ class DeviationPriorityQueue:
             strategy: Strategy index
             mixture: Base strategy mixture
         """
-        heapq.heappush(self.queue, (-gain, strategy, mixture))
+        heapq.heappush(self.queue, (-float(gain), strategy, mixture))
         
     def pop(self) -> Tuple[float, int, torch.Tensor]:
         """
@@ -76,6 +78,9 @@ class DeviationPriorityQueue:
         """
         return len(self.queue) == 0
 
+def profile_key_for_pure(game: Game, s: int) -> Tuple[Tuple[str,str], ...]:
+    role_name, strat_name = game.get_strategy_name(s)  # returns (role,strat)
+    return tuple(sorted([(role_name, strat_name)]))
 
 def role_aware_normalize(mixture: torch.Tensor, game: Game) -> torch.Tensor:
     """
@@ -619,7 +624,8 @@ def regret(game: Game, mixture: torch.Tensor) -> torch.Tensor:
         
         # Handle NaN or Inf in the result
         if torch.is_tensor(result):
-            if torch.isnan(result).any() or torch.isinf(result).any():
+            # Convert 0-d boolean tensors to Python bool to avoid ambiguity errors
+            if torch.isnan(result).any().item() or torch.isinf(result).any().item():
                 print("Warning: NaN or Inf detected in regret calculation. Replacing with 1.0")
                 result = torch.nan_to_num(result, nan=1.0, posinf=1.0, neginf=0.0)
         else:
@@ -647,7 +653,9 @@ async def quiesce(
     solver_iters: int = 5000,       
     verbose: bool = True, 
     maximal_subgames: Set[frozenset] = None,
-    full_game: Optional[Game] = None
+    full_game: Optional[Game] = None,
+    obs_store: Optional[Dict[Tuple[int, ...],
+                 List[Observation]]] = None
 ) -> List[Tuple[torch.Tensor, float]]:
     """
     find all equilibria of a game using the QUIESCE algorithm.
@@ -1038,10 +1046,10 @@ async def quiesce(
                     role_melo_mask = melo_mask[global_idx:global_idx + len(role_strategies)]
                     role_mixture = rand_mixture[global_idx:global_idx + len(role_strategies)]
                     
-                    if i % 3 == 0 and role_melo_mask.any():
+                    if i % 3 == 0 and role_melo_mask.any().item():
                         # Bias toward MELO strategies in this role
                         role_mixture[role_melo_mask] *= 5.0
-                    elif i % 3 == 1 and (~role_melo_mask).any():
+                    elif i % 3 == 1 and (~role_melo_mask).any().item():
                         # Bias toward non-MELO strategies in this role
                         role_mixture[~role_melo_mask] *= 5.0
                     # i % 3 == 2: Keep original mixture (no bias)
@@ -1052,10 +1060,10 @@ async def quiesce(
                     global_idx += len(role_strategies)
             else:
                 # Standard biasing for symmetric games
-                if i % 3 == 0 and melo_mask.any():
+                if i % 3 == 0 and melo_mask.any().item():
                     # Bias toward MELO strategies
                     rand_mixture[melo_mask] *= 5.0
-                elif i % 3 == 1 and (~melo_mask).any():
+                elif i % 3 == 1 and (~melo_mask).any().item():
                     # Bias toward non-MELO strategies
                     rand_mixture[~melo_mask] *= 5.0
                 # Renormalize
@@ -1100,7 +1108,11 @@ async def quiesce(
             
         new_unconfirmed = []
         for candidate in unconfirmed_candidates:
-            is_eq, _ = await test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames, verbose, test_game)
+            is_eq, _ = await test_candidate(candidate, game, regret_threshold,
+                                        deviation_queue, restricted_game_size,
+                                        maximal_subgames, verbose,
+                                        full_game=test_game,
+                                        obs_store=obs_store)
             
             if is_eq:
                 is_distinct = True
@@ -1204,7 +1216,9 @@ async def quiesce(
             
             solver_start = time.time()
             if solver == 'replicator':
-                equilibrium = replicator_dynamics(restricted_game, init_restricted, iters=solver_iters)
+                #equilibrium = replicator_dynamics(restricted_game, init_restricted, iters=solver_iters)
+                result = replicator_dynamics(restricted_game, init_restricted, iters=solver_iters)
+                equilibrium = result[0] if isinstance(result, tuple) else result
             elif solver == 'fictitious_play':
                 equilibrium = fictitious_play(restricted_game, init_restricted, iters=solver_iters)
             elif solver == 'gain_descent':
@@ -1219,7 +1233,8 @@ async def quiesce(
                 full_mixture[s] = equilibrium[i]
             
             # Test regret against the appropriate game (full game if using DPR)
-            regret_val = test_game.regret(full_mixture).item()
+            reg_raw   = test_game.regret(full_mixture)
+            regret_val = reg_raw.item() if torch.is_tensor(reg_raw) else float(reg_raw)
             
             candidate = SubgameCandidate(
                 support=new_support,
@@ -1252,7 +1267,8 @@ def quiesce_sync(
     solver="replicator_dynamics",
     solver_iters=1000,
     verbose=False,
-    full_game=None  # Full game for testing equilibria (when using DPR)
+    full_game=None,  # Full game for testing equilibria (when using DPR)
+    obs_store = None
 ):
     """Synchronous wrapper for quiesce - finds all equilibria of a game using QUIESCE."""
     # Import and apply nest_asyncio to handle nested event loops
@@ -1276,7 +1292,8 @@ def quiesce_sync(
             solver_iters=solver_iters,
             maximal_subgames=maximal_subgames,     
             verbose=verbose,
-            full_game=full_game  # Pass through fu_game parameter
+            full_game=full_game,  # Pass through fu_game parameter
+            obs_store=obs_store
         ))
         loop.close()
         
@@ -1335,164 +1352,207 @@ def quiesce_sync(
                 uniform = torch.ones(test_game.num_strategies, device=test_game.game.device) / test_game.num_strategies
             return [(uniform, 1.0)]
 
-async def test_deviations(
-    game, 
-    mixture, 
-    deviation_queue, 
-    regret_threshold=1e-6, 
-    restricted_game_size=4, 
-    maximal_subgames=None,
-    verbose=False
-):
+def _gather_samples(obs_by_profile: Dict[Tuple[int, ...], List[Observation]],
+                    profile_key: Tuple[int, ...]) -> List[np.ndarray]:
+    return [o.payoffs for o in obs_by_profile.get(profile_key, [])]
+
+
+# ------------------------------------------------------------------  
+#  Statistical one–deviation check used by test_candidate  
+# ------------------------------------------------------------------
+async def test_candidate(candidate, game, regret_threshold, deviation_queue,
+                         restricted_game_size, maximal_subgames=None,
+                         verbose=False, *,
+                         full_game:  Optional[Any] = None,
+                         obs_store:  Optional[Dict[Tuple[int, ...],
+                                                   List[Observation]]] = None,
+                         alpha: float = 0.05):
     """
-    Test for beneficial deviations. If `game` is a restricted subgame (has attribute
-    `restriction_indices`), lift both the mixture and any deviating strategy back to
-    the full game before pushing into the queue.
+    True/False: is `candidate` an equilibrium?
+    Also returns list of profitable deviations (empty if EQ).
     """
-    # Determine if we're in a restricted subgame
-    is_restricted = hasattr(game, "restriction_indices")
-    if is_restricted:
-        # 'restriction_indices' maps local subgame indices → full‐game indices
-        full_game = game.full_game_reference  # see note below
-        restriction_list = game.restriction_indices
+    from marketsim.egta.egta import statistical_test          # <- your util
 
-        # Build a full‐length mixture from the restricted 'mixture'
-        full_mixture = torch.zeros(full_game.num_strategies, device=full_game.game.device)
-        for local_i, full_i in enumerate(restriction_list):
-            full_mixture[full_i] = mixture[local_i]
-    else:
-        full_game = game
-        full_mixture = mixture.clone()
+    mixture   = candidate.mixture
+    test_game = full_game or game
 
-    # Now compute deviation payoffs inside the current 'game' (restricted or full)
-    dev_payoffs = game.deviation_payoffs(mixture)
+    # ---------------------------------- fast point-estimate filter
+    reg_raw       = test_game.regret(mixture)
+    point_regret  = reg_raw.item() if torch.is_tensor(reg_raw) else float(reg_raw)
+    if point_regret > regret_threshold:
+        return False, []                                     
 
-    # Clean up any NaN/Inf before computing gains
-    if torch.isnan(dev_payoffs).any() or torch.isinf(dev_payoffs).any():
-        if verbose:
-            print("    Warning: NaN or Inf in deviation payoffs. Clamping.")
-        dev_payoffs = torch.nan_to_num(dev_payoffs, nan=0.0, posinf=10.0, neginf=-10.0)
-
-    # Compute expected payoff under 'mixture'
-    expected_payoff = (mixture * dev_payoffs).sum()
-
-    # Gains = u(s) − u(μ)
-    gains = dev_payoffs - expected_payoff
-
-    has_beneficial = False
-    beneficial_strategies = []
-
-    # Build the set of currently‐played strategies in the restricted space
-    support_local = {i for i, p in enumerate(mixture) if p.item() > 0.01}
-    
-    for local_s in range(game.num_strategies):
-        if local_s in support_local:
-            continue
-
-        local_gain = gains[local_s].item()
-        if np.isnan(local_gain) or np.isinf(local_gain):
-            if verbose:
-                full_s = restriction_list[local_s] if is_restricted else local_s
-                print(f"    Warning: NaN/Inf gain for strategy {full_s}. Skipping.")
-            continue
-
-        if local_gain > regret_threshold:
-            has_beneficial = True
-
-            if is_restricted:
-                full_s = restriction_list[local_s]
-            else:
-                full_s = local_s
-
-            beneficial_strategies.append((full_s, local_gain))
-
-            new_support_full = {i for i, p in enumerate(full_mixture) if p.item() > 0.01}
-            new_support_full.add(full_s)
-
-            if len(new_support_full) <= restricted_game_size:
-                deviation_queue.push(local_gain, full_s, full_mixture)
-
-                if verbose:
-                    print(f"    Queued deviation to full‐game strategy {full_s} with gain {local_gain:.6f}")
-            else:
-                if verbose:
-                    print(f"    Skipping deviation to {full_s} (would exceed restricted size)")
-
-    # If no beneficial deviations in *any* local_s, it's an equilibrium in the current 'game'
-    if not has_beneficial:
-        if verbose:
-            context = "restricted game" if is_restricted else "full game"
-            print(f"    Found equilibrium w.r.t. {context} (regret ≤ {regret_threshold:.6f})")
+    if obs_store is None:                                   
         return True, []
 
-    return False, beneficial_strategies
+    dev_payoffs = test_game.deviation_payoffs(mixture)
+    exp_payoff  = (mixture * dev_payoffs).sum().item()
+
+    profitable: List[Tuple[int, float]] = []          
+
+    for s in range(test_game.num_strategies):
+        if mixture[s] > 1e-8:
+            continue                                  
+
+        est_gain = dev_payoffs[s].item() - exp_payoff
+        if est_gain <= regret_threshold:            
+            continue
+
+        # ------------- build profile keys for the two pure profiles ---------
+        # current mix's support (pure profile of strategies w/ prob > 0)
+        prof_base = tuple(sorted((r, a)
+                        for (r, a), p in zip(game.all_strategy_names(), mixture)
+                        if p > 1e-10))
+
+        role_s, strat_s = game.get_strategy_name(s) \
+                          if isinstance(game.get_strategy_name(s), tuple) \
+                          else (game.role_names[0], game.get_strategy_name(s))
+
+        prof_dev = tuple(sorted(set(prof_base) - {(role_s, strat_s)}
+                                           | {(role_s, strat_s)}))
+
+        samp_base = [obs.payoffs.mean()
+                     for obs in obs_store.get(prof_base, [])]
+        samp_dev  = [obs.payoffs.mean()
+                     for obs in obs_store.get(prof_dev,  [])]
+
+        # ---------------- run the statistical test every time ---------------
+        if statistical_test(samp_base, samp_dev, alpha):
+            # significant positive gain  → profitable deviation
+            profitable.append((s, est_gain))
+        else:
+            # inconclusive (too little data or not significant) → schedule
+            deviation_queue.push(est_gain, s, mixture)
+
+    # ------------------------------------------------------------------------
+    # decide equilibrium status
+    # ------------------------------------------------------------------------
+    if not profitable:                       # no profitable deviations found
+        #
+        # candidate.regret = point_regret
+        return True, []                      # mixture is an equilibrium
+
+    # otherwise queue *largest* profitable deviation for exploration
+    s_best, gain_best = max(profitable, key=lambda x: x[1])
+    deviation_queue.push(gain_best, s_best, mixture)
+    return False, profitable                # candidate rejected
 
 
 
-async def test_candidate(candidate, game, regret_threshold, deviation_queue, restricted_game_size, maximal_subgames=None, verbose=False, full_game: Optional[Game] = None):
-    """Test a candidate equilibrium and add beneficial deviations to the queue."""
-    mixture = candidate.mixture
-    num_strategies = game.num_strategies
-    
-    # Determine which game to use for testing
-    test_game = full_game if full_game is not None else game
-    
-    # Safety check to ensure we have a true game for testing
-    if test_game is None:
-        raise ValueError("No valid game available for testing equilibrium candidates")
-    
-    # Validate mixture for numerical issues before testing
-    if torch.isnan(mixture).any() or torch.isinf(mixture).any() or torch.any(mixture < 0):
+
+async def test_candidate(
+        candidate, game, regret_threshold, deviation_queue,
+        restricted_game_size, maximal_subgames=None, verbose=True, *,
+        full_game=None,
+        obs_store: Optional[Dict[Tuple[int, ...], List[Observation]]] = None,
+        alpha: float = 0.05):
+
+    # ------------------------------------------------------------------
+    # utilities
+    # ------------------------------------------------------------------
+    from marketsim.egta.egta import statistical_test, hoeffding_upper_bound
+    import numpy as np
+
+    mix = candidate.mixture
+    reg_val = game.regret(mix)
+    point_regret = float(reg_val.item() if torch.is_tensor(reg_val) else reg_val)
+
+    if verbose:
+        print(f"[candidate] initial regret = {point_regret:.3e}")
+
+    # Fast deterministic filter
+    if point_regret > regret_threshold:
         if verbose:
-            print(f"    Warning: Invalid mixture detected. Fixing before testing.")
-        # Fix the mixture
-        mixture = torch.nan_to_num(mixture, nan=1.0/num_strategies)
-        mixture = torch.clamp(mixture, min=1e-6)
-        mixture = mixture / mixture.sum()
-        candidate.mixture = mixture
-    
-    # Calculate regret using the test game (full game if using DPR)
-    try:
-        regret_val = test_game.regret(mixture)
-        
-        # Handle NaN regret
-        if torch.is_tensor(regret_val) and (
-            torch.isnan(regret_val).any() or torch.isinf(regret_val).any()
-        ):
-            if verbose:
-                print(f"    Warning: Detected NaN/Inf regret for candidate. Setting high regret.")
-            regret_val = torch.tensor(1.0, device=mixture.device)
-            candidate.regret = 1.0
-            return False, []
-        
-        if isinstance(regret_val, torch.Tensor):
-            regret_val = regret_val.item()
-        
-        candidate.regret = regret_val
-        
-        if verbose:
-            print(f"    Candidate regret (vs {'full' if full_game else 'reduced'} game): {regret_val:.6f}")
-            
-        # If regret is above threshold, not an equilibrium
-        if regret_val > regret_threshold:
-            return False, []
-            
-    except Exception as e:
-        if verbose:
-            print(f"    Error calculating regret: {e}")
-        candidate.regret = 1.0
+            print("  ↳ exceeds threshold – reject immediately")
         return False, []
-    
-    # Now test for beneficial deviations using the test game
-    return await test_deviations(
-        game=test_game,  # Use test_game for deviation testing
-        mixture=mixture,
-        deviation_queue=deviation_queue,
-        regret_threshold=regret_threshold,
-        restricted_game_size=restricted_game_size,
-        maximal_subgames=maximal_subgames,
-        verbose=verbose
-    )
+
+    # If we have no variance data, fall back to deterministic acceptance
+    if obs_store is None:
+        if verbose:
+            print("  ↳ no observation store – deterministic mode only")
+        candidate.regret = point_regret
+        return True, []
+
+    # ------------------------------------------------------------------
+    # statistical one-deviation check
+    # ------------------------------------------------------------------
+    dev_payoffs = game.deviation_payoffs(mix)
+    base_pay    = (mix * dev_payoffs).sum().item()
+
+    profitable : list[tuple[int, float]] = []   # deviations proved profitable
+    all_decisive = True                        # becomes False if any test inconclusive
+
+    for s in range(game.num_strategies):
+        if mix[s] > 1e-8:                       # already in support
+            continue
+
+        est_gain = dev_payoffs[s].item() - base_pay
+        if est_gain <= 0:
+            continue                            # can't help even in expectation
+
+        # ------------------------------------------------------------------
+        # build profile keys
+        role, strat = (game.get_strategy_name(s) if isinstance(
+                        game.get_strategy_name(s), tuple)
+                        else (game.role_names[0], game.get_strategy_name(s)))
+
+        prof_base = tuple(sorted((r, a)
+                     for (r, a), p in zip(game.all_strategy_names(), mix)
+                     if p > 1e-10))
+        prof_dev  = tuple(sorted(set(prof_base) -
+                                 {(role, strat)} | {(role, strat)}))
+
+        samp_base = [o.payoffs.mean() for o in obs_store.get(prof_base, [])]
+        samp_dev  = [o.payoffs.mean() for o in obs_store.get(prof_dev , [])]
+
+        sig = statistical_test(samp_base, samp_dev, alpha)
+
+        if verbose:
+            print(f" ↳ dev {role}:{strat:<10} gain≈{est_gain:+.3e} "
+                  f"samples=({len(samp_base)},{len(samp_dev)}) "
+                  f"{'SIG' if sig else 'not-sig'}")
+
+        if sig:                                      # proved profitable
+            profitable.append((s, est_gain))
+        else:
+            all_decisive = False                     # at least one test unclear
+            # optimistic priority → gather more data next
+            ub = (hoeffding_upper_bound(samp_dev, alpha) if samp_dev else np.inf)
+            gain_to_push = float(max(ub, est_gain))
+            if not np.isfinite(gain_to_push):
+                gain_to_push = 1e12          # huge but finite
+
+            deviation_queue.push(gain_to_push, s, mix)
+
+    # ------------------------------------------------------------------
+    # decide mixture status
+    # ------------------------------------------------------------------
+    if profitable:                                   # mixture fails
+        # push the best proved deviation first
+        s_best, g_best = max(profitable, key=lambda x: x[1])
+        deviation_queue.push(float(g_best), s_best, mix)
+        if verbose:
+            names = ", ".join(game.get_strategy_name(i)[1]
+                               if isinstance(game.get_strategy_name(i), tuple)
+                               else game.get_strategy_name(i)
+                               for i, _ in profitable)
+            print(f"  ↳ deviations proved profitable: {names} → reject mixture")
+        return False, profitable
+
+    if not all_decisive:                             # still inconclusive tests
+        if verbose:
+            print("  ↳ tests inconclusive – more samples scheduled")
+        return False, []
+
+    # every test decisive & no profitable deviation ⇒ accept equilibrium
+    if verbose:
+        print("  ↳ all deviations tested non-profitable – accept as equilibrium")
+    candidate.regret = point_regret
+    return True, []
+
+
+
+
 
 def format_mixture(mixture, strategy_names, threshold=0.01):
     """

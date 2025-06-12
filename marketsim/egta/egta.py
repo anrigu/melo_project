@@ -4,11 +4,12 @@ Empirical Game-Theoretic Analysis (EGTA) framework with Role Symmetric Game supp
 import os
 import json
 import time
-from typing import Dict, List, Tuple, Any, Optional, Union, Set
+from typing import Dict, List, Tuple, Any, Optional, Union, Set, Sequence
 import torch
 import numpy as np
 from datetime import datetime
-
+from dataclasses import dataclass
+from collections import Counter
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
 from marketsim.egta.schedulers.random import RandomScheduler
@@ -16,6 +17,51 @@ from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.simulators.base import Simulator
 from marketsim.egta.solvers.equilibria import quiesce, quiesce_sync, replicator_dynamics, regret
 from marketsim.game.symmetric_game import SymmetricGame
+import math
+from marketsim.egta.stats import statistical_test, hoeffding_upper_bound
+from tqdm.auto import tqdm          # nice Jupyter/terminal handling
+from contextlib import redirect_stdout, redirect_stderr
+import io
+
+
+
+class silence_io:
+    """Context-manager that discards everything printed to stdout *and* stderr."""
+    def __enter__(self):
+        self._buf_out, self._buf_err = io.StringIO(), io.StringIO()
+        self._redir_out = redirect_stdout(self._buf_out)
+        self._redir_err = redirect_stderr(self._buf_err)
+        self._redir_out.__enter__()
+        self._redir_err.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        # close the redirections and drop the buffers
+        self._redir_out.__exit__(*exc)
+        self._redir_err.__exit__(*exc)
+
+
+
+@dataclass
+class Observation:
+    """A *single* simulator run for one pure profile.
+
+    Attributes
+    ----------
+    profile_key : Tuple[int, ...]
+        Hashable representation of the pure‑strategy profile.
+    payoffs : np.ndarray  shape = (num_players,)
+        realised utilities this round.
+    aux : Optional[Dict[str, Any]] – any extra features you might emit.
+    """
+    profile_key: Tuple[int, ...]
+    payoffs:     np.ndarray
+    aux:         Optional[Dict[str, Any]] = None
+
+# -----------------------------------------------------------------------------
+#  UTILITIES – one‑sided Hoeffding test   (no external dependencies)
+# -----------------------------------------------------------------------------
+
 
 
 class EGTA:
@@ -47,6 +93,7 @@ class EGTA:
         self.output_dir = output_dir
         self.max_profiles = max_profiles
         self.seed = seed
+        self._init_storage()
         
         # Detect if simulator supports role symmetric games
         self.is_role_symmetric = hasattr(simulator, 'get_role_info')
@@ -101,183 +148,257 @@ class EGTA:
         self.payoff_data = []
         self.simulated_profiles = set()
         self.equilibria = []
+    def _init_storage(self):
+        self._obs_by_profile: Dict[Tuple[int, ...], List[Observation]] = {}
+        self.payoff_data = []
+
+    def _record_observations(self, raw_samples: List[Any]):
+        """
+        • Keep variance data in self._obs_by_profile   (Observation objects)
+        • Keep legacy per-agent rows in self.payoff_data  (list[tuple]) so
+        Game.from_payoff_data still works unmodified.
+        """
+        for item in raw_samples:
+            # ------------------------------------------------------------------
+            # 1. Obtain / build an Observation  (needed for statistical tests)
+            # ------------------------------------------------------------------
+            if isinstance(item, Observation):
+                obs = item
+                legacy_row = None            # we'll build it below
+            elif isinstance(item, list) and item and len(item[0]) == 4:
+                # list[(pid,role,strat,payoff)…]  →  Observation
+                profile_key = tuple(sorted((r, s) for _pid, r, s, _ in item))
+                payoffs = np.asarray([p for *_xyz, p in item], dtype=float)
+                obs = Observation(profile_key, payoffs)
+                legacy_row = item            # we can reuse it as-is
+            else:  # dict {"profile":…, "payoffs":…}
+                profile_key, payoff_vec = item["profile"], item["payoffs"]
+                obs = Observation(tuple(profile_key), np.asarray(payoff_vec, dtype=float))
+                legacy_row = None            # will build below
+
+            # ------------------------------------------------------------------
+            # 2. Store Observation for variance / hypothesis tests
+            # ------------------------------------------------------------------
+            self._obs_by_profile.setdefault(obs.profile_key, []).append(obs)
+
+            # ------------------------------------------------------------------
+            # 3. Ensure self.payoff_data gets a *legacy* row
+            # ------------------------------------------------------------------
+            if legacy_row is None:
+                # Need to fabricate the list[(pid,role,strat,pay)] form
+                legacy_row = []
+                for idx, (role, strat) in enumerate(obs.profile_key):
+                    payoff = float(obs.payoffs[idx])
+                    legacy_row.append((f"p{idx}", role, strat, payoff))
+            self.payoff_data.append(legacy_row)
+
+
 
     def has_profile(self, profile: List[Tuple[str,str]]) -> bool:
         key = tuple(sorted((r, s) for r, s in profile))
         return key in self.game.payoff_table   # adjust to your storage structure
 
     
-    def run(self, 
-           max_iterations: int = 10, 
-           profiles_per_iteration: int = 10,
-           save_frequency: int = 1,
-           verbose: bool = True,
-           quiesce_kwargs: Optional[Dict] = None) -> Game:
-        """
-        Run the EGTA process.
-        
-        Args:
-            max_iterations: Maximum number of iterations
-            profiles_per_iteration: Number of profiles to simulate per iteration
-            save_frequency: How often to save results (in iterations)
-            verbose: Whether to print progress
-            quiesce_kwargs: Optional dictionary of parameters to pass to quiesce_sync
-            
-        Returns:
-            The final game
-        """
-        total_profiles = 0
-        start_time = time.time()
-        
-        # Set default quiesce parameters if not provided
+   
+    def run(
+        self,
+        max_iterations: int = 10,
+        profiles_per_iteration: int = 10,      # retained for API compatibility
+        save_frequency: int = 1,
+        verbose: bool = True,
+        quiesce_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> "Game":
+
+        total_profiles, start_time = 0, time.time()
+
+        # ------------------------------------------------------------------
+        # Defaults for the *final* QUIESCE pass
+        # ------------------------------------------------------------------
         if quiesce_kwargs is None:
-            quiesce_kwargs = {
-                'num_iters': 1,
-                'num_random_starts': 10,
-                'regret_threshold': 1e-3,
-                'dist_threshold': 1e-2,
-                'solver': 'replicator',
-                'solver_iters': 5000
-            }
-        else:
-            # Ensure all required parameters are present
-            default_quiesce_kwargs = {
-                'num_iters': 1,
-                'num_random_starts': 60,
-                'regret_threshold': 1e-2,
-                'dist_threshold': 1e-2,
-                'solver': 'replicator',
-                'solver_iters': 5000
-            }
-       
-            for key, value in default_quiesce_kwargs.items():
-                if key not in quiesce_kwargs:
-                    quiesce_kwargs[key] = value
-        
+            quiesce_kwargs = dict(
+                num_iters=1,
+                num_random_starts=10,
+                regret_threshold=1e-3,
+                dist_threshold=1e-2,
+                solver="replicator",
+                solver_iters=5_000,
+            )
+        eps = quiesce_kwargs["regret_threshold"]
 
-        for iteration in range(max_iterations):
+        # ================================================================
+        #                       MAIN EGTA LOOP
+        # ================================================================
+        for it in range(max_iterations):
             if verbose:
-                print(f"\nIteration {iteration+1}/{max_iterations}")
+                print(f"\nIteration {it + 1}/{max_iterations}")
 
-        
+            # ------------------------------------------------------------
+            # (1)  Simulate new profiles from the scheduler
+            # ------------------------------------------------------------
             while True:
                 batch = self.scheduler.get_next_batch(self.game)
                 if not batch:
-                    break  
+                    break
 
                 if verbose:
-                    print(f"  Scheduling {len(batch)} new profiles")
-                new_data = self.simulator.simulate_profiles(batch)
+                    for idx, profile in enumerate(
+                        tqdm(batch, desc="Simulating profiles",
+                            unit="profile", leave=False)
+                    ):
+                        role_mode = getattr(self, "is_role_symmetric", False)
+                        counts = Counter(profile)
+                        if role_mode:  # profile is list[(role, strat)]
+                            parts = [f"{r}:{s}×{c}" for (r, s), c in counts.items()]
+                        else:          # symmetric game: list[strat]
+                            parts = [f"{s}×{c}" for s, c in counts.items()]
+                        print(f"  • ({idx + 1}/{len(batch)}) [{', '.join(parts)}]")
 
-                # update game
-                self.payoff_data.extend(new_data)
+                t0 = time.time()
+                with silence_io():                          # <── mute noisy internals
+                    raw = self.simulator.simulate_profiles(batch)
+                if verbose:
+                    print(f"    ✓ finished simulation in {time.time() - t0:.1f}s")
+
+                prev = len(self.payoff_data)
+                self._record_observations(raw)
+                legacy_rows = self.payoff_data[prev:]
+
                 if self.game is None:
-                    self.game = Game.from_payoff_data(self.payoff_data, device=self.device)
+                    self.game = Game.from_payoff_data(legacy_rows,
+                                                    device=self.device)
                 else:
-                    self.game.update_with_new_data(new_data)
+                    self.game.update_with_new_data(legacy_rows)
 
                 self.scheduler.update(self.game)
-                self.scheduler._profile_key_cache = {}
-                total_profiles += len(new_data)
+                total_profiles += len(batch)
+
                 if total_profiles >= self.max_profiles:
                     break
 
-         
-            candidates = self.scheduler._select_equilibrium_candidates(self.game, 50)
+            # ------------------------------------------------------------
+            # (2)  Evaluate equilibrium candidates
+            # ------------------------------------------------------------
+            true_game = (
+                self.game.full_game_reference
+                if hasattr(self.game, "full_game_reference")
+                and self.game.full_game_reference is not None
+                else self.game
+            )
+
+            candidates = self.scheduler._select_equilibrium_candidates(
+                self.game, 50)
+
+            # —— inject joint-pure CDA / MELO mixes ———————————————
+            extra_pures, pure_cda, pure_melo = [], \
+                torch.zeros(self.game.num_strategies, device=self.device), \
+                torch.zeros(self.game.num_strategies, device=self.device)
+
+            for gidx, sname in enumerate(self.game.strategy_names):
+                if "CDA"  in sname.upper():
+                    pure_cda[gidx] = 1.0
+                if "MELO" in sname.upper():
+                    pure_melo[gidx] = 1.0
+
+            if pure_cda.sum():
+                extra_pures.append(role_aware_normalize(pure_cda,  self.game).tolist())
+            if pure_melo.sum():
+                extra_pures.append(role_aware_normalize(pure_melo, self.game).tolist())
+
+            for mix in extra_pures:
+                if not any(np.allclose(mix, c, atol=1e-6) for c in candidates):
+                    candidates.append(mix)
+            # ————————————————————————————————————————————————
+
             confirmed, unconfirmed = [], []
-            eps = quiesce_kwargs.get('regret_threshold', 1e-3)
-
-            for σ in candidates: #ask scheduler for missing deviations
+            for σ in candidates:
+                # be sure every deviation of σ is present
                 missing = self.scheduler.missing_deviations(σ, self.game)
-                if verbose:
-                    print(f"missing = {len(missing)}")
                 if missing:
-                    if verbose:
-                        print(f"{len(missing)} missing deviations → simulating")
-                    new_data = self.simulator.simulate_profiles(missing)
-                    self.payoff_data.extend(new_data)
-                    self.game.update_with_new_data(new_data)
-                    self.scheduler.update(self.game)
-                    self.scheduler._profile_key_cache = {}
-                    total_profiles += len(new_data)
+                    with silence_io():
+                        raw = self.simulator.simulate_profiles(missing)
+                    prev = len(self.payoff_data)
+                    self._record_observations(raw)
+                    self.game.update_with_new_data(self.payoff_data[prev:])
 
-                σ_reg = float(regret(self.game, torch.tensor(σ, dtype=torch.float32,
-                                                            device=self.device)))
-                if σ_reg <= eps:
-                    confirmed.append((torch.tensor(σ,
-                               dtype=torch.float32,
-                               device=self.game.game.device),σ_reg))
-                else:
-                    unconfirmed.append((σ, σ_reg))
+                σ_reg = float(regret(
+                    true_game,
+                    torch.tensor(σ, dtype=torch.float32, device=self.device))
+                )
+                (confirmed if σ_reg <= eps else unconfirmed).append((σ, σ_reg))
+
+            if confirmed:
+                self.equilibria = [
+                    (torch.tensor(σ, dtype=torch.float32, device=self.device), r)
+                    for σ, r in confirmed
+                ]
 
             if verbose:
                 print(f"  Candidates – confirmed: {len(confirmed)}   "
                     f"unconfirmed: {len(unconfirmed)}")
 
+            # early-exit if everything is settled
             all_seen = (
-                self.expected_strategies
-                == self.game.strategies_present_in_payoff_table()  
+                self.expected_strategies ==
+                self.game.strategies_present_in_payoff_table()
             )
             if confirmed and not unconfirmed and all_seen:
-                self.equilibria = confirmed
                 if verbose:
                     print("  All strategies observed and all candidates confirmed – done.")
                 break
 
-           
-            if verbose:
-                print("  Expanding subgame …")
-
-            # optional snapshot
-            if iteration % save_frequency == 0:
-                self._save_results(iteration)
+            # ------------------------------------------------------------
+            # (3)  Snapshot
+            # ------------------------------------------------------------
+            if it % save_frequency == 0:
+                self._save_results(it)
 
             if total_profiles >= self.max_profiles:
                 if verbose:
                     print(f"Reached profile budget ({self.max_profiles}).")
                 break
-        total_time = time.time() - start_time
 
-        # --------------------------------------------------------------------
-        # FINAL EQUILIBRIUM VERIFICATION VIA QUIESCE
-        # --------------------------------------------------------------------
+        # ----------------------------------------------------------------
+        # (4)  Single final QUIESCE verification
+        # ----------------------------------------------------------------
+        if verbose:
+            print("\nRunning QUIESCE final verification …")
+
         try:
-            if verbose:
-                print("\nRunning QUIESCE final verification …")
+            q_args = dict(quiesce_kwargs,
+                        num_iters=1,
+                        dist_threshold=1e-3,
+                        num_random_starts=0)
 
-            # Ensure final verification runs just one improvement step regardless
-            # of what was requested upstream. This does *not* mutate the
-            # original dictionary passed by the caller.
-            quiesce_args = dict(quiesce_kwargs)
-            quiesce_args["num_iters"] = 1
-            quiesce_args["dist_threshold"] = 1e-3
-            quiesce_args["num_random_starts"] = 20
-
-            quiesce_eqs = quiesce_sync(
-                game=self.game,          # current empirical game (full)
-                full_game=self.game,     # test deviations in the same game
+            eqs = quiesce_sync(
+                game=self.game,          # (possibly reduced) working game
+                full_game=true_game,     # verify vs. true/full game
+                obs_store=self._obs_by_profile,
                 verbose=verbose,
-                **quiesce_args,
+                **q_args,
             )
-
-            if quiesce_eqs:
-                self.equilibria = quiesce_eqs
+            if eqs:
+                self.equilibria = eqs
                 if verbose:
                     print(f"QUIESCE found {len(self.equilibria)} equilibria")
         except Exception as e:
             if verbose:
                 print(f"QUIESCE failed: {e}")
 
-        # --------------------------------------------------------------------
-        # PRINT SUMMARY AND RETURN
-        # --------------------------------------------------------------------
-        total_time = time.time() - start_time
+        # ----------------------------------------------------------------
+        # (5)  Summary
+        # ----------------------------------------------------------------
         if verbose:
-            print(f"\nEGTA completed in {total_time:.2f} seconds")
-            print(f"Simulated {total_profiles} profiles")
-            print(f"Found {len(self.equilibria)} equilibria")
-        
+            elapsed = time.time() - start_time
+            print(f"\nEGTA completed in {elapsed:.2f}s – "
+                f"simulated {total_profiles} profiles – "
+                f"found {len(self.equilibria)} equilibria")
+
         return self.game
+
+
+
+
+
     
     def _save_results(self, iteration: int):
         """

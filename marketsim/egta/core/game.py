@@ -459,12 +459,14 @@ class Game:
 
 
    
-    def all_strategy_names(self) -> List[str]:
-        return self.strategy_names if not self.is_role_symmetric else [
-            f"{r}:{s}"
-            for r, role_strats in zip(self.role_names, self.strategy_names_per_role)
-            for s in role_strats
-        ]
+    def all_strategy_names(self) -> List[Tuple[str, str]]:
+        if getattr(self, "is_role_symmetric", False):
+            names = []
+            for role, acts in zip(self.role_names, self.strategy_names_per_role):
+                names.extend((role, a) for a in acts)
+            return names
+        # symmetric case – already there
+        return [(self.role_names[0], a) for a in self.strategy_names]
 
     def strategies_present_in_payoff_table(self) -> set:
         """Return the set {'MOBI:MOBI_0_100', ...} that actually appear."""
