@@ -163,7 +163,7 @@ def run_role_symmetric_mobi_zi_egta():
     
         sim_time = 10000  
         num_iterations = 2
-        batch_size = 5
+        batch_size = 140 
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -171,7 +171,7 @@ def run_role_symmetric_mobi_zi_egta():
         
         mobi_strategies = [
             "MOBI_100_0",   # 100% CDA, 0% MELO
-            "MOBI_50_50",   # 50% CDA, 50% MELO
+            #"MOBI_50_50",   # 50% CDA, 50% MELO
             "MOBI_0_100"   # 0% CDA, 100% MELO
         ]
         
@@ -252,8 +252,8 @@ def run_role_symmetric_mobi_zi_egta():
             quiesce_kwargs={
                 'num_iters': 50,
                 'num_random_starts': 60,
-                'regret_threshold': 1e-3,
-                'dist_threshold': 5e-2,
+                'regret_threshold': 1e-10,
+                'dist_threshold': 10e-2,
                 'solver': 'replicator',
                 'solver_iters': 3000,
                 'restricted_game_size': 1000

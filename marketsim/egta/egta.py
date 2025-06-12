@@ -22,7 +22,8 @@ from marketsim.egta.stats import statistical_test, hoeffding_upper_bound
 from tqdm.auto import tqdm          # nice Jupyter/terminal handling
 from contextlib import redirect_stdout, redirect_stderr
 import io
-
+import logging
+logger = logging.getLogger(__name__)
 
 
 class silence_io:
@@ -185,7 +186,6 @@ class EGTA:
             # 3. Ensure self.payoff_data gets a *legacy* row
             # ------------------------------------------------------------------
             if legacy_row is None:
-                # Need to fabricate the list[(pid,role,strat,pay)] form
                 legacy_row = []
                 for idx, (role, strat) in enumerate(obs.profile_key):
                     payoff = float(obs.payoffs[idx])
@@ -196,14 +196,14 @@ class EGTA:
 
     def has_profile(self, profile: List[Tuple[str,str]]) -> bool:
         key = tuple(sorted((r, s) for r, s in profile))
-        return key in self.game.payoff_table   # adjust to your storage structure
+        return key in self.game.payoff_table 
 
     
    
     def run(
         self,
         max_iterations: int = 10,
-        profiles_per_iteration: int = 10,      # retained for API compatibility
+        profiles_per_iteration: int = 10,     
         save_frequency: int = 1,
         verbose: bool = True,
         quiesce_kwargs: Optional[Dict[str, Any]] = None,
@@ -211,9 +211,7 @@ class EGTA:
 
         total_profiles, start_time = 0, time.time()
 
-        # ------------------------------------------------------------------
-        # Defaults for the *final* QUIESCE pass
-        # ------------------------------------------------------------------
+       
         if quiesce_kwargs is None:
             quiesce_kwargs = dict(
                 num_iters=1,
@@ -254,10 +252,15 @@ class EGTA:
                         print(f"  • ({idx + 1}/{len(batch)}) [{', '.join(parts)}]")
 
                 t0 = time.time()
-                with silence_io():                          # <── mute noisy internals
-                    raw = self.simulator.simulate_profiles(batch)
                 if verbose:
-                    print(f"    ✓ finished simulation in {time.time() - t0:.1f}s")
+                    # Let internal tqdm bars (reps) print when verbose
+                    raw = self.simulator.simulate_profiles(batch)
+                else:
+                    # Suppress internal output when not in verbose mode
+                    with silence_io():
+                        raw = self.simulator.simulate_profiles(batch)
+                if verbose:
+                    print(f"    ✓ finished simulation in {(time.time()-t0):.1f}s")
 
                 prev = len(self.payoff_data)
                 self._record_observations(raw)
@@ -288,25 +291,7 @@ class EGTA:
             candidates = self.scheduler._select_equilibrium_candidates(
                 self.game, 50)
 
-            # —— inject joint-pure CDA / MELO mixes ———————————————
-            extra_pures, pure_cda, pure_melo = [], \
-                torch.zeros(self.game.num_strategies, device=self.device), \
-                torch.zeros(self.game.num_strategies, device=self.device)
-
-            for gidx, sname in enumerate(self.game.strategy_names):
-                if "CDA"  in sname.upper():
-                    pure_cda[gidx] = 1.0
-                if "MELO" in sname.upper():
-                    pure_melo[gidx] = 1.0
-
-            if pure_cda.sum():
-                extra_pures.append(role_aware_normalize(pure_cda,  self.game).tolist())
-            if pure_melo.sum():
-                extra_pures.append(role_aware_normalize(pure_melo, self.game).tolist())
-
-            for mix in extra_pures:
-                if not any(np.allclose(mix, c, atol=1e-6) for c in candidates):
-                    candidates.append(mix)
+           
             # ————————————————————————————————————————————————
 
             confirmed, unconfirmed = [], []
