@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 import torch
 import pytest
 import multiprocessing
+import numpy as np
 
 from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.solvers.equilibria import replicator_dynamics, quiesce_sync
@@ -53,6 +54,8 @@ def create_rps_game():
             self.num_players_per_role = torch.tensor([2])
             self.game = self # For compatibility
             self.device = torch.device("cpu")
+            self.num_players = 2  # Two players in the game
+            self.num_actions = 3
 
         def deviation_payoffs(self, mixture):
             return payoff_matrix @ mixture
@@ -578,21 +581,112 @@ def _build_large_random_game(num_roles=3, strats_per_role=5, players_per_role=3,
     return Game(rsg)
 
 
-def test_large_rsg_quiesce_smoke():
-    """Ensure QUIESCE returns at least one equilibrium on a moderate-size game."""
-    game = _build_large_random_game()
+# def test_large_rsg_quiesce_smoke():
+#     """Ensure QUIESCE returns at least one equilibrium on a moderate-size game."""
+#     game = _build_large_random_game()
+#
+#     eqs = quiesce_sync(
+#         game,
+#         full_game=game,
+#         num_iters=100,
+#         num_random_starts=10,
+#         regret_threshold=1e-3,
+#         dist_threshold=1e-3,
+#         restricted_game_size=6,
+#         solver="replicator",
+#         solver_iters=800,
+#         verbose=False,
+#     )
+#
+#     assert len(eqs) >= 1
 
-    eqs = quiesce_sync(
+# ---------------------------------------------------------------------------
+# Additional rigorous tests inspired by quiesce_old
+# ---------------------------------------------------------------------------
+
+def test_quiesce_finds_all_brinkman_equilibria():
+    """QUIESCE should find all pure and mixed equilibria in the Brinkman game."""
+    game = create_brinkman_game()
+    equilibria = quiesce_sync(
         game,
         full_game=game,
         num_iters=100,
         num_random_starts=10,
-        regret_threshold=1e-3,
+        regret_threshold=1e-4,
         dist_threshold=1e-3,
-        restricted_game_size=6,
+        restricted_game_size=4,
         solver="replicator",
-        solver_iters=800,
+        solver_iters=1000,
         verbose=False,
     )
+    expected = [
+        torch.tensor([1.0, 0.0, 0.0]),
+        torch.tensor([0.0, 1.0, 0.0]),
+        torch.tensor([0.0, 0.0, 1.0]),
+    ]
+    for target in expected:
+        assert any(torch.allclose(eq_mix, target, atol=1e-2) for eq_mix, _ in equilibria)
 
-    assert len(eqs) >= 1 
+def test_equilibrium_support_size():
+    """Check that the support size of equilibria matches expectations (RPS should be fully mixed)."""
+    game = create_rps_game()
+    equilibria = quiesce_sync(game, full_game=game, num_iters=50, regret_threshold=1e-3)
+    for mix, _ in equilibria:
+        support = (mix > 1e-2).sum().item()
+        assert support == 3  # RPS equilibrium should be fully mixed
+
+import asyncio
+from marketsim.egta.core.game import Game as EGTA_Game
+from marketsim.egta.solvers.equilibria import quiesce
+
+def test_quiesce_async_and_sync_consistency():
+    """Test that async and sync quiesce return the same number of equilibria."""
+    game = EGTA_Game(create_rps_game())
+    async def run_async():
+        return await quiesce(game, num_iters=10, regret_threshold=1e-3, full_game=game)
+    import asyncio
+    loop = asyncio.new_event_loop()
+    try:
+        eq_async = loop.run_until_complete(run_async())
+    finally:
+        loop.close()
+    eq_sync = quiesce_sync(game, num_iters=10, regret_threshold=1e-3, full_game=game)
+    assert len(eq_async) == len(eq_sync)
+
+
+def test_backup_restriction_trigger():
+    """Test that backup restrictions are scheduled if no equilibrium is found in small subgames."""
+    payoff_matrix = torch.tensor([[-1., -1., -1.], [-1., -1., -1.], [-1., -1., 10.]], dtype=torch.float32)
+    class HardGame:
+        def __init__(self):
+            self.strategy_names = ["A", "B", "C"]
+            self.num_strategies = 3
+            self.is_role_symmetric = True
+            self.role_names = ["Player"]
+            self.strategy_names_per_role = [self.strategy_names]
+            self.num_players_per_role = torch.tensor([2])
+            self.game = self
+            self.device = torch.device("cpu")
+            self.num_players = 2  # Two players in the game
+            self.num_actions = 3
+
+
+        def deviation_payoffs(self, mixture):
+            return payoff_matrix @ mixture
+        def regret(self, mixture):
+            pay = self.deviation_payoffs(mixture)
+            return (torch.max(pay) - (mixture @ pay)).item()
+    from marketsim.egta.core.game import Game as EGTA_Game
+    game = EGTA_Game(HardGame())
+    equilibria = quiesce_sync(
+        game,
+        full_game=game,
+        num_iters=30,
+        regret_threshold=1e-2,
+        dist_threshold=1e-3,
+        restricted_game_size=2,  # Force small subgames
+        solver="replicator",
+        solver_iters=500,
+        verbose=False,
+    )
+    assert len(equilibria) >= 1

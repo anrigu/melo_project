@@ -200,6 +200,9 @@ class EGTA:
 
     
    
+
+
+
     def run(
         self,
         max_iterations: int = 10,
@@ -208,18 +211,22 @@ class EGTA:
         verbose: bool = True,
         quiesce_kwargs: Optional[Dict[str, Any]] = None,
     ) -> "Game":
+        # set up logging
+        if verbose:
+            logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
-        total_profiles, start_time = 0, time.time()
+        total_profiles = 0
+        start_time = time.time()
 
-       
+        # default quiesce parameters
         if quiesce_kwargs is None:
             quiesce_kwargs = dict(
-                num_iters=1,
-                num_random_starts=10,
-                regret_threshold=1e-3,
-                dist_threshold=1e-2,
-                solver="replicator",
-                solver_iters=5_000,
+                num_iters         = 1,
+                num_random_starts = 10,
+                regret_threshold  = 1e-3,
+                dist_threshold    = 1e-2,
+                solver            = "replicator",
+                solver_iters      = 5_000,
             )
         eps = quiesce_kwargs["regret_threshold"]
 
@@ -227,89 +234,91 @@ class EGTA:
         #                       MAIN EGTA LOOP
         # ================================================================
         for it in range(max_iterations):
-            if verbose:
-                print(f"\nIteration {it + 1}/{max_iterations}")
+            logger.info(f"=== Iteration {it+1}/{max_iterations} ===")
 
-            # ------------------------------------------------------------
-            # (1)  Simulate new profiles from the scheduler
-            # ------------------------------------------------------------
+            # (1) simulate new profiles
             while True:
                 batch = self.scheduler.get_next_batch(self.game)
                 if not batch:
+                    logger.info("No more profiles from scheduler.")
                     break
 
-                if verbose:
-                    for idx, profile in enumerate(
-                        tqdm(batch, desc="Simulating profiles",
-                            unit="profile", leave=False)
-                    ):
+                logger.info(f"Got batch of {len(batch)} profiles → simulating…")
+                # show each profile under tqdm
+                for idx, profile in enumerate(
+                    tqdm(batch, desc="  profiles", unit="profile", leave=False)
+                ):
+                    if verbose:
                         role_mode = getattr(self, "is_role_symmetric", False)
                         counts = Counter(profile)
-                        if role_mode:  # profile is list[(role, strat)]
+                        if role_mode:
                             parts = [f"{r}:{s}×{c}" for (r, s), c in counts.items()]
-                        else:          # symmetric game: list[strat]
+                        else:
                             parts = [f"{s}×{c}" for s, c in counts.items()]
-                        print(f"  • ({idx + 1}/{len(batch)}) [{', '.join(parts)}]")
+                        logger.info(f"    • ({idx+1}/{len(batch)}) [{', '.join(parts)}]")
 
                 t0 = time.time()
                 if verbose:
-                    # Let internal tqdm bars (reps) print when verbose
                     raw = self.simulator.simulate_profiles(batch)
                 else:
-                    # Suppress internal output when not in verbose mode
                     with silence_io():
                         raw = self.simulator.simulate_profiles(batch)
-                if verbose:
-                    print(f"    ✓ finished simulation in {(time.time()-t0):.1f}s")
+                dt = time.time() - t0
+                logger.info(f"    ✓ simulation done in {dt:.1f}s")
 
+                # record payoffs
                 prev = len(self.payoff_data)
                 self._record_observations(raw)
-                legacy_rows = self.payoff_data[prev:]
+                new_rows = self.payoff_data[prev:]
+                logger.info(f"    • recorded {len(new_rows)} new observations")
 
+                # update game & scheduler
                 if self.game is None:
-                    self.game = Game.from_payoff_data(legacy_rows,
-                                                    device=self.device)
+                    logger.info("    • building initial Game from data")
+                    self.game = Game.from_payoff_data(new_rows, device=self.device)
                 else:
-                    self.game.update_with_new_data(legacy_rows)
+                    logger.info("    • updating Game with new data")
+                    self.game.update_with_new_data(new_rows)
 
                 self.scheduler.update(self.game)
                 total_profiles += len(batch)
+                logger.info(f"Total profiles simulated so far: {total_profiles}")
 
                 if total_profiles >= self.max_profiles:
+                    logger.info(f"Reached max_profiles={self.max_profiles}, breaking out of simulation loop.")
                     break
 
-            # ------------------------------------------------------------
-            # (2)  Evaluate equilibrium candidates
-            # ------------------------------------------------------------
+            # (2) evaluate equilibrium candidates
             true_game = (
                 self.game.full_game_reference
-                if hasattr(self.game, "full_game_reference")
-                and self.game.full_game_reference is not None
+                if hasattr(self.game, "full_game_reference") and self.game.full_game_reference is not None
                 else self.game
             )
-
-            candidates = self.scheduler._select_equilibrium_candidates(
-                self.game, 50)
-
-           
-            # ————————————————————————————————————————————————
+            logger.info("Selecting equilibrium candidates (up to 50)…")
+            candidates = self.scheduler._select_equilibrium_candidates(self.game, 50)
+            logger.info(f"  • {len(candidates)} candidates selected")
 
             confirmed, unconfirmed = [], []
-            for σ in candidates:
-                # be sure every deviation of σ is present
+            for idx, σ in enumerate(candidates, start=1):
+                # ensure all deviations are present
                 missing = self.scheduler.missing_deviations(σ, self.game)
                 if missing:
+                    logger.info(f"  • candidate {idx}: {len(missing)} missing deviations → simulating")
                     with silence_io():
                         raw = self.simulator.simulate_profiles(missing)
                     prev = len(self.payoff_data)
                     self._record_observations(raw)
                     self.game.update_with_new_data(self.payoff_data[prev:])
+                    logger.info("    ✓ missing deviations recorded")
 
-                σ_reg = float(regret(
-                    true_game,
-                    torch.tensor(σ, dtype=torch.float32, device=self.device))
+                σ_reg = float(
+                    regret(true_game, torch.tensor(σ, dtype=torch.float32, device=self.device))
                 )
-                (confirmed if σ_reg <= eps else unconfirmed).append((σ, σ_reg))
+                logger.info(f"  • candidate {idx}/{len(candidates)} regret = {σ_reg:.6e}")
+                if σ_reg <= eps:
+                    confirmed.append((σ, σ_reg))
+                else:
+                    unconfirmed.append((σ, σ_reg))
 
             if confirmed:
                 self.equilibria = [
@@ -317,68 +326,48 @@ class EGTA:
                     for σ, r in confirmed
                 ]
 
-            if verbose:
-                print(f"  Candidates – confirmed: {len(confirmed)}   "
-                    f"unconfirmed: {len(unconfirmed)}")
+            logger.info(f"Candidates → confirmed: {len(confirmed)} | unconfirmed: {len(unconfirmed)}")
 
-            # early-exit if everything is settled
-            all_seen = (
-                self.expected_strategies ==
-                self.game.strategies_present_in_payoff_table()
-            )
+            # early exit?
+            all_seen = (self.expected_strategies == self.game.strategies_present_in_payoff_table())
             if confirmed and not unconfirmed and all_seen:
-                if verbose:
-                    print("  All strategies observed and all candidates confirmed – done.")
+                logger.info("All strategies observed and all candidates confirmed → exiting main loop")
                 break
 
-            # ------------------------------------------------------------
-            # (3)  Snapshot
-            # ------------------------------------------------------------
+            # (3) snapshot
             if it % save_frequency == 0:
+                logger.info(f"Saving intermediate results at iteration {it}")
                 self._save_results(it)
 
             if total_profiles >= self.max_profiles:
-                if verbose:
-                    print(f"Reached profile budget ({self.max_profiles}).")
+                logger.info("Reached profile budget → exiting iteration loop")
                 break
 
-        # ----------------------------------------------------------------
-        # (4)  Single final QUIESCE verification
-        # ----------------------------------------------------------------
-        if verbose:
-            print("\nRunning QUIESCE final verification …")
-
+        # (4) final QUIESCE
+        logger.info("Running QUIESCE final verification …")
         try:
-            q_args = dict(quiesce_kwargs,
-                        num_iters=1,
-                        dist_threshold=1e-3,
-                        num_random_starts=0)
-
+            q_args = dict(quiesce_kwargs, num_iters=1, dist_threshold=1e-3, num_random_starts=0)
             eqs = quiesce_sync(
-                game=self.game,          # (possibly reduced) working game
-                full_game=true_game,     # verify vs. true/full game
+                game=self.game,
+                full_game=true_game,
                 obs_store=self._obs_by_profile,
                 verbose=verbose,
                 **q_args,
             )
             if eqs:
                 self.equilibria = eqs
-                if verbose:
-                    print(f"QUIESCE found {len(self.equilibria)} equilibria")
+                logger.info(f"QUIESCE found {len(eqs)} equilibria")
         except Exception as e:
-            if verbose:
-                print(f"QUIESCE failed: {e}")
+            logger.warning(f"QUIESCE failed with error: {e}")
 
-        # ----------------------------------------------------------------
-        # (5)  Summary
-        # ----------------------------------------------------------------
-        if verbose:
-            elapsed = time.time() - start_time
-            print(f"\nEGTA completed in {elapsed:.2f}s – "
-                f"simulated {total_profiles} profiles – "
-                f"found {len(self.equilibria)} equilibria")
+        # (5) summary
+        elapsed = time.time() - start_time
+        logger.info(f"EGTA completed in {elapsed:.2f}s – "
+                    f"simulated {total_profiles} profiles – "
+                    f"found {len(self.equilibria)} equilibria")
 
         return self.game
+
 
 
 
