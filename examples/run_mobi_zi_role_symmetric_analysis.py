@@ -248,7 +248,7 @@ def run_role_symmetric_mobi_zi_egta():
         game = egta.run(
             max_iterations=num_iterations,
             profiles_per_iteration=256,
-            save_frequency=2,
+            save_frequency=1,
             verbose=True,
             quiesce_kwargs={
                 'num_iters': 50,
@@ -257,7 +257,7 @@ def run_role_symmetric_mobi_zi_egta():
                 'dist_threshold': .01,
                 'solver': 'replicator',
                 'solver_iters': 3000,
-                'restricted_game_size': 1000
+                'restricted_game_size': 3
             }
         )
         end_time = time.time()

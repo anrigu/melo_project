@@ -1114,7 +1114,7 @@ async def quiesce(
             candidate.regret = init_regret
 
             # now let every candidate go through the full statistical check
-            print(f"Observaion store: {obs_store}")
+       
             is_eq, _ = await test_candidate(
                 candidate,
                 game,
