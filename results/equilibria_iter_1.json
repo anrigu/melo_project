@@ -5,49 +5,10 @@
     "is_role_symmetric": true,
     "mixture_by_role": {
       "MOBI": {
-        "MELO": 0.5
-      },
-      "ZI": {
-        "CDA": 0.5
-      }
-    }
-  },
-  {
-    "id": 1,
-    "regret": 0.0,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MELO": 1.0
-      },
-      "ZI": {
         "CDA": 1.0
-      }
-    }
-  },
-  {
-    "id": 2,
-    "regret": 0.0,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MELO": 1.0
       },
       "ZI": {
-        "CDA": 1.0
-      }
-    }
-  },
-  {
-    "id": 3,
-    "regret": 0.0,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
         "MELO": 1.0
-      },
-      "ZI": {
-        "CDA": 1.0
       }
     }
   }

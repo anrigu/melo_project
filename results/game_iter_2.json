@@ -1,14 +1,14 @@
 {
   "metadata": {
     "game_type": "role_symmetric",
-    "num_profiles": 29,
+    "num_profiles": 1,
     "payoff_mean": 0.0,
     "payoff_std": 1.0
   },
   "is_role_symmetric": true,
   "strategy_names": [
-    "MELO",
-    "CDA"
+    "CDA",
+    "MELO"
   ],
   "num_players": 4,
   "num_strategies": 2,
@@ -22,10 +22,10 @@
   ],
   "strategy_names_per_role": [
     [
-      "MELO"
+      "CDA"
     ],
     [
-      "CDA"
+      "MELO"
     ]
   ]
 }

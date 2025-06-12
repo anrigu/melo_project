@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/egta/__init__.py
+# hypothesis_version: 6.135.7
+
+['EGTA', 'Game', 'best_responses', 'compare_solvers', 'fictitious_play', 'gain_descent', 'plot_strategy_traces', 'quiesce', 'regret', 'replicator_dynamics']

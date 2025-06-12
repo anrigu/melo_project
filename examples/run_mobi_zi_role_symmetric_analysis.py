@@ -164,7 +164,7 @@ def run_role_symmetric_mobi_zi_egta():
     
         sim_time = 10000  
         num_iterations = 2
-        batch_size = 20 
+        batch_size = 140 
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -199,7 +199,7 @@ def run_role_symmetric_mobi_zi_egta():
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=10,
+            reps=1000,
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
             log_profile_details=True

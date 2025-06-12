@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/game/role_symmetric_game.py
+# hypothesis_version: 6.135.7
+
+[-1e-09, 0.0, 1e-12, 1e-09, 1e-08, 1e-06, 0.0001, 1.0, 'ObservationRepo', 'RoleSymmetricGame', 'cache_clear', 'cpu', 'deviation_payoffs', 'inf', 'payoffs', 'profile_count']

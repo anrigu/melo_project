@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/custom_math/simplex_operations.py
+# hypothesis_version: 6.135.7
+
+[1e-10, 0.01, 1.0, 'cpu']

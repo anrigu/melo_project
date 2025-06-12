@@ -1295,8 +1295,7 @@ def quiesce_sync(
     nest_asyncio.apply()
     
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        loop = asyncio.new_event_loop()  # Use a dedicated loop without altering the global default
         
         maximal_subgames = set()
         
