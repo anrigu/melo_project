@@ -47,9 +47,6 @@ def _create_rps_game():
     return RPS()
 
 
-# ---------------------------------------------------------------------------
-# Helper to run QUIESCE under a fixed seed
-# ---------------------------------------------------------------------------
 
 def _run_quiesce(seed: int):
     random.seed(seed)

@@ -281,21 +281,18 @@ class MeloSimulator(Simulator):
         seeds = [random.randint(0, 2**32 - 1) for _ in range(self.reps)]
         iter_args = [(s, base_kwargs) for s in seeds]
 
-        # -------- PARALLEL ------------------------------------------
         if self.parallel and self.reps > 1:
             import multiprocessing as mp
             ctx  = mp.get_context("spawn")
             with cf.ProcessPoolExecutor(mp_context=ctx) as pool:
-                # tqdm wraps the lazy iterator that ProcessPoolExecutor returns
                 values_per_rep = list(
                     tqdm(pool.map(_run_melo_single_rep, iter_args),
                         total=self.reps,
-                        desc="   reps",           # indented label
+                        desc="   reps",          
                         unit="rep",
-                        leave=False,             # keeps outer bars neat
+                        leave=False,            
                         disable=not self.log_profile_details)
                 )
-        # -------- SERIAL --------------------------------------------
         else:
             values_per_rep = []
             for out in tqdm(map(_run_melo_single_rep, iter_args),
@@ -306,9 +303,6 @@ class MeloSimulator(Simulator):
                             disable=not self.log_profile_details):
                 values_per_rep.append(out)
 
-        # --------------------------------------------------------------
-        # 3)  Aggregate average payoff per *player*
-        # --------------------------------------------------------------
         aggregated_payoffs: List[float] = []
         player_idx = 0
         for role_name, strat in profile:
@@ -362,9 +356,6 @@ class MeloSimulator(Simulator):
             results.append(profile_results)
         return results 
 
-    # ------------------------------------------------------------------
-    # Helper: pretty-print per-role payoff summary for a single profile
-    # ------------------------------------------------------------------
     def _print_profile_summary(
         self,
         profile: List[Tuple[str, str]],

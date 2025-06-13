@@ -42,7 +42,6 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
     for i in range(num_points):
         mixture = torch.zeros(game.num_strategies, device=game.game.device)
         
-        # Generate random mixture for each role
         global_idx = 0
         for role_idx, (role_name, role_strategies) in enumerate(zip(game.role_names, game.strategy_names_per_role)):
             num_role_strats = len(role_strategies)
@@ -55,7 +54,6 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
         
         grid_mixtures.append(mixture)
     
-    # Run replicator dynamics from each starting point
     final_states = []
     converged_to_eq = []
     traces = []
@@ -128,7 +126,7 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
     
     basin_counts = {}
     for eq in converged_to_eq:
-        basin_counts[eq] = basin_counts.get(eq, 0) + 1
+        basin_counts[eq] = basin_counts.get(eq, 0) + 1 
     
     total_points = len(converged_to_eq)
     basin_percentages = {eq: (count / total_points) * 100 for eq, count in basin_counts.items()}
@@ -163,8 +161,8 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 2
-        batch_size = 140 
+        num_iterations = 3
+        batch_size = 20 
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -172,7 +170,7 @@ def run_role_symmetric_mobi_zi_egta():
         
         mobi_strategies = [
             "MOBI_100_0",   # 100% CDA, 0% MELO
-            #"MOBI_50_50",   # 50% CDA, 50% MELO
+            "MOBI_50_50",   # 50% CDA, 50% MELO
             "MOBI_0_100"   # 0% CDA, 100% MELO
         ]
         
@@ -199,7 +197,7 @@ def run_role_symmetric_mobi_zi_egta():
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=1000,
+            reps=10,
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
             log_profile_details=True
@@ -231,6 +229,7 @@ def run_role_symmetric_mobi_zi_egta():
             strategy_names_per_role=strategy_names_per_role,
             subgame_size=4
         )
+        scheduler.max_profiles_per_subgame = 250 
 
 
         
@@ -239,10 +238,10 @@ def run_role_symmetric_mobi_zi_egta():
             scheduler=scheduler,
             device=device,
             output_dir=f"results/rsg_mobi_zi_egta/holding_period_{holding_period}",
-            max_profiles=1000000,
+            max_profiles=100000000000,
             seed=42
         )
-        egta.always_complete_deviations = True      #  ←  add this line
+        egta.always_complete_deviations = True
         
         print("Running Role Symmetric EGTA...")
         start_time = time.time()
@@ -252,10 +251,10 @@ def run_role_symmetric_mobi_zi_egta():
             save_frequency=1,
             verbose=True,
             quiesce_kwargs={
-                'num_iters': 50,
-                'num_random_starts': 0,
-                'regret_threshold': 1e-6,
-                'dist_threshold': .01,
+                'num_iters': 100,
+                'num_random_starts': 5,
+                'regret_threshold': 1e-4,
+                'dist_threshold': 1e-3,
                 'solver': 'replicator',
                 'solver_iters': 3000,
                 'restricted_game_size': 4
@@ -267,7 +266,7 @@ def run_role_symmetric_mobi_zi_egta():
      
         if egta.equilibria:
             before = len(egta.equilibria)
-            egta.equilibria = unique_equilibria(egta.equilibria, tol=5e-2)
+            egta.equilibria = unique_equilibria(egta.equilibria, tol=1e-3)
             after = len(egta.equilibria)
             if after < before:
                 print(f"Removed {before-after} numerically identical equilibria (now {after}).")
@@ -640,6 +639,23 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
         json.dump(game_details, f, indent=2)
     print(f"Saved game details to {game_file}")
     
+    # Also copy the full observations so downstream statistical checks can be
+    # reproduced exactly (mirrors EGTAOnline behaviour).
+    if hasattr(egta, "_obs_by_profile") and egta._obs_by_profile:
+        obs_path = os.path.join(results_dir, "observations.json")
+        to_dump = []
+        for prof_key, obs_list in egta._obs_by_profile.items():
+            pretty_key = [[role, strat] for role, strat in prof_key]
+            for ob in obs_list:
+                to_dump.append({
+                    "profile": pretty_key,
+                    "payoffs": ob.payoffs.tolist(),
+                    "aux": ob.aux or {},
+                })
+        with open(obs_path, "w") as f:
+            json.dump(to_dump, f, indent=2)
+        print(f"Saved observations to {obs_path}")
+
     print(f"Comprehensive role symmetric results saved to: {results_dir}")
     return results_dir
 

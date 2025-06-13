@@ -19,7 +19,7 @@ from marketsim.egta.solvers.equilibria import quiesce, quiesce_sync, replicator_
 from marketsim.game.symmetric_game import SymmetricGame
 import math
 from marketsim.egta.stats import statistical_test, hoeffding_upper_bound
-from tqdm.auto import tqdm          # nice Jupyter/terminal handling
+from tqdm.auto import tqdm          
 from contextlib import redirect_stdout, redirect_stderr
 import io
 import logging
@@ -178,9 +178,13 @@ class EGTA:
                 legacy_row = None            # will build below
 
             # ------------------------------------------------------------------
-            # 2. Store Observation for variance / hypothesis tests
+            # 2. Store Observation for variance / hypothesis tests using a
+            #    *canonical* key: one entry per (role,strategy) irrespective
+            #    of player multiplicity or ordering.  This ensures keys match
+            #    the compact profiles built inside test_candidate.
             # ------------------------------------------------------------------
-            self._obs_by_profile.setdefault(obs.profile_key, []).append(obs)
+            canon_key = tuple(sorted(set(obs.profile_key)))
+            self._obs_by_profile.setdefault(canon_key, []).append(obs)
 
             # ------------------------------------------------------------------
             # 3. Ensure self.payoff_data gets a *legacy* row
@@ -321,11 +325,7 @@ class EGTA:
             else:
                 logger.info("  • No equilibria confirmed this iteration")
 
-            # ----------------------------------------------------------
-            # Optionally schedule *all* one-player deviations that still
-            # lack observations so the next simulation batch will gather
-            # the data required for statistical tests to finish.
-            # ----------------------------------------------------------
+           
             if getattr(self, "always_complete_deviations", False) and self.equilibria:
                 missing_profiles: List[List[Tuple[str, str]]] = []
                 for mix, _ in self.equilibria:
@@ -333,21 +333,31 @@ class EGTA:
                         self.scheduler.missing_deviations(mix.cpu().numpy(), self.game)
                     )
 
-                # Convert those profiles into subgame descriptors so the
-                # scheduler can generate them in get_next_batch().
                 for prof in missing_profiles:
-                    # Build per-role strategy sets from the profile list
                     sub: Dict[str, set] = {}
                     for role, strat in prof:
                         sub.setdefault(role, set()).add(strat)
-                    # Only add if it doesn't exceed scheduler's subgame_size
                     self.scheduler.requested_subgames.append(sub)
 
-            # early exit if all strategies seen and equilibria stable
-            all_seen = (self.expected_strategies == self.game.strategies_present_in_payoff_table())
-            if self.equilibria and all_seen:
-                logger.info("All strategies observed and equilibria confirmed → exiting loop")
+            # --------------------------------------------------------------
+            # Exit only when (i) every strategy has been observed *and*
+            # (ii) there are no outstanding deviation sub-games waiting to be
+            #     simulated.  This prevents premature termination when the
+            #     statistical tests inside QUIESCE scheduled extra sampling
+            #     but the scheduler hasn't executed it yet.
+            # --------------------------------------------------------------
+            all_seen = (
+                self.expected_strategies == self.game.strategies_present_in_payoff_table()
+            )
+            pending_subs = getattr(self.scheduler, "requested_subgames", [])
+
+            if self.equilibria and all_seen and not pending_subs:
+                logger.info("All strategies observed, equilibria confirmed, and no pending deviation sub-games → exiting loop")
                 break
+            elif self.equilibria and all_seen:
+                logger.info(
+                    f"{len(pending_subs)} deviation sub-games still pending – continuing iterations"
+                )
 
             # snapshot
             if it % save_frequency == 0:
@@ -358,6 +368,32 @@ class EGTA:
                 logger.info("Reached profile budget → exiting loop")
                 break
 
+     
+        try:
+            if self.game is not None:
+                logger.info("Running final strict QUIESCE pass (1 iteration, ε=1e-6)…")
+                strict_eqs = quiesce_sync(
+                    game=self.game,
+                    full_game=true_game,
+                    num_iters=1,
+                    num_random_starts=0,
+                    regret_threshold=1e-4,
+                    dist_threshold=quiesce_kwargs["dist_threshold"],
+                    restricted_game_size=quiesce_kwargs["restricted_game_size"],
+                    solver=quiesce_kwargs["solver"],
+                    solver_iters=quiesce_kwargs["solver_iters"],
+                    verbose=False,
+                    obs_store=self._obs_by_profile,
+                )
+
+                # merge with existing equilibria (L1 distance check)
+                for mix, reg in strict_eqs:
+                    if all(torch.norm(mix - m, p=1).item() > quiesce_kwargs["dist_threshold"]
+                           for m, _ in self.equilibria):
+                        self.equilibria.append((mix, reg))
+        except Exception as _e:
+            logger.warning(f"Strict QUIESCE pass failed: {_e}")
+
         # (3) final summary
         elapsed = time.time() - start_time
         logger.info(
@@ -365,6 +401,44 @@ class EGTA:
             f"simulated {total_profiles} profiles – "
             f"found {len(self.equilibria)} equilibria"
         )
+
+        # ------------------------------------------------------------------
+        # Persist raw observations so the user can reload without rerunning
+        # expensive simulations.  One file per run in the output directory.
+        # ------------------------------------------------------------------
+        try:
+            obs_out = os.path.join(self.output_dir, "observations.json")
+            to_dump = []
+            for prof_key, obs_list in self._obs_by_profile.items():
+                pretty_key = [[role, strat] for role, strat in prof_key]
+                for ob in obs_list:
+                    to_dump.append({
+                        "profile": pretty_key,
+                        "payoffs": ob.payoffs.tolist(),
+                        "aux": ob.aux or {},
+                    })
+            with open(obs_out, "w") as f:
+                json.dump(to_dump, f, indent=2)
+            logger.info(f"Saved {len(to_dump)} observations → {obs_out}")
+        except Exception as exc:
+            logger.warning(f"Failed to save observations: {exc}")
+
+        try:
+            obs_snap = os.path.join(self.output_dir, f"observations_iter_{it}.json")
+            to_dump = []
+            for prof_key, obs_list in self._obs_by_profile.items():
+                pretty_key = [[role, strat] for role, strat in prof_key]
+                for ob in obs_list:
+                    to_dump.append({
+                        "profile": pretty_key,
+                        "payoffs": ob.payoffs.tolist(),
+                        "aux": ob.aux or {},
+                    })
+            with open(obs_snap, "w") as fh:
+                json.dump(to_dump, fh, indent=2)
+        except Exception as exc:
+            logger.warning(f"Failed to snapshot observations: {exc}")
+
         return self.game
 
 

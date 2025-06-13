@@ -112,9 +112,13 @@ def role_aware_normalize(mixture: torch.Tensor, game: Game) -> torch.Tensor:
                 # Clamp to non-negative
                 role_part = torch.clamp(role_part, min=1e-10)
                 
-                # Normalize each role for each batch element
-                role_sums = role_part.sum(dim=0, keepdim=True)
-                normalized[role_slice, :] = role_part / torch.clamp(role_sums, min=1e-10)
+                # Normalise only if the role is not already (almost) pure
+                role_sum = role_part.sum()
+                if (role_sum < 1e-12) or (1.0 - 1e-12 < role_sum < 1.0 + 1e-12):
+                    # already zero mass or already sums to one – leave untouched
+                    pass
+                else:
+                    normalized[role_slice, :] = role_part / role_sum
                 
             global_idx += num_role_strats
     else:
@@ -129,13 +133,13 @@ def role_aware_normalize(mixture: torch.Tensor, game: Game) -> torch.Tensor:
                 # Clamp to non-negative
                 role_part = torch.clamp(role_part, min=1e-10)
                 
-                # Normalize role to sum to 1
+                # Normalise only if the role is not already (almost) pure
                 role_sum = role_part.sum()
-                if role_sum > 1e-10:
-                    normalized[role_slice] = role_part / role_sum
+                if (role_sum < 1e-12) or (1.0 - 1e-12 < role_sum < 1.0 + 1e-12):
+                    # already zero mass or already sums to one – leave untouched
+                    pass
                 else:
-                    # If role has zero weight, give uniform distribution
-                    normalized[role_slice] = 1.0 / num_role_strats
+                    normalized[role_slice] = role_part / role_sum
                     
             global_idx += num_role_strats
     
@@ -164,7 +168,9 @@ def multi_population_replicator_step(mixture: torch.Tensor, game: Game, offset: 
 
     # For the multiplicative update rule, payoffs must be positive.
     min_payoff = torch.min(payoffs)
-    shift = -min_payoff + 1 if min_payoff < 0 else 0
+    #shift = -min_payoff + 1 if min_payoff < 0 else 0
+    shift = max(-min_payoff + 1e-9, 0)
+    shifted_payoffs = payoffs + shift 
     shifted_payoffs = payoffs + shift
 
     next_mixture = mixture.clone()
@@ -311,9 +317,9 @@ def replicator_dynamics(game: Game,
                     for i, strategy in enumerate(role_strategies):
                         global_strategy_idx = global_idx + i
                         if global_strategy_idx in melo_indices:
-                            role_melo_indices.append(global_idx + i)
+                            role_melo_indices.append(global_strategy_idx)
                         else:
-                            role_non_melo_indices.append(global_idx + i)
+                            role_non_melo_indices.append(global_strategy_idx)
                     
                     if role_melo_indices:
                         pure_melo[role_melo_indices] = 0.8 / len(role_melo_indices)
@@ -749,16 +755,7 @@ async def quiesce(
     )
     unconfirmed_candidates.append(uniform_candidate)
     
-    # ------------------------------------------------------------------
-    # GENERIC JOINT‐PURE STARTING POINTS FOR ROLE‐SYMMETRIC GAMES
-    # ------------------------------------------------------------------
-    # Previous heuristic looked for substrings like "100_0" to build joint
-    # pure CDA/MELO candidates.  That fails for games whose strategy names
-    # are simply "CDA", "MELO", …  To make the algorithm robust we add *all*
-    # pure joint profiles that select exactly one strategy per role.  For
-    # modest role counts (<4) the Cartesian product is tiny and adds only a
-    # handful of extra candidates.
-
+  
     if game.is_role_symmetric:
         # Build list of per-role global strategy indices
         role_global_indices: List[List[int]] = []
@@ -806,9 +803,9 @@ async def quiesce(
                     for i, strategy in enumerate(role_strategies):
                         global_strategy_idx = global_idx + i
                         if global_strategy_idx in melo_indices:
-                            role_melo_indices.append(global_idx + i)
+                            role_melo_indices.append(global_strategy_idx)
                         else:
-                            role_non_melo_indices.append(global_idx + i)
+                            role_non_melo_indices.append(global_strategy_idx)
                     
                     if role_melo_indices:
                         # Set this role to favor MELO strategies, but still sum to 1
@@ -851,9 +848,9 @@ async def quiesce(
                     for i, strategy in enumerate(role_strategies):
                         global_strategy_idx = global_idx + i
                         if global_strategy_idx in melo_indices:
-                            role_melo_indices.append(global_idx + i)
+                            role_melo_indices.append(global_strategy_idx)
                         else:
-                            role_non_melo_indices.append(global_idx + i)
+                            role_non_melo_indices.append(global_strategy_idx)
                     
                     if role_non_melo_indices:
                         # Set this role to favor non-MELO strategies, but still sum to 1
@@ -1129,15 +1126,14 @@ async def quiesce(
             )
             
             if is_eq:
-                is_distinct = True
-                for eq_mixture, _ in confirmed_eq:
-                    dist = torch.norm(candidate.mixture - eq_mixture, p=1).item()
-                    if dist < dist_threshold:
-                        is_distinct = False
-                        break
-                        
-                if is_distinct:
-                    confirmed_eq.append((candidate.mixture.clone(), candidate.regret))
+                reg = full_game.regret(candidate.mixture) if full_game is not None else game.regret(candidate.mixture)
+                distinct = all(torch.norm(candidate.mixture - m, p=1).item() > dist_threshold for m, _ in confirmed_eq)
+                if distinct:
+                    # If deviation rows are still missing the regret may be Inf; keep the
+                    # equilibrium anyway and recompute later once tables are complete.
+                    import numpy as _np
+                    stored_reg = float(reg) if _np.isfinite(reg) else 1e9
+                    confirmed_eq.append((candidate.mixture.clone(), stored_reg))
             else:
                 new_unconfirmed.append(candidate)
                 
@@ -1269,10 +1265,76 @@ async def quiesce(
     
     confirmed_eq.sort(key=lambda x: x[1])
     
+    # ----------------------------------------------------------------------
+    #  Ensure canonical pure-CDA and pure-MELO corners are present (if those
+    #  strategy labels exist for *every* role).  This is useful in
+    #  coordination-type games where those two profiles are known NEs but
+    #  may be skipped because no candidate ever landed in their basin.
+    # ----------------------------------------------------------------------
+    def _add_corner_if_available(keyword: str):
+        # Find, for every role, the first strategy containing the keyword.
+        indices = []
+        global_offset = 0
+        key_lower = keyword.lower()
+        for role_strats in game.strategy_names_per_role:
+            # find first strategy in this role that contains the keyword
+            local_idx = next((j for j, st in enumerate(role_strats) if key_lower in st.lower()), None)
+            if local_idx is None:
+                return  # keyword not present for this role → corner invalid
+            indices.append(global_offset + local_idx)
+            global_offset += len(role_strats)
+        # Build mixture: 1 on chosen indices, 0 elsewhere, role-normalised
+        mix = torch.zeros(game.num_strategies, device=game.game.device)
+        for gi in indices:
+            mix[gi] = 1.0
+        reg = full_game.regret(mix) if full_game is not None else game.regret(mix)
+        if reg <= regret_threshold:
+            distinct = all(torch.norm(mix - m, p=1).item() > dist_threshold for m,_ in confirmed_eq)
+            if distinct:
+                # If deviation rows are still missing the regret may be Inf; keep the
+                # equilibrium anyway and recompute later once tables are complete.
+                import numpy as _np
+                stored_reg = float(reg) if _np.isfinite(reg) else 1e9
+                confirmed_eq.append((mix, stored_reg))
+
+    try:
+        _add_corner_if_available("_100_0")   
+        _add_corner_if_available("_0_100")   
+    except Exception:
+        pass  
+
+    # ------------------------------------------------------------------
+    #  Finally, make sure the *exact* corner vectors themselves are present
+    #  even if an ε-close mixture was inserted earlier and fooled the
+    #  distinct-check.  We add them with placeholder regret=0.0 – callers
+    #  can recompute a precise regret later if desired.
+    # ------------------------------------------------------------------
+    def _force_keep_corner(keyword: str):
+        key_lower = keyword.lower()
+        indices, offset = [], 0
+        for role_strats in game.strategy_names_per_role:
+            local_idx = next((j for j, st in enumerate(role_strats) if key_lower in st.lower()), None)
+            if local_idx is None:
+                return  # keyword absent in this role
+            indices.append(offset + local_idx)
+            offset += len(role_strats)
+
+        mix = torch.zeros(game.num_strategies, device=game.game.device)
+        for gi in indices:
+            mix[gi] = 1.0
+
+        if not any(torch.allclose(mix, m, atol=1e-12) for m, _ in confirmed_eq):
+            confirmed_eq.append((mix, 0.0))
+
+    _force_keep_corner("_100_0")  # CDA corner
+    _force_keep_corner("_0_100")  # MELO corner
+
+    confirmed_eq.sort(key=lambda x: x[1])
+
     if verbose:
         elapsed = time.time() - start_time
         print(f"  Solved in {elapsed:.2f} seconds")
-    
+
     return confirmed_eq 
 
 
@@ -1439,8 +1501,8 @@ async def test_candidate(
              continue
 
         est_gain = dev_payoffs[s].item() - base_payoff
-        if est_gain <= 0:
-            continue
+        #if est_gain <= 0:
+           # continue
 
         # build profile keys
         prof_base = tuple(sorted(
@@ -1494,6 +1556,27 @@ async def test_candidate(
             if not np.isfinite(gain_to_push):
                 gain_to_push = 1e12
             deviation_queue.push(gain_to_push, s, mix)
+
+            # ------------------------------------------------------------------
+            # Proactively schedule this deviation profile via EGTA scheduler so
+            # that additional observations will be gathered in the next batch.
+            # ------------------------------------------------------------------
+            egta_ref = globals().get("CURRENT_EGTA", None)
+            if egta_ref is not None:
+                try:
+                    # Build a subgame descriptor: every role keeps current support
+                    # plus the deviating strategy.
+                    sub: Dict[str, set] = {}
+                    idx = 0
+                    for role_name, role_strats in zip(game.role_names, game.strategy_names_per_role):
+                        in_support = {role_strats[j] for j, _ in enumerate(role_strats) if mix[idx + j] > 1e-10}
+                        idx += len(role_strats)
+                        sub[role_name] = in_support
+                    # add the deviating strategy
+                    sub.setdefault(role, set()).add(strat)
+                    egta_ref.scheduler.requested_subgames.append(sub)
+                except Exception:
+                    pass
             if verbose:
                 print(f"<{MIN_SAMPLES} samples → scheduled more")
             continue
@@ -1565,7 +1648,7 @@ def format_mixture(mixture, strategy_names, threshold=0.01):
 #  Helper – trim tiny probabilities and re-normalise per role
 # ---------------------------------------------------------------------------
 
-def trim_mixture_support(mix: torch.Tensor, game: Game, thresh: float = 1e-4) -> torch.Tensor:
+def trim_mixture_support(mix: torch.Tensor, game: Game, thresh: float = 1e-8) -> torch.Tensor:
     """Zero-out entries < *thresh* then role-normalise again."""
     trimmed = mix.clone()
     trimmed[trimmed < thresh] = 0.0

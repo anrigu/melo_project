@@ -1,0 +1,16 @@
+{
+  "welfare_data": [
+    0.24799391627311707,
+    0.26210519671440125,
+    0.23164387047290802
+  ],
+  "labels": [
+    "Eq 1",
+    "Eq 2",
+    "Eq 3"
+  ],
+  "best_equilibrium_welfare": 0.26210519671440125,
+  "worst_equilibrium_welfare": 0.23164387047290802,
+  "welfare_variance": 0.0001549271810835763,
+  "analysis_type": "role_symmetric"
+}

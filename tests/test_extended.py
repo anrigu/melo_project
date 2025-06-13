@@ -5,13 +5,11 @@ import numpy as np
 
 # ---------------------------------------------------------------------------
 # Ensure project root is on sys.path so standalone runs work like test_egta.py
-# ---------------------------------------------------------------------------
 import pathlib, sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Core modules under test
 from marketsim.egta.core.game import Game
 from marketsim.game.role_symmetric_game import RoleSymmetricGame
 from marketsim.egta.solvers.equilibria import replicator_dynamics, quiesce_sync
@@ -73,10 +71,8 @@ def test_game_creation_role_symmetric():
     payoff_data = _role_symmetric_payoff_data()
     g = Game.from_payoff_data(payoff_data)
     assert g.is_role_symmetric
-    # Expect 2 roles each with 2 strategies => 4 global strategies
     assert g.num_strategies == 4
 
-    # Uniform mixture should have finite regret (smoke-test deviation_payoffs flow)
     mix = torch.ones(4) / 4
     r = g.regret(mix)
     assert np.isfinite(r)
@@ -87,17 +83,14 @@ def test_game_creation_role_symmetric():
 # ---------------------------------------------------------------------------
 
 def test_rolesymmetricgame_regret_zero_on_strict_ne():
-    # Two roles, each one strategy – trivial zero-regret game
     rsg = RoleSymmetricGame(
         role_names=["M", "Z"],
         num_players_per_role=[1, 1],
         strategy_names_per_role=[["X"], ["Y"]],
-        # One config: both players choose their only strategy
         rsg_config_table=torch.tensor([[1.0, 1.0]]),
-        # Payoffs: arbitrary constants
         rsg_payoff_table=torch.tensor([[0.5], [1.2]]),
     )
-    mix = torch.tensor([1.0, 1.0])  # any values – will be role-normalised internally
+    mix = torch.tensor([1.0, 1.0])  
     mix = mix / mix.sum()
     assert rsg.regret(mix) == 0.0
 
@@ -109,11 +102,9 @@ def test_rolesymmetricgame_regret_zero_on_strict_ne():
 def test_replicator_converges_on_coordination():
     payoff_data = _coordination_payoff_data()
     g = Game.from_payoff_data(payoff_data)
-    # Start from uniform random mix and ensure convergence to some pure NE
     init = torch.rand(2)
     init = init / init.sum()
     eq = replicator_dynamics(g, init, iters=4000)
-    # equilibrium must be near either [1,0] or [0,1]
     assert torch.allclose(eq, torch.tensor([1.0, 0.0]), atol=1e-2) or \
            torch.allclose(eq, torch.tensor([0.0, 1.0]), atol=1e-2)
 
@@ -126,13 +117,11 @@ def test_quiesce_event_loop_integrity():
     payoff_data = _coordination_payoff_data()
     g = Game.from_payoff_data(payoff_data)
 
-    # Capture the current default loop
     default_loop = asyncio.get_event_loop()
 
     eqs = quiesce_sync(g, full_game=g, num_iters=5, regret_threshold=1e-3)
     assert len(eqs) >= 1
 
-    # The global loop should not be closed after quiesce_sync returns
     assert not default_loop.is_closed()
 
 
@@ -141,7 +130,6 @@ def test_quiesce_event_loop_integrity():
 # ---------------------------------------------------------------------------
 
 def test_dprscheduler_generates_profiles():
-    # Simple RSG with 1 player per role and 2 strategies each
     role_names = ["R1", "R2"]
     strats_per_role = [["A", "B"], ["X", "Y"]]
     sched = DPRScheduler(
@@ -155,9 +143,7 @@ def test_dprscheduler_generates_profiles():
     )
 
     batch = sched.get_next_batch()
-    # Every element is a full profile list[(role,strat)…]
     assert batch and isinstance(batch[0], list)
-    # All roles present in each profile
     for prof in batch:
         roles_in_prof = {r for r, _ in prof}
         assert roles_in_prof == set(role_names)

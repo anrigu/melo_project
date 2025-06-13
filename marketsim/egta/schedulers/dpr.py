@@ -203,6 +203,13 @@ class DPRScheduler(Scheduler):
             if full_profile:
                 profiles.append(full_profile)
 
+                # Early-exit if we have already generated too many profiles for
+                # this sub-game.  Prevents combinatorial explosion when roles
+                # have many players or strategies.
+                MAX_PROFILES_PER_SUBGAME = getattr(self, "max_profiles_per_subgame", 1000)
+                if len(profiles) >= MAX_PROFILES_PER_SUBGAME:
+                    break  # stop gathering more
+
         return profiles
  
 
@@ -515,15 +522,21 @@ class DPRScheduler(Scheduler):
         Returns:
             List of role symmetric strategy profiles
         """
-        if game is None:
-            profiles_to_simulate = []
-            for subgame in self.requested_subgames:
-                profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
-        else:
+        
+        profiles_to_simulate: List[List[Tuple[str, str]]] = []
+
+        if self.requested_subgames:
+            for sub in self.requested_subgames:
+                profiles_to_simulate.extend(self._generate_profiles_for_subgame(sub))
+            
+            self.requested_subgames.clear()
+
+        
+        if game is not None:
             self.game = game
-            
+
             candidates = self._select_equilibrium_candidates(game)
-            
+
             new_subgames = []
             for candidate in candidates:
                 support_strategies = self._select_support_strategies(game, candidate)
@@ -546,13 +559,11 @@ class DPRScheduler(Scheduler):
                     
                     new_subgame[role_name] = role_strategies
                 
-                new_subgames.append(new_subgame)
-            
-            self.requested_subgames.extend(new_subgames)
-            
-            profiles_to_simulate = []
-            for subgame in new_subgames:
-                profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
+                # Append *after* we've processed the old queue so we don't lose them
+                self.requested_subgames.extend(new_subgames)
+
+                for subgame in new_subgames:
+                    profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
         
         # Filter out already scheduled profiles
         new_profiles = []

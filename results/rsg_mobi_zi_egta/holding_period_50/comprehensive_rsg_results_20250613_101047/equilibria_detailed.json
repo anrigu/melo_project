@@ -1,0 +1,162 @@
+[
+  {
+    "equilibrium_id": 1,
+    "regret": 0.0,
+    "welfare": 0.23295608162879944,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_100_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100": 1.0
+      }
+    },
+    "mixture_vector": [
+      0.0,
+      1.0,
+      1.0,
+      0.0
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_0_100"
+      ]
+    },
+    "support_size": 2,
+    "equilibrium_type": "Pure"
+  },
+  {
+    "equilibrium_id": 2,
+    "regret": 0.0,
+    "welfare": 3892.35595703125,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100": 0.4958494007587433,
+        "MOBI_100_0": 0.5041506290435791
+      },
+      "ZI": {
+        "ZI_0_100": 1.0
+      }
+    },
+    "mixture_vector": [
+      0.4958494007587433,
+      0.5041506290435791,
+      1.0,
+      1.000000013351432e-10
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_0_100",
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_0_100"
+      ]
+    },
+    "support_size": 3,
+    "equilibrium_type": "Partially Mixed"
+  },
+  {
+    "equilibrium_id": 3,
+    "regret": 7.528905712206324e-07,
+    "welfare": 0.23178711533546448,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_100_0": 1.0
+      },
+      "ZI": {
+        "ZI_100_0": 1.0
+      }
+    },
+    "mixture_vector": [
+      0.0,
+      1.0,
+      0.0,
+      1.0
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 2,
+    "equilibrium_type": "Pure"
+  },
+  {
+    "equilibrium_id": 4,
+    "regret": 0.0003695264458656311,
+    "welfare": 3636.854248046875,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100": 0.5,
+        "MOBI_100_0": 0.5
+      },
+      "ZI": {
+        "ZI_0_100": 0.8235293626785278,
+        "ZI_100_0": 0.1764705926179886
+      }
+    },
+    "mixture_vector": [
+      0.5,
+      0.5,
+      0.8235293626785278,
+      0.1764705926179886
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_0_100",
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_0_100",
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 4,
+    "equilibrium_type": "Mixed"
+  },
+  {
+    "equilibrium_id": 5,
+    "regret": 0.0009030126966536045,
+    "welfare": 1469.8519287109375,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100": 0.32470765709877014,
+        "MOBI_100_0": 0.6752923130989075
+      },
+      "ZI": {
+        "ZI_0_100": 0.48284685611724854,
+        "ZI_100_0": 0.5171531438827515
+      }
+    },
+    "mixture_vector": [
+      0.32470765709877014,
+      0.6752923130989075,
+      0.48284685611724854,
+      0.5171531438827515
+    ],
+    "support_by_role": {
+      "MOBI": [
+        "MOBI_0_100",
+        "MOBI_100_0"
+      ],
+      "ZI": [
+        "ZI_0_100",
+        "ZI_100_0"
+      ]
+    },
+    "support_size": 4,
+    "equilibrium_type": "Mixed"
+  }
+]

@@ -5,7 +5,7 @@
     "is_role_symmetric": true,
     "mixture_by_role": {
       "MOBI": {
-        "MOBI_0_100": 1.0
+        "MOBI_100_0": 1.0
       },
       "ZI": {
         "ZI_100_0": 1.0
@@ -18,98 +18,10 @@
     "is_role_symmetric": true,
     "mixture_by_role": {
       "MOBI": {
-        "MOBI_100_0": 1.0
-      },
-      "ZI": {
-        "ZI_100_0": 1.0
-      }
-    }
-  },
-  {
-    "id": 2,
-    "regret": 6.105671523926048e-13,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
         "MOBI_0_100": 1.0
       },
       "ZI": {
-        "ZI_0_100": 0.5,
-        "ZI_100_0": 0.5
-      }
-    }
-  },
-  {
-    "id": 3,
-    "regret": 6.545522523992986e-08,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MOBI_0_100": 0.5,
-        "MOBI_100_0": 0.5
-      },
-      "ZI": {
-        "ZI_100_0": 1.0
-      }
-    }
-  },
-  {
-    "id": 4,
-    "regret": 1.868943826366376e-07,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MOBI_0_100": 0.5,
-        "MOBI_100_0": 0.5
-      },
-      "ZI": {
-        "ZI_0_100": 0.8888888955116272,
-        "ZI_100_0": 0.1111111119389534
-      }
-    }
-  },
-  {
-    "id": 5,
-    "regret": 3.3877023497552727e-07,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MOBI_0_100": 0.5,
-        "MOBI_100_0": 0.5
-      },
-      "ZI": {
-        "ZI_0_100": 0.8235293626785278,
-        "ZI_100_0": 0.1764705926179886
-      }
-    }
-  },
-  {
-    "id": 6,
-    "regret": 4.2480093043195666e-07,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MOBI_0_100": 0.4993741512298584,
-        "MOBI_100_0": 0.5006258487701416
-      },
-      "ZI": {
-        "ZI_0_100": 0.7998927235603333,
-        "ZI_100_0": 0.20010729134082794
-      }
-    }
-  },
-  {
-    "id": 7,
-    "regret": 6.480046295109787e-07,
-    "is_role_symmetric": true,
-    "mixture_by_role": {
-      "MOBI": {
-        "MOBI_0_100": 0.5,
-        "MOBI_100_0": 0.5
-      },
-      "ZI": {
-        "ZI_0_100": 0.75,
-        "ZI_100_0": 0.25
+        "ZI_0_100": 1.0
       }
     }
   }
