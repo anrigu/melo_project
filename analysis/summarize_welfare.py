@@ -1,204 +1,166 @@
-from __future__ import annotations
-
+#!/usr/bin/env python3
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-#!/usr/bin/env python3
-from marketsim.egta.core.game import RoleSymmetricGame
-
-"""
-Summarise welfare metrics for every equilibrium.
-
-Changes relative to the original:
-  • Uses game.mixture_values rather than hand-rolling from deviation payoffs.
-  • Robust to NaN / inf both in raw observations and mixture evaluation.
-  • Sanitises the output in one sweep.
-"""
-
-
-import json, os, math, sys
-from collections import defaultdict
-from typing import Dict, List, Tuple
-
-import numpy as np
+import json
 import torch
+import argparse
 
-# --------------------------------------------------------------------------- #
-# CONFIG ––– adapt just these paths                                           #
-# --------------------------------------------------------------------------- #
-RESULTS_DIR     = "/Users/gabesmithline/Desktop/100_2_strats_no_shade/comprehensive_rsg_results_20250614_185419"
-EQS_FILE        = os.path.join(RESULTS_DIR, "equilibria_detailed.json")
-GAME_DETAILS    = os.path.join(RESULTS_DIR, "game_details.json")
-RAW_PAYOFF_DATA = os.path.join(RESULTS_DIR, "raw_payoff_data.json")
-OBS_FILE        = os.path.join(RESULTS_DIR, "observations.json")
-OUTPUT_JSON     = os.path.join(RESULTS_DIR, "raw_welfare_metrics_with_stats_250.json")
+# make sure we can import marketsim
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
 
-# --------------------------------------------------------------------------- #
-# tiny helper                                                                 #
-# --------------------------------------------------------------------------- #
-def _sanitize(obj):
-    """Recursively replace NaN/Inf with null so json.dump never fails."""
-    if isinstance(obj, float):
-        return None if (math.isnan(obj) or math.isinf(obj)) else obj
-    if isinstance(obj, dict):
-        return {k: _sanitize(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_sanitize(v) for v in obj]
-    return obj
+from marketsim.game.role_symmetric_game import RoleSymmetricGame
 
-
-# --------------------------------------------------------------------------- #
-# load helpers                                                                #
-# --------------------------------------------------------------------------- #
-def load_equilibria(path: str) -> List[dict]:
-    with open(path) as f:
-        return json.load(f)
-
-def load_observations(path: str) -> List[dict]:
-    with open(path) as f:
-        return json.load(f)
-
-def compute_optimum_welfare(obs: List[dict]) -> float:
-    """Highest average *sum* of player payoffs across all fully-sampled profiles."""
-    sums = defaultdict(list)
-    for e in obs:
-        if not e["payoffs"]:
-            continue
-        prof = tuple(tuple(p) for p in e["profile"])
-        if any(map(lambda x: x is None or math.isnan(x) or math.isinf(x), e["payoffs"])):
-            continue
-        sums[prof].append(sum(e["payoffs"]))
-    if not sums:
-        return 0.0
-    return max(np.mean(v) for v in sums.values())
-
-def load_game(details_path: str, payoff_path: str, device: torch.device):
-     # local import
-    meta = json.load(open(details_path))
-    raw  = json.load(open(payoff_path))
-    return RoleSymmetricGame.from_payoff_data_rsg(
-        payoff_data             = raw,
-        role_names              = meta["role_names"],
-        num_players_per_role    = meta["num_players_per_role"],
-        strategy_names_per_role = meta["strategy_names_per_role"],
-        device                  = device,
-        normalize_payoffs       = False
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Compute raw‐unit welfare & regrets for stored equilibria."
     )
+    parser.add_argument(
+        "results_dir",
+        type=str,
+        help="Path to the results folder (must contain experiment_parameters.json, equilibria_detailed.json, raw_payoff_data.json)"
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Torch device to use (cpu or cuda)"
+    )
+    parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="If set, normalize payoffs (subtract mean, divide by std)"
+    )
+    return parser.parse_args()
 
-# --------------------------------------------------------------------------- #
-# If your RoleSymmetricGame lacks mixture_values, add this (5 lines)          #
-# class RoleSymmetricGame:                                                   #
-#     ...                                                                    #
-#     def mixture_values(self, mix_tensor: torch.Tensor) -> torch.Tensor:     #
-#         """Return per-role expected payoff of the mixture itself."""        #
-#         return (mix_tensor * self.deviation_payoffs(mix_tensor)).sum(dim=1)#
-# --------------------------------------------------------------------------- #
+def _compute_role_stats(mixture: torch.Tensor,
+                        avg_by_role: dict[str, dict[str, float]],
+                        game: RoleSymmetricGame):
+    """Expected payoffs/regrets using *per-strategy sample means*.
 
-def shannon_entropy(p_dict: Dict[str, float]) -> float:
-    ps = np.array(list(p_dict.values()), dtype=float)
-    ps = ps[ps > 0]
-    return float(-(ps * np.log(ps)).sum()) if ps.size else 0.0
+    Parameters
+    ----------
+    mixture        Flat tensor (len == game.num_strategies) already on device.
+    avg_by_role    {role: {strategy: mean_raw_payoff}}
+    game           The RoleSymmetricGame (only used for num_players_per_role).
+    """
 
+    role_payoffs: dict[str, float] = {}
+    role_regrets: dict[str, float] = {}
+    collective = 0.0
 
-# --------------------------------------------------------------------------- #
-# MAIN                                                                        #
-# --------------------------------------------------------------------------- #
-def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    offset = 0
+    for r_idx, role in enumerate(game.role_names):
+        n_s = int(game.num_strategies_per_role[r_idx])
+        r_mix = mixture[offset:offset + n_s]
+        strat_names = game.strategy_names_per_role[r_idx]
 
-    equilibria   = load_equilibria(EQS_FILE)
-    observations = load_observations(OBS_FILE)
-    game         = load_game(GAME_DETAILS, RAW_PAYOFF_DATA, device)
-    opt_welfare  = compute_optimum_welfare(observations)
+        # Expected payoff under mixture
+        epay = 0.0
+        for p, s in zip(r_mix.tolist(), strat_names):
+            epay += p * avg_by_role.get(role, {}).get(s, 0.0)
 
-    # ---------------------------------------------------------------
-    # Quick per-strategy raw payoff averages to avoid zero-payoff bug
-    # ---------------------------------------------------------------
-    avg_by_role: Dict[str, Dict[str, float]] = defaultdict(dict)
-    count_by_role: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for prof in observations:
-        for (role, strat), payoff in zip(prof["profile"], prof["payoffs"]):
-            if payoff is None or math.isnan(payoff) or math.isinf(payoff):
-                continue
-            avg_by_role[role].setdefault(strat, 0.0)
-            count_by_role[role][strat] += 1
-            avg_by_role[role][strat] += payoff
+        # Best-response payoff ≈ best average sample payoff for role
+        br = max(avg_by_role.get(role, {}).values()) if avg_by_role.get(role) else 0.0
 
-    # turn sums into means
-    for role, smap in avg_by_role.items():
-        for strat in smap:
-            smap[strat] /= count_by_role[role][strat]
+        role_payoffs[role] = epay
+        role_regrets[role] = br - epay
 
-    summaries: List[dict] = []
+        collective += epay * int(game.num_players_per_role[r_idx])
 
-    for eq in equilibria:
-        mix = torch.tensor(eq["mixture_vector"], dtype=torch.float32, device=device)
+        offset += n_s
 
-        # -----------------------------------------------------------
-        # Expected payoffs via simple per-strategy means (raw scale)
-        # -----------------------------------------------------------
-        mix_vals_by_role = {}
-        for role, dist in eq["mixture_by_role"].items():
-            epay = 0.0
-            for strat, prob in dist.items():
-                epay += prob * avg_by_role.get(role, {}).get(strat, 0.0)
-            mix_vals_by_role[role] = epay
-
-        # ------------------------------------------------------------------ #
-        # aggregate per role                                                 #
-        # ------------------------------------------------------------------ #
-        role_epay, role_reg = {}, {}
-        collective = total_regret = 0.0
-        offset = 0
-        for ridx, rname in enumerate(game.role_names):
-            n_s = len(game.strategy_names_per_role[ridx])
-            r_strats = mix[offset:offset + n_s]
-            r_mix    = mix[offset:offset + n_s]
-
-            role_name = rname
-            expected_pay = mix_vals_by_role.get(role_name, 0.0)
-
-            # Best dev: use max avg payoff for role
-            if avg_by_role.get(role_name):
-                best_dev = max(avg_by_role[role_name].values())
-            else:
-                best_dev = 0.0
-
-            reg          = best_dev - expected_pay
-
-            n_players = int(game.num_players_per_role[ridx])
-            collective      += expected_pay * n_players
-            total_regret    += reg * n_players
-            role_epay[rname] = expected_pay
-            role_reg[rname]  = reg
-
-            offset += n_s
-
-        price_of_anarchy = (opt_welfare / collective) if collective > 0 else None
-        payoff_gap       = opt_welfare - collective
-
-        entropy_by_role = {
-            role: shannon_entropy(dist) for role, dist in eq["mixture_by_role"].items()
-        }
-
-        summaries.append({
-            "equilibrium_id":       eq["equilibrium_id"],
-            "mixture_by_role":      eq["mixture_by_role"],
-            "role_expected_payoffs": role_epay,
-            "role_regrets":         role_reg,
-            "collective_welfare":   collective,
-            "total_regret":         total_regret,
-            "price_of_anarchy":     price_of_anarchy,
-            "entropy":              entropy_by_role,
-            "payoff_gap":           payoff_gap,
-        })
-
-    with open(OUTPUT_JSON, "w") as fp:
-        json.dump(_sanitize(summaries), fp, indent=2, allow_nan=False)
-
-    print(f"✓ wrote summary to {OUTPUT_JSON}")
-
+    return {
+        "role_expected_payoffs": role_payoffs,
+        "role_regrets": role_regrets,
+        "collective_welfare": collective,
+    }
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    rd = args.results_dir
 
+    # Load inputs
+    params_fp = os.path.join(rd, "experiment_parameters.json")
+    eq_fp = os.path.join(rd, "equilibria_detailed.json")
+    raw_fp = os.path.join(rd, "raw_payoff_data.json")
+    for p in (params_fp, eq_fp, raw_fp):
+        if not os.path.isfile(p):
+            print(f"ERROR: missing required file: {p}", file=sys.stderr)
+            sys.exit(1)
+
+    with open(params_fp) as f:
+        params = json.load(f)
+    with open(eq_fp) as f:
+        equilibria_info = json.load(f)
+    with open(raw_fp) as f:
+        payoff_data = json.load(f)
+
+    # Unpack experiment settings
+    role_names = params["role_names"]
+    num_players_per_role = params["num_players_per_role"]
+    strategy_names_per_role = params["strategy_names_per_role"]
+
+    # Build the symmetric game from raw payoff data
+    game_raw = RoleSymmetricGame.from_payoff_data_rsg(
+        payoff_data=payoff_data,
+        role_names=role_names,
+        num_players_per_role=num_players_per_role,
+        strategy_names_per_role=strategy_names_per_role,
+        device=args.device,
+        normalize_payoffs=args.normalize,
+    )
+
+    # ------------------------------------------------------------------
+    # 1. Compute simple per-strategy sample means from payoff_data  (raw units)
+    # ------------------------------------------------------------------
+
+    avg_by_role: dict[str, dict[str, float]] = {}
+    count_by_role: dict[str, dict[str, int]] = {}
+
+    for prof in payoff_data:  # each profile is list[(pid, role, strat, payoff)]
+        for _pid, r_name, s_name, payoff in prof:
+            if payoff is None or not isinstance(payoff, (int, float)) or torch.isnan(torch.tensor(payoff)) or torch.isinf(torch.tensor(payoff)):
+                continue
+            avg_by_role.setdefault(r_name, {}).setdefault(s_name, 0.0)
+            count_by_role.setdefault(r_name, {}).setdefault(s_name, 0)
+            avg_by_role[r_name][s_name] += float(payoff)
+            count_by_role[r_name][s_name] += 1
+
+    # convert sums to means
+    for r_name, smap in avg_by_role.items():
+        for s_name in smap:
+            cnt = count_by_role[r_name][s_name]
+            if cnt:
+                smap[s_name] /= cnt
+
+    # ------------------------------------------------------------------
+    # Optional debug print
+    print("Constructed game:")
+    print(" Configs:", game_raw.rsg_config_table.shape)
+    print(" Payoffs:", game_raw.rsg_payoff_table.shape)
+
+    # Compute and collect stats for each equilibrium
+    results = []
+    for eq in equilibria_info:
+        # Rebuild mixture-tensor by name to ensure correct ordering
+        mix = torch.zeros(game_raw.num_strategies, dtype=torch.float32, device=args.device)
+        for r_idx, role in enumerate(role_names):
+            role_dist = eq["mixture_by_role"][role]
+            for s_local_idx, strat in enumerate(strategy_names_per_role[r_idx]):
+                gi = int(game_raw.role_starts[r_idx] + s_local_idx)
+                mix[gi] = role_dist.get(strat, 0.0)
+
+        stats = _compute_role_stats(mix, avg_by_role, game_raw)
+        results.append({
+            "equilibrium_id": eq["equilibrium_id"],
+            "mixture_by_role": eq["mixture_by_role"],
+            **stats
+        })
+
+    # Write out
+    out_fp = os.path.join(rd, "raw_welfare_metrics.json")
+    with open(out_fp, "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(f"✓ Wrote raw welfare metrics to {out_fp}")

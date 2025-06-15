@@ -755,7 +755,7 @@ async def quiesce(
     )
     unconfirmed_candidates.append(uniform_candidate)
     
-  
+
     if game.is_role_symmetric:
         # Build list of per-role global strategy indices
         role_global_indices: List[List[int]] = []
@@ -1328,13 +1328,13 @@ async def quiesce(
 
     _force_keep_corner("_100_0")  # CDA corner
     _force_keep_corner("_0_100")  # MELO corner
-
+    
     confirmed_eq.sort(key=lambda x: x[1])
-
+    
     if verbose:
         elapsed = time.time() - start_time
         print(f"  Solved in {elapsed:.2f} seconds")
-
+    
     return confirmed_eq 
 
 
