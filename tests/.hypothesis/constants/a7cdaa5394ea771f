@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/agent/melo_agent.py
+# hypothesis_version: 6.135.7
+
+[0.3, 0.5, 0.7, 5000000.0, 10000000, 'CDA', 'MELO', 'direction', 'market', 'price', 'quantity']

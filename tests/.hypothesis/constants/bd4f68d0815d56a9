@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/agent/hbl_agent.py
+# hypothesis_version: 6.135.7
+
+[0.1, 10000000000.0, 100, 10000000, 'ERROR', '__len__']

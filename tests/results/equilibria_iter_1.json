@@ -1,0 +1,15 @@
+[
+  {
+    "id": 0,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MELO": 1.0
+      },
+      "ZI": {
+        "CDA": 1.0
+      }
+    }
+  }
+]

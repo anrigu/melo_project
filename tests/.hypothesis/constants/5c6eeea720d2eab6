@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/egta/core/game.py
+# hypothesis_version: 6.135.7
+
+[0.0, 1e-10, 0.001, 0.01, 1.0, 700, 5000, ':', 'Game', 'Player', 'RoleSymmetricGame', 'SymmetricGame', '_profile_key_set', 'cpu', 'game_type', 'is_role_symmetric', 'item', 'metadata', 'num_players', 'num_players_per_role', 'num_profiles', 'num_strategies', 'numel', 'payoff_mean', 'payoff_std', 'role_names', 'role_symmetric', 'strategy_names', 'symmetric', 'tolist', 'w']

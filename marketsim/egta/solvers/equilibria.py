@@ -1530,7 +1530,8 @@ async def test_candidate(
             n_eff = 0
             for ob in obs_list:
                 vals.append(ob.payoffs[0])
-                n_eff += getattr(ob, "aux", {}).get("n_raw", 1)
+                aux_dict = getattr(ob, "aux", None) or {}
+                n_eff += aux_dict.get("n_raw", 1)
             return vals, n_eff
 
         samp_base, n_base = _vals_and_n(obs_base)

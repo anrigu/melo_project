@@ -596,17 +596,15 @@ class DPRScheduler(Scheduler):
     
     def missing_deviations(self, mixture: np.ndarray, game: Game) -> List[List[Tuple[str,str]]]:
         """
-        Return every unevaluated one-player deviation profile of σ.
+        return every unevaluated one-player deviation profile of the strategy profile.
         """
         support = self._select_support_strategies(game, mixture, threshold=1e-12)
         missing = []
         import itertools
-        # build a pure profile over the support (one player per role strategy)
         base = []
         for role, strats in support.items():
             base.append([(role, s) for s in strats])
         for pure in itertools.product(*base):
-            # `pure` is a compact list with ONE (role,strategy) per role
             pure = list(pure)
 
             for i, (role_i, strat_i) in enumerate(pure):
@@ -614,37 +612,50 @@ class DPRScheduler(Scheduler):
                     if other == strat_i:
                         continue
 
-                    # --- build compact dev profile (one deviator) -----------
                     dev_compact = pure.copy()
-                    dev_compact[i] = (role_i, other)  # single deviator in role_i
+                    dev_compact[i] = (role_i, other)  
 
-                    # --- EXPAND: all but ONE player stay with original strat_i
+                    #expand: all but ONE player stay with original strat_i
                     dev_full = []
                     for role_idx2, (role_name2, strat_name2) in enumerate(dev_compact):
                         n_players = int(
                             game.num_players_per_role[role_idx2].item()
                         )
 
-                        if role_idx2 == i:  # this is the deviating role
-                            # one player uses strat_name2 (the deviation)
+                        if role_idx2 == i: 
                             dev_full.append((role_name2, strat_name2))
-                            # the remaining players keep the original strategy
                             orig_strat = pure[i][1]
                             dev_full.extend(
                                 [(role_name2, orig_strat)] * (n_players - 1)
                             )
                         else:
-                            # all players stick with strat_name2
                             dev_full.extend([(role_name2, strat_name2)] * n_players)
                      # ---------------------------------------------------------
-                     #print(f"Profiles to simulate: {dev_full}")
-                    if not game.has_profile(dev_full):
-                        missing.append(dev_full)
+
+                    
+                    unplayed_threshold = 1e-3  
+
+                    # Map (role,strat) → global index in mixture
+                    if not hasattr(self, "_name_to_global_idx"):
+                        mapping = {}
+                        g_idx = 0
+                        for r_name, strats in zip(self.role_names, self.strategy_names_per_role):
+                            for s in strats:
+                                mapping[(r_name, s)] = g_idx
+                                g_idx += 1
+                        self._name_to_global_idx = mapping
+
+                    # Global index for the deviating strategy "other"
+                    other_idx = self._name_to_global_idx[(role_i, other)]
+
+                    if mixture[other_idx] < unplayed_threshold:
+                        if not game.has_profile(dev_full):
+                            missing.append(dev_full)
 
         return missing
 
         
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=256)
 def _cached_distribute_players(k: int, n: int) -> Tuple[Tuple[int, ...], ...]:
     """
     Return all ways to assign `n` players over `k` strategies as tuples of length k.

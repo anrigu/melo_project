@@ -10,6 +10,7 @@ import json
 import pandas as pd
 from datetime import datetime
 from matplotlib.lines import Line2D
+import argparse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -145,13 +146,17 @@ else:
     device = torch.device("cpu")
     print("Using CPU for simulations")
 
-def run_role_symmetric_mobi_zi_egta():
+def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     """
     Run EGTA with role symmetric games where both MOBI and ZI agents are strategic.
     """
     num_strategic_mobi = 28
     num_strategic_zi = 40
-    holding_periods = [50]
+
+    # Allow caller to specify a custom list of holding periods.  This is
+    # convenient for SLURM array jobs where each task runs one period.
+    if holding_periods is None:
+        holding_periods = [50]
     
     all_results = []
     
@@ -161,8 +166,8 @@ def run_role_symmetric_mobi_zi_egta():
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 3
-        batch_size = 20 
+        num_iterations = 2
+        batch_size = 70 
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -197,7 +202,7 @@ def run_role_symmetric_mobi_zi_egta():
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=10,
+            reps=1000,
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
             log_profile_details=True
@@ -251,7 +256,7 @@ def run_role_symmetric_mobi_zi_egta():
             save_frequency=1,
             verbose=True,
             quiesce_kwargs={
-                'num_iters': 100,
+                'num_iters': 3,
                 'num_random_starts': 5,
                 'regret_threshold': 1e-4,
                 'dist_threshold': 1e-3,
@@ -721,13 +726,32 @@ def complete_deviation_rows(game, simulator, scheduler, equilibria, batch_size=3
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    os.makedirs("results/rsg_mobi_zi_egta_new", exist_ok=True)
-    game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta()
-    
-    if eq_mixture is not None:
+    parser = argparse.ArgumentParser(description="Run role-symmetric MOBI×ZI EGTA experiment(s).")
+    parser.add_argument("--holding-period", type=int, default=None,
+                        help="Single holding period to analyse. Overrides --holding-periods if provided.")
+    parser.add_argument("--holding-periods", type=int, nargs="*", default=[50],
+                        help="Space-separated list of holding periods to analyse in sequence.")
+    parser.add_argument("--output-root", type=str, default="results/rsg_mobi_zi_egta_new",
+                        help="Root directory where results will be stored.")
+    args = parser.parse_args()
+
+    # Derive list of periods to run
+    if args.holding_period is not None:
+        periods = [args.holding_period]
+    else:
+        periods = args.holding_periods
+
+    os.makedirs(args.output_root, exist_ok=True)
+
+    game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta(periods)
+
+    # Optional post-processing for the *first* game run (makes sense when a
+    # single holding period is executed).  Skip if multiple periods to avoid
+    # heavy visualisations in every array task.
+    if len(periods) == 1 and eq_mixture is not None:
         basin_results = analyze_basins_of_attraction_rsg(game, num_points=100, iters=1000)
-        
-        results_dir = save_comprehensive_rsg_results(
-            egta, game, welfare_data, labels, experiment_params, 
-            basin_results=basin_results
+        save_comprehensive_rsg_results(
+            egta, game, welfare_data, labels, experiment_params,
+            output_dir=args.output_root,
+            basin_results=basin_results,
         ) 

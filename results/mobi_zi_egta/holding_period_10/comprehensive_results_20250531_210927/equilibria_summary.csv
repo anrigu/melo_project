@@ -1,2 +1,0 @@
-equilibrium_id,regret,welfare,mixture_dict,mixture_vector,support,support_size,is_pure_strategy,dominant_strategy,dominant_probability
-1,1.0,24654.339130027078,"{'MELO_0_100': 0.5, 'MELO_100_0': 0.5}","[0.5, 0.5]","['MELO_0_100', 'MELO_100_0']",2,False,MELO_0_100,0.5

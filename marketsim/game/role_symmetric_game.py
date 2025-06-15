@@ -319,26 +319,20 @@ class RoleSymmetricGame(AbstractGame):
                 mixture_out[role_slice] = 1.0 / num_strats_in_role
         return mixture_out
         
+    # ------------------------------------------------------------------
+    # Internal helper that actually computes deviation payoffs (no Jacobian)
+    # This code block is exactly the former implementation moved into a
+    # separate function so we can reuse it for autograd-based Jacobian
+    # computation without duplicating everything.
+    # ------------------------------------------------------------------
+
     @lru_cache(maxsize=None)
-    def deviation_payoffs(self, mixture: torch.Tensor) -> torch.Tensor:
-        """
-        Calculate the expected payoff for playing each pure strategy,
-        given that other players play according to the mixture.
-        This is role-aware.
-
-        Args:
-            mixture (torch.Tensor): A flat tensor of strategy probabilities.
-                                    It's assumed that this mixture is (or will be)
-                                    normalized such that within each role, probs sum to 1.
-
-        Returns:
-            torch.Tensor: A tensor of expected payoffs for each global strategy.
-        """
+    def _deviation_payoffs_internal(self, mixture_flat: torch.Tensor) -> torch.Tensor:  # noqa: C901
+        """Role-aware deviation payoffs (no Jacobian)."""
         if self.rsg_config_table is None or self.rsg_payoff_table is None:
-            # print("Warning: RoleSymmetricGame.deviation_payoffs requires rsg_config_table and rsg_payoff_table to be populated. Returning zeros.")
             return torch.zeros(self.num_strategies, device=self.device, dtype=torch.float32)
 
-        mixture_internal = self._ensure_role_normalized_mixture(mixture)
+        mixture_internal = self._ensure_role_normalized_mixture(mixture_flat)
 
         dev_payoffs_output = torch.zeros(self.num_strategies, device=self.device, dtype=torch.float64)
 
@@ -346,91 +340,130 @@ class RoleSymmetricGame(AbstractGame):
             r_k = self.role_indices[s_k_idx]
 
             num_players_others_list = self.num_players_per_role.cpu().tolist()
-            
             if num_players_others_list[r_k] < 1:
-                dev_payoffs_output[s_k_idx] = torch.tensor(0.0, device=self.device, dtype=torch.float64)
+                dev_payoffs_output[s_k_idx] = 0.0
                 continue
             num_players_others_list[r_k] -= 1
             num_players_others = torch.tensor(num_players_others_list, dtype=torch.long, device=self.device)
 
-            accumulated_expected_payoff_for_sk = torch.tensor(0.0, device=self.device, dtype=torch.float64)
+            expected_payoff_sk = 0.0
 
-            for c_prime_idx in range(self.rsg_config_table.shape[0]):
-                profile_c_prime = self.rsg_config_table[c_prime_idx].to(dtype=torch.float64)
-
-                if profile_c_prime[s_k_idx] < 1.0 - 1e-9: # Check if s_k is essentially not played
+            for c_idx in range(self.rsg_config_table.shape[0]):
+                profile_c = self.rsg_config_table[c_idx].to(dtype=torch.float64)
+                if profile_c[s_k_idx] < 1.0 - 1e-9:
                     continue
 
-                profile_c_others = profile_c_prime.clone()
-                profile_c_others[s_k_idx] -= 1.0
+                profile_others = profile_c.clone()
+                profile_others[s_k_idx] -= 1.0
 
-                is_valid_c_others = True
-                for r_iter_idx in range(self.num_roles):
-                    role_slice = slice(self.role_starts[r_iter_idx], self.role_starts[r_iter_idx] + self.num_strategies_per_role[r_iter_idx])
-                    if not torch.isclose(profile_c_others[role_slice].sum(), num_players_others[r_iter_idx].to(torch.float64), atol=1e-6):
-                        is_valid_c_others = False
-                        break
-                    if torch.any(profile_c_others[role_slice] < -1e-9):
-                        is_valid_c_others = False
-                        break
-                if not is_valid_c_others:
+                # verify counts per role
+                valid = True
+                for r_idx in range(self.num_roles):
+                    sl = slice(self.role_starts[r_idx], self.role_starts[r_idx] + self.num_strategies_per_role[r_idx])
+                    if not torch.isclose(profile_others[sl].sum(), num_players_others[r_idx].to(torch.float64), atol=1e-6):
+                        valid = False; break
+                    if torch.any(profile_others[sl] < -1e-9):
+                        valid = False; break
+                if not valid:
                     continue
 
-                log_prob_c_others = torch.tensor(0.0, device=self.device, dtype=torch.float64)
-                possible_to_form_c_others = True
-                for r_iter_idx in range(self.num_roles):
-                    role_slice = slice(self.role_starts[r_iter_idx], self.role_starts[r_iter_idx] + self.num_strategies_per_role[r_iter_idx])
-                    
-                    counts_in_role_for_c_others = torch.round(profile_c_others[role_slice]).to(torch.float32) # Multinomial expects float counts that are integers
-                    mixture_probs_in_role = mixture_internal[role_slice] # Already role-normalized by helper
+                log_p = 0.0
+                can_form = True
+                for r_idx in range(self.num_roles):
+                    sl = slice(self.role_starts[r_idx], self.role_starts[r_idx] + self.num_strategies_per_role[r_idx])
+                    counts_role = torch.round(profile_others[sl]).to(torch.float32)
+                    probs_role  = mixture_internal[sl]
 
-                    current_role_players_for_others = int(num_players_others[r_iter_idx].item())
-
-                    if current_role_players_for_others == 0:
-                        if counts_in_role_for_c_others.sum() < 1e-9: # Effectively zero counts
-                            continue 
+                    tot_players_role = int(num_players_others[r_idx].item())
+                    if tot_players_role == 0:
+                        if counts_role.sum() < 1e-9:
+                            continue
                         else:
-                            possible_to_form_c_others = False; break
-                    
-                    if torch.any(counts_in_role_for_c_others < -1e-9):
-                         possible_to_form_c_others = False; break
-                    
-                    # Ensure counts sum to total_count for multinomial
-                    if not torch.isclose(counts_in_role_for_c_others.sum(), torch.tensor(float(current_role_players_for_others), device=self.device, dtype=torch.float32)):
-                        possible_to_form_c_others = False; break
+                            can_form = False; break
 
-                    if torch.any(mixture_probs_in_role < -1e-9):
-                        possible_to_form_c_others = False; break
-                    
-                    clamped_counts_in_role = torch.clamp(counts_in_role_for_c_others, min=0.0)
+                    if torch.any(counts_role < -1e-9):
+                        can_form = False; break
+
+                    if not torch.isclose(counts_role.sum(), torch.tensor(float(tot_players_role), device=self.device)):
+                        can_form = False; break
+
+                    if torch.any(probs_role < -1e-9):
+                        can_form = False; break
 
                     try:
-                        if current_role_players_for_others > 0 or (current_role_players_for_others == 0 and clamped_counts_in_role.sum() < 1e-9):
-                             multinom_dist = torch.distributions.Multinomial(
-                                total_count=current_role_players_for_others, 
-                                probs=mixture_probs_in_role.to(torch.float32)
-                            )
-                             log_prob_c_others += multinom_dist.log_prob(clamped_counts_in_role)
-                        elif current_role_players_for_others < 0: 
-                            possible_to_form_c_others = False; break
+                        m = torch.distributions.Multinomial(total_count=tot_players_role, probs=probs_role.to(torch.float32))
+                        log_p += m.log_prob(counts_role)
+                    except (ValueError, RuntimeError):
+                        can_form = False; break
 
-                    except ValueError: 
-                        possible_to_form_c_others = False; break
-                    except RuntimeError as e: 
-                        possible_to_form_c_others = False; break
-                
-                if not possible_to_form_c_others or torch.isinf(log_prob_c_others) or torch.isnan(log_prob_c_others):
+                if not can_form or torch.isinf(log_p) or torch.isnan(log_p):
                     continue
 
-                prob_c_others = torch.exp(log_prob_c_others)
-                if prob_c_others > 1e-12:
-                    payoff_s_k_in_c_prime = self.rsg_payoff_table[s_k_idx, c_prime_idx].to(dtype=torch.float64)
-                    if not torch.isnan(payoff_s_k_in_c_prime):
-                        accumulated_expected_payoff_for_sk += prob_c_others * payoff_s_k_in_c_prime
-            
-            dev_payoffs_output[s_k_idx] = accumulated_expected_payoff_for_sk
+                p = torch.exp(log_p)
+                if p > 1e-12:
+                    payoff_val = self.rsg_payoff_table[s_k_idx, c_idx]
+                    if not torch.isnan(payoff_val):
+                        expected_payoff_sk += p * payoff_val.to(dtype=torch.float64)
+
+            dev_payoffs_output[s_k_idx] = expected_payoff_sk
 
         return dev_payoffs_output.to(dtype=torch.float32)
+
+    # ------------------------------------------------------------------
+    # Public API: deviation_payoffs with optional Jacobian
+    # ------------------------------------------------------------------
+    def deviation_payoffs(self, mixture: torch.Tensor, *, jacobian: bool = False):
+        """Deviation payoffs, optionally with Jacobian.
+
+        Parameters
+        ----------
+        mixture : torch.Tensor
+            Flat tensor of strategy probabilities (one per global strategy).
+        jacobian : bool, default False
+            If True, also returns the Jacobian matrix \(d dev / d mix\).
+        """
+
+        if not jacobian:
+            return self._deviation_payoffs_internal(mixture)
+
+        # --- Jacobian via autograd -----------------------------------
+        mix_var = mixture.clone().detach().to(self.device).to(torch.float64)
+        mix_var.requires_grad_(True)
+
+        devs = self._deviation_payoffs_internal(mix_var)
+
+        jac_rows = []
+        for i in range(self.num_strategies):
+            if mix_var.grad is not None:
+                mix_var.grad.zero_()
+            devs[i].backward(retain_graph=True)
+            jac_rows.append(mix_var.grad.detach().clone())
+
+        jac = torch.stack(jac_rows, dim=0).to(torch.float32)
+        return devs.to(dtype=torch.float32).detach(), jac
+
+    # ------------------------------------------------------------------
+    # Expected payoffs of the mixture itself (one value per role)
+    # ------------------------------------------------------------------
+    def mixture_values(self, mixture: torch.Tensor) -> torch.Tensor:
+        """Return a length-`num_roles` tensor of expected payoffs.
+
+        Each entry is the expected payoff for that role when every player
+        sticks with *mixture* (i.e. \(\sum_s \pi_{r,s} \cdot \text{dev}_{r,s}(\pi)\)).
+        """
+        mix_norm = self._ensure_role_normalized_mixture(mixture).to(torch.float32)
+        devs = self._deviation_payoffs_internal(mix_norm)
+
+        role_vals = []
+        offset = 0
+        for r in range(self.num_roles):
+            n_s = self.num_strategies_per_role[r]
+            seg_mix  = mix_norm[offset:offset + n_s]
+            seg_devs = devs[offset:offset + n_s]
+            role_vals.append((seg_mix * seg_devs).sum())
+            offset += n_s
+
+        return torch.stack(role_vals)
 
     def get_strategy_name(self, global_strategy_index: int) -> str:
         """Returns the name of a strategy given its global index."""
