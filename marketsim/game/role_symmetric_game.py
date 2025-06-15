@@ -412,7 +412,7 @@ class RoleSymmetricGame(AbstractGame):
     # ------------------------------------------------------------------
     # Public API: deviation_payoffs with optional Jacobian
     # ------------------------------------------------------------------
-    def deviation_payoffs(self, mixture: torch.Tensor, *, jacobian: bool = False):
+    def deviation_payoffs(self, mixture: torch.Tensor, *, jacobian: bool = False, ignore_incomplete: bool = False):
         """Deviation payoffs, optionally with Jacobian.
 
         Parameters
@@ -423,8 +423,13 @@ class RoleSymmetricGame(AbstractGame):
             If True, also returns the Jacobian matrix \(d dev / d mix\).
         """
 
-        if not jacobian:
+        if not jacobian and not ignore_incomplete:
+            # Fast path with caching
             return self._deviation_payoffs_internal(mixture)
+
+        if not jacobian and ignore_incomplete:
+            # Renormalise over observed-payoff mass only (no caching).
+            return self._deviation_payoffs_internal_renorm(mixture)
 
         # --- Jacobian via autograd -----------------------------------
         mix_var = mixture.clone().detach().to(self.device).to(torch.float64)
@@ -441,6 +446,102 @@ class RoleSymmetricGame(AbstractGame):
 
         jac = torch.stack(jac_rows, dim=0).to(torch.float32)
         return devs.to(dtype=torch.float32).detach(), jac
+
+    # ------------------------------------------------------------------
+    # Helper that renormalises if some payoff entries are missing (NaN).
+    #  *No* LRU cache because the result now depends on both `mixture` and the
+    #    pattern of NaNs, but we keep it efficient by sharing most of the code.
+    # ------------------------------------------------------------------
+
+    def _deviation_payoffs_internal_renorm(self, mixture_flat: torch.Tensor) -> torch.Tensor:
+        """Deviation payoffs with probability renormalisation.
+
+        Any configuration where the focal strategy's payoff is NaN is *dropped*.
+        The remaining probability mass is renormalised so that expectations are
+        conditional on the payoff being observed.
+        """
+
+        if self.rsg_config_table is None or self.rsg_payoff_table is None:
+            return torch.zeros(self.num_strategies, device=self.device, dtype=torch.float32)
+
+        mixture_internal = self._ensure_role_normalized_mixture(mixture_flat)
+
+        dev_payoffs = torch.full((self.num_strategies,), float('nan'), device=self.device, dtype=torch.float64)
+
+        for s_k_idx in range(self.num_strategies):
+            r_k = self.role_indices[s_k_idx]
+
+            # players other than the deviator per role
+            num_players_others_list = self.num_players_per_role.cpu().tolist()
+            if num_players_others_list[r_k] < 1:
+                dev_payoffs[s_k_idx] = 0.0; continue
+            num_players_others_list[r_k] -= 1
+            num_players_others = torch.tensor(num_players_others_list, dtype=torch.long, device=self.device)
+
+            num = 0.0  # weighted payoff sum
+            denom = 0.0  # total prob mass with finite payoff
+
+            for c_idx in range(self.rsg_config_table.shape[0]):
+                profile_c = self.rsg_config_table[c_idx].to(dtype=torch.float64)
+                if profile_c[s_k_idx] < 1.0 - 1e-9:
+                    continue
+
+                profile_others = profile_c.clone(); profile_others[s_k_idx] -= 1.0
+
+                # verify counts per role
+                valid = True
+                for r_idx in range(self.num_roles):
+                    sl = slice(self.role_starts[r_idx], self.role_starts[r_idx] + self.num_strategies_per_role[r_idx])
+                    if not torch.isclose(profile_others[sl].sum(), num_players_others[r_idx].to(torch.float64), atol=1e-6):
+                        valid = False; break
+                    if torch.any(profile_others[sl] < -1e-9):
+                        valid = False; break
+                if not valid:
+                    continue
+
+                # probability of seeing this profile under mixture (Multinomial × roles)
+                log_p = 0.0; can_form = True
+                for r_idx in range(self.num_roles):
+                    sl = slice(self.role_starts[r_idx], self.role_starts[r_idx] + self.num_strategies_per_role[r_idx])
+                    counts_role = torch.round(profile_others[sl]).to(torch.float32)
+                    probs_role  = mixture_internal[sl]
+
+                    tot_players_role = int(num_players_others[r_idx].item())
+                    if tot_players_role == 0:
+                        if counts_role.sum() < 1e-9:
+                            continue
+                        can_form = False; break
+
+                    if torch.any(counts_role < -1e-9):
+                        can_form = False; break
+                    if not torch.isclose(counts_role.sum(), torch.tensor(float(tot_players_role), device=self.device)):
+                        can_form = False; break
+
+                    try:
+                        m = torch.distributions.Multinomial(total_count=tot_players_role, probs=probs_role.to(torch.float32))
+                        log_p += m.log_prob(counts_role)
+                    except (ValueError, RuntimeError):
+                        can_form = False; break
+
+                if not can_form or torch.isinf(log_p) or torch.isnan(log_p):
+                    continue
+
+                payoff_val = self.rsg_payoff_table[s_k_idx, c_idx]
+                if torch.isnan(payoff_val):
+                    # skip but don't accumulate probability
+                    continue
+
+                p = torch.exp(log_p)
+                if p <= 1e-12:
+                    continue
+
+                num += p * payoff_val.to(dtype=torch.float64)
+                denom += p
+
+            if denom > 1e-12:
+                dev_payoffs[s_k_idx] = num / denom
+
+        return dev_payoffs.to(dtype=torch.float32)
 
     # ------------------------------------------------------------------
     # Expected payoffs of the mixture itself (one value per role)
