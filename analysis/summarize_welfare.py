@@ -108,21 +108,17 @@ def role_stats(game: RoleSymmetricGame,
         br_pay  = safe_nanmax(dev_r). item()
         if br_pay == float('-inf'):                 
 
-        role_pay[role] = exp_pay
-        role_reg[role] = br_pay - exp_pay
-        welfare        += exp_pay * game.num_players_per_role[r_idx].item()
-        off            += n_s
+            role_pay[role] = exp_pay
+            role_reg[role] = br_pay - exp_pay
+            welfare        += exp_pay * game.num_players_per_role[r_idx].item()
+            off            += n_s
 
     return role_pay, role_reg, welfare
 
-# --------------------------------------------------------------------- #
-#  main
-# --------------------------------------------------------------------- #
 def main() -> None:
     args = parse_args()
     rd   = args.results_dir
 
-    # ---------- load inputs ------------------------------------------- #
     with open(os.path.join(rd, "experiment_parameters.json")) as f:
         params = json.load(f)
     with open(os.path.join(rd, "equilibria_detailed.json")) as f:

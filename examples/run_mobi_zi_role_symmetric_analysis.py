@@ -166,8 +166,8 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 2
-        batch_size = 70 
+        num_iterations = 1
+        batch_size = 10 
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -175,12 +175,13 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         
         mobi_strategies = [
             "MOBI_100_0",   # 100% CDA, 0% MELO
-            "MOBI_50_50",   # 50% CDA, 50% MELO
+            #"MOBI_50_50",   # 50% CDA, 50% MELO
             "MOBI_0_100"   # 0% CDA, 100% MELO
         ]
         
         zi_strategies = [
-            "ZI_100_0",     # 100% CDA, 0% MELO
+            "ZI_100_0", 
+            #"ZI_50_50",    # 100% CDA, 0% MELO
             #"ZI_75_25",     # 75% CDA, 25% MELO
             #"ZI_25_75",     # 25% CDA, 75% MELO
             "ZI_0_100"     # 0% CDA, 100% MELO
@@ -202,10 +203,11 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=1000,
+            reps=10,
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
-            log_profile_details=True
+            log_profile_details=True,
+            parallel=True
             #force_symmetric=True
         )
         
@@ -234,7 +236,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             strategy_names_per_role=strategy_names_per_role,
             subgame_size=4
         )
-        scheduler.max_profiles_per_subgame = 250 
+        scheduler.max_profiles_per_subgame = 400 
 
 
         
@@ -257,7 +259,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             verbose=True,
             quiesce_kwargs={
                 'num_iters': 3,
-                'num_random_starts': 5,
+                'num_random_starts': 0,
                 'regret_threshold': 1e-4,
                 'dist_threshold': 1e-3,
                 'solver': 'replicator',
@@ -363,7 +365,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
                         print(f"    {strategy}: {payoff:.6f}")
                     global_idx += len(role_strategies)
                     
-            print(f"\n🎉 Multi-population replicator dynamics is working correctly!")
+            print(f"\n Multi-population replicator dynamics is working correctly!")
             print(f"   • Each role maintains its own simplex (sums to 1)")
             print(f"   • Payoffs computed from full joint state (coupled)")
             print(f"   • State space: Cartesian product of role simplexes")
@@ -383,7 +385,6 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             print("\nEquilibria found by Role Symmetric EGTA:")
             print("\nWelfare Analysis of Equilibria:")
             
-            # Calculate welfare for role symmetric equilibria
             for i, (mixture, regret_val) in enumerate(egta.equilibria):
                 expected_welfare = 0.0
                 

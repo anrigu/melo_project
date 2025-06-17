@@ -1239,12 +1239,10 @@ async def quiesce(
                 raise ValueError(f"Unknown solver: {solver}")
             solver_time = time.time() - solver_start
             
-            # Convert back to full game mixture
             full_mixture = torch.zeros(game.num_strategies, device=game.game.device)
             for i, s in enumerate(restriction):
                 full_mixture[s] = equilibrium[i]
             
-            # Trim dust probabilities and renormalise per role
             full_mixture = trim_mixture_support(full_mixture, game)
             
             # Test regret against the appropriate game (full game if using DPR)
@@ -1291,8 +1289,7 @@ async def quiesce(
         if reg <= regret_threshold:
             distinct = all(torch.norm(mix - m, p=1).item() > dist_threshold for m,_ in confirmed_eq)
             if distinct:
-                # If deviation rows are still missing the regret may be Inf; keep the
-                # equilibrium anyway and recompute later once tables are complete.
+             
                 import numpy as _np
                 stored_reg = float(reg) if _np.isfinite(reg) else 1e9
                 confirmed_eq.append((mix, stored_reg))
@@ -1303,12 +1300,7 @@ async def quiesce(
     except Exception:
         pass  
 
-    # ------------------------------------------------------------------
-    #  Finally, make sure the *exact* corner vectors themselves are present
-    #  even if an ε-close mixture was inserted earlier and fooled the
-    #  distinct-check.  We add them with placeholder regret=0.0 – callers
-    #  can recompute a precise regret later if desired.
-    # ------------------------------------------------------------------
+ 
     def _force_keep_corner(keyword: str):
         key_lower = keyword.lower()
         indices, offset = [], 0

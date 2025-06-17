@@ -14,11 +14,11 @@ from typing import Any
 __all__ = [
     # Core classes
     "Game", "EGTA",
-
+    
     # Solvers
     "replicator_dynamics", "fictitious_play", "gain_descent",
     "quiesce", "regret", "best_responses",
-
+    
     # Visualization helpers
     "plot_equilibrium_payoffs", "plot_strategy_traces",
     "run_solver_with_trace", "compare_solvers", "visualize_quiesce_results",
