@@ -6,10 +6,11 @@ from collections import defaultdict
 from pathlib import Path
 
 # ---------- parameters ----------
-RAW_FILE = "/Users/gabesmithline/Desktop/pilot_egta_medium_run_250_CDA_Shade_26913541/comprehensive_rsg_results_20250615_163200/raw_payoff_data.json"
-BOOT     = 20000                 # bootstrap replications
-M_MELO, M_CDA = "MOBI_0_100", "MOBI_100_0"
-Z_MELO        = "ZI_0_100"
+RAW_FILE = "/Users/gabesmithline/Desktop/holding_period_0/comprehensive_rsg_results_20250619_115208/raw_payoff_data.json"
+BOOT     = 2000                 # bootstrap replications
+M_MELO = "MOBI_0_100_shade0_0"           # MOBI plays M-ELO (liquidity 0‒100)
+M_CDA  = "MOBI_100_0_shade250_500"       # MOBI plays CDA  (liquidity 250‒500)
+Z_MELO        = "ZI_0_100_shade250_500"
 
 # ---------- load ----------
 profiles = json.loads(Path(RAW_FILE).read_text())

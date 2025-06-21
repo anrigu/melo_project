@@ -145,7 +145,7 @@ class Game:
         """Calculate regret for a mixture."""
         return self.game.regret(mixture)
     
-    def best_responses(self, mixture, atol=1e-10):
+    def best_responses(self, mixture, atol=1e-3):
         """Find best responses to a mixture."""
         return self.game.best_responses(mixture, atol)
     

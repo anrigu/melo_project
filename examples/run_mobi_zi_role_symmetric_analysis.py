@@ -47,7 +47,6 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
         for role_idx, (role_name, role_strategies) in enumerate(zip(game.role_names, game.strategy_names_per_role)):
             num_role_strats = len(role_strategies)
             if num_role_strats > 0:
-                # Random distribution for this role
                 role_mixture = torch.rand(num_role_strats)
                 role_mixture = role_mixture / role_mixture.sum()  # Normalize
                 mixture[global_idx:global_idx + num_role_strats] = role_mixture
@@ -70,7 +69,6 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
         final_states.append(final_mix)
         traces.append(trace)
         
-        # Calculate regret for the final state
         final_regret_result = regret(game, final_mix)
         final_regret = final_regret_result.item() if torch.is_tensor(final_regret_result) else final_regret_result
         
@@ -97,33 +95,33 @@ def analyze_basins_of_attraction_rsg(game, num_points=100, iters=5000):
         converged_to_eq.append(converged_to)
     
     # Create visualization
-    plt.figure(figsize=(15, 10))
+   # plt.figure(figsize=(15, 10))
     
     # Plot convergence types
-    convergence_types = list(set(converged_to_eq))
-    colors = plt.cm.Set3(np.linspace(0, 1, len(convergence_types)))
-    color_map = {conv_type: colors[i] for i, conv_type in enumerate(convergence_types)}
+   # convergence_types = list(set(converged_to_eq))
+   # colors = plt.cm.Set3(np.linspace(0, 1, len(convergence_types)))
+   # color_map = {conv_type: colors[i] for i, conv_type in enumerate(convergence_types)}
     
     # Create a 2D projection for visualization (using first two strategy dimensions)
-    x_vals = [mix[0].item() for mix in grid_mixtures]
-    y_vals = [mix[1].item() if game.num_strategies > 1 else 0 for mix in grid_mixtures]
-    point_colors = [color_map[eq] for eq in converged_to_eq]
+   # x_vals = [mix[0].item() for mix in grid_mixtures]
+   # y_vals = [mix[1].item() if game.num_strategies > 1 else 0 for mix in grid_mixtures]
+   # point_colors = [color_map[eq] for eq in converged_to_eq]
     
-    plt.scatter(x_vals, y_vals, c=point_colors, s=50, alpha=0.7)
-    plt.xlabel('First Strategy Probability')
-    plt.ylabel('Second Strategy Probability' if game.num_strategies > 1 else 'Constant')
-    plt.title('Basin of Attraction (Role Symmetric Game)')
+   # plt.scatter(x_vals, y_vals, c=point_colors, s=50, alpha=0.7)
+   # plt.xlabel('First Strategy Probability')
+   # plt.ylabel('Second Strategy Probability' if game.num_strategies > 1 else 'Constant')
+   # plt.title('Basin of Attraction (Role Symmetric Game)')
     
     # Create legend
-    legend_elements = [
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map[conv_type], 
-                  label=conv_type, markersize=10)
-        for conv_type in convergence_types
-    ]
-    plt.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.savefig('rsg_basin_of_attraction.png', bbox_inches='tight')
-    plt.show()
+   # legend_elements = [
+    #    plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map[conv_type], 
+    #              label=conv_type, markersize=10)
+   #     for conv_type in convergence_types
+   # ]
+   # plt.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left')
+   # plt.tight_layout()
+   # plt.savefig('rsg_basin_of_attraction.png', bbox_inches='tight')
+   # plt.show()
     
     basin_counts = {}
     for eq in converged_to_eq:
@@ -156,7 +154,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     # Allow caller to specify a custom list of holding periods.  This is
     # convenient for SLURM array jobs where each task runs one period.
     if holding_periods is None:
-        holding_periods = [50]
+        holding_periods = [0]
     
     all_results = []
     
@@ -166,25 +164,36 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 1
-        batch_size = 10 
+        num_iterations = 10
+        batch_size = 10
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
         print(f"Simulation time: {sim_time}")
         
+
+        '''
+        Strategy is which mechanism + shade 
+        '''
         mobi_strategies = [
-            "MOBI_100_0",   # 100% CDA, 0% MELO
-            #"MOBI_50_50",   # 50% CDA, 50% MELO
-            "MOBI_0_100"   # 0% CDA, 100% MELO
+            #"MOBI_0_100_shade100_500",  
+            #"MOBI_100_0_shade100_500",
+            "MOBI_0_100_shade0_0",  #MOBIs never shade in the MELO 
+            "MOBI_100_0_shade250_500",
+           # "MOBI_100_0_shade0_500",
+            #"MOBI_100_0_shade0_200"
+
         ]
+
+        
         
         zi_strategies = [
-            "ZI_100_0", 
-            #"ZI_50_50",    # 100% CDA, 0% MELO
-            #"ZI_75_25",     # 75% CDA, 25% MELO
-            #"ZI_25_75",     # 25% CDA, 75% MELO
-            "ZI_0_100"     # 0% CDA, 100% MELO
+           # "ZI_0_100_shade100_500",  
+            #"Zi_100_0_shade100_500", 
+            "ZI_0_100_shade250_500",  
+            "ZI_100_0_shade250_500",
+            #"ZI_0_100_shade0_500",
+            #"ZI_100_0_shade0_500",
         ]
         
         simulator = MeloSimulator(
@@ -193,13 +202,15 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             sim_time=sim_time,
             lam=6e-3,
             lam_r=6e-3,
-            lam_melo=1e-3,       
+            lam_melo=1e-3,   
+            lam_melo_mobi = 1e-3,
+            lam_melo_zi = 6e-3,    
             mean=1e6,      
             r=0.001,              
             shock_var=1e6,       
             q_max=10,            
             pv_var=5000000,      
-            shade=[250, 500],      
+            shade=[250, 500], #doesnt matter what set to     
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
@@ -207,7 +218,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
             log_profile_details=True,
-            parallel=True
+            parallel=False
             #force_symmetric=True
         )
         
@@ -234,9 +245,9 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             role_names=role_names,
             num_players_per_role=num_players_per_role,
             strategy_names_per_role=strategy_names_per_role,
-            subgame_size=4
+            subgame_size=7
         )
-        scheduler.max_profiles_per_subgame = 400 
+        scheduler.max_profiles_per_subgame = 5000 
 
 
         
@@ -248,7 +259,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             max_profiles=100000000000,
             seed=42
         )
-        egta.always_complete_deviations = True
+        egta.always_complete_deviations = False
         
         print("Running Role Symmetric EGTA...")
         start_time = time.time()
@@ -258,13 +269,13 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             save_frequency=1,
             verbose=True,
             quiesce_kwargs={
-                'num_iters': 3,
+                'num_iters': 1,
                 'num_random_starts': 0,
                 'regret_threshold': 1e-4,
                 'dist_threshold': 1e-3,
                 'solver': 'replicator',
                 'solver_iters': 3000,
-                'restricted_game_size': 4
+                'restricted_game_size': 6
             }
         )
         end_time = time.time()
@@ -273,14 +284,12 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
      
         if egta.equilibria:
             before = len(egta.equilibria)
-            egta.equilibria = unique_equilibria(egta.equilibria, tol=1e-3)
+            egta.equilibria = unique_equilibria(egta.equilibria, tol=.3)
             after = len(egta.equilibria)
             if after < before:
                 print(f"Removed {before-after} numerically identical equilibria (now {after}).")
         
-        # ------------------------------------------------------------------
-        #  Fill in any missing deviation rows so welfare/regret use full data
-        # ------------------------------------------------------------------
+       
 
         complete_deviation_rows(game.game, simulator, scheduler, egta.equilibria)
 
@@ -730,7 +739,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run role-symmetric MOBI×ZI EGTA experiment(s).")
     parser.add_argument("--holding-period", type=int, default=None,
                         help="Single holding period to analyse. Overrides --holding-periods if provided.")
-    parser.add_argument("--holding-periods", type=int, nargs="*", default=[50],
+    parser.add_argument("--holding-periods", type=int, nargs="*", default=[0],
                         help="Space-separated list of holding periods to analyse in sequence.")
     parser.add_argument("--output-root", type=str, default="results/rsg_mobi_zi_egta_new",
                         help="Root directory where results will be stored.")
@@ -746,9 +755,7 @@ if __name__ == "__main__":
 
     game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta(periods)
 
-    # Optional post-processing for the *first* game run (makes sense when a
-    # single holding period is executed).  Skip if multiple periods to avoid
-    # heavy visualisations in every array task.
+  
     if len(periods) == 1 and eq_mixture is not None:
         basin_results = analyze_basins_of_attraction_rsg(game, num_points=100, iters=1000)
         save_comprehensive_rsg_results(

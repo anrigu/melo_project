@@ -154,6 +154,19 @@ def test_dprscheduler_generates_profiles():
 # ---------------------------------------------------------------------------
 
 def test_melosimulator_strategy_accessors():
-    sim = MeloSimulator(num_strategic_mobi=2, num_strategic_zi=2, reps=1, parallel=False, force_symmetric=False)
+    # Minimal strategy sets required by MeloSimulator
+    mobi_strats = ["MOBI_0_100_shade0_0", "MOBI_100_0_shade250_500"]
+    zi_strats   = ["ZI_0_100_shade250_500", "ZI_100_0_shade250_500"]
+
+    sim = MeloSimulator(
+        num_strategic_mobi=2,
+        num_strategic_zi=2,
+        reps=1,
+        parallel=False,
+        force_symmetric=False,
+        sim_time=1,
+        mobi_strategies=mobi_strats,
+        zi_strategies=zi_strats,
+    )
     assert set(sim.get_role_info()[0]) == {"MOBI", "ZI"}
     assert {s for lst in sim.strategy_names_per_role for s in lst} == set(sim.get_strategies()) 

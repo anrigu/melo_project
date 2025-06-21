@@ -82,6 +82,8 @@ class ZIAgent(Agent):
         # random.seed(t + seed)
         estimate = self.estimate_fundamental() 
         # estimate = self.estimate_fundamental() + np.random.normal(0, np.sqrt(1e6))
+        #print(f"MY ZI shade is! {self.shade}")
+
         spread = self.shade[1] - self.shade[0]
         valuation_offset = spread*random.random() + self.shade[0]
         # a = self.pv.value_for_exchange(self.position, BUY)

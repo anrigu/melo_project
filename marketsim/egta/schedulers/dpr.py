@@ -513,7 +513,7 @@ class DPRScheduler(Scheduler):
             support_strategies["Player"] = {game.strategy_names[i] for i in support_indices}
         
         return support_strategies
-    
+    '''
     def get_next_batch(self, game: Optional[Game] = None) -> List[List[Tuple[str, str]]]:
         """
         Get the next batch of role symmetric profiles to simulate.
@@ -576,7 +576,65 @@ class DPRScheduler(Scheduler):
         
         self.rand.shuffle(new_profiles)
         return new_profiles[:self.batch_size]
-    
+    '''
+    def get_next_batch(self, game: Optional[Game] = None) -> List[List[Tuple[str, str]]]:
+        """
+        Get the next batch of role symmetric profiles to simulate.
+        Args:
+            game: Optional game with existing data
+        Returns:
+            List of role symmetric strategy profiles
+        """
+        batch: List[List[Tuple[str, str]]] = []
+        needed = self.batch_size
+
+        # 1) Drain previously requested subgames up to batch_size
+        while self.requested_subgames and needed > 0:
+            sub = self.requested_subgames.pop(0)
+            for prof in self._generate_profiles_for_subgame(sub):
+                tpl = tuple(sorted(prof))
+                if tpl not in self.scheduled_profiles:
+                    self.scheduled_profiles.add(tpl)
+                    batch.append(prof)
+                    needed -= 1
+                    if needed == 0:
+                        break
+
+        # 2) If still need more, generate from new candidate subgames
+        if game is not None and needed > 0:
+            self.game = game
+            candidates = self._select_equilibrium_candidates(game)
+
+            for candidate in candidates:
+                # Build support and deviator sets
+                support = self._select_support_strategies(game, candidate)
+                deviators = self._select_deviating_strategies(game, candidate)
+
+                # Merge into a single subgame dict
+                sub = {}
+                roles = set(support) | set(deviators)
+                for role in roles:
+                    s = set(support.get(role, [])) | set(deviators.get(role, []))
+                    # Limit to self.subgame_size 
+                    if len(s) > self.subgame_size:
+                        s = set(list(s)[:self.subgame_size])
+                    sub[role] = s
+
+                # Generate profiles for this subgame up to needed
+                for prof in self._generate_profiles_for_subgame(sub):
+                    tpl = tuple(sorted(prof))
+                    if tpl not in self.scheduled_profiles:
+                        self.scheduled_profiles.add(tpl)
+                        batch.append(prof)
+                        needed -= 1
+                        if needed == 0:
+                            break
+                if needed == 0:
+                    break
+
+        # Shuffle and return at most batch_size profiles
+        self.rand.shuffle(batch)
+        return batch
     def update(self, game: Game) -> None:
         """
         Update the scheduler with new game data.
@@ -648,7 +706,16 @@ class DPRScheduler(Scheduler):
                     # Global index for the deviating strategy "other"
                     other_idx = self._name_to_global_idx[(role_i, other)]
 
-                    if mixture[other_idx] < unplayed_threshold:
+                    # If mixture vector comes from a *restricted* game it may
+                    # be shorter than the full strategy list. In that case the
+                    # deviating strategy is by definition unplayed in the
+                    # current mixture -> schedule it.
+                    if other_idx >= len(mixture):
+                        is_unplayed = True
+                    else:
+                        is_unplayed = mixture[other_idx] < unplayed_threshold
+
+                    if is_unplayed:
                         if not game.has_profile(dev_full):
                             missing.append(dev_full)
 

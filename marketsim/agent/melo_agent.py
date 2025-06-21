@@ -103,13 +103,15 @@ class MeloAgent(Agent):
             # price = midpoint - self.meloPv[0]
         
         if market == CDA:
+            #print(f"MY shade is! {self.shade}")
             spread = self.shade[1] - self.shade[0]
             valuation_offset = spread*random.random() + self.shade[0]
             if side == BUY:
                 price -= valuation_offset
             else:
                 price += valuation_offset
-        order = Order(
+        
+        order = Order(  
             price=price.item(),
             quantity=5,
             agent_id=self.get_id(),

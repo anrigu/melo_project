@@ -4,14 +4,19 @@ from collections import defaultdict
 # ── CONFIG ─────────────────────────────────────────────────────────
 BOOT      = 2000
 CONF_L, CONF_H = 2.5, 97.5          # 95 % CI
-path = "/Users/gabesmithline/Desktop/pilot_egta_medium_run_200_CDA_Shade_26913540/comprehensive_rsg_results_20250615_161443/raw_payoff_data.json"      # <- change if needed
+path = "/Users/gabesmithline/Desktop/holding_period_0/comprehensive_rsg_results_20250619_115208/raw_payoff_data.json"      # <- change if needed
 assert os.path.isfile(path)
 profiles = json.loads(pathlib.Path(path).read_text())
 
 
 # ── BOOTSTRAP HELPERS ────────────────────────────────────────────
 def strat_names(role):
-    return (f"{role}_0_100", f"{role}_100_0")          # (MELO, CDA)
+    """Return (MELO_strat, CDA_strat) names for the given role."""
+    if role == "ZI":
+        # Dataset encodes ZI M-ELO choice with liquidity 0–100 but shade 250–500
+        return ("ZI_0_100_shade250_500", "ZI_100_0_shade250_500")
+    else:  # MOBI
+        return ("MOBI_0_100_shade0_0", "MOBI_100_0_shade250_500")
 
 
 def bootstrap_ci(samples):
@@ -101,7 +106,7 @@ def plot_role(role, df):
         label="Play M-ELO",
     )
 
-    # —— deviation arrows (one per profile, no “floating”) ———————
+    # —— deviation arrows (one per profile, no "floating") ———————
     # bar centres
     x_cda  = {k: k - w / 2 for k in ks}
     x_melo = {k: k + w / 2 for k in ks}

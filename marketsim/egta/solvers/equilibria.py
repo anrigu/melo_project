@@ -597,7 +597,7 @@ def gain_descent(game: Game,
     return mixture
 
 
-def best_responses(game: Game, mixture: torch.Tensor, atol: float = 1e-8) -> torch.Tensor:
+def best_responses(game: Game, mixture: torch.Tensor, atol: float = 1e-3) -> torch.Tensor:
     """
     Find best responses to a mixture.
     
@@ -1263,36 +1263,36 @@ async def quiesce(
     
     confirmed_eq.sort(key=lambda x: x[1])
     
-    # ----------------------------------------------------------------------
-    #  Ensure canonical pure-CDA and pure-MELO corners are present (if those
-    #  strategy labels exist for *every* role).  This is useful in
-    #  coordination-type games where those two profiles are known NEs but
-    #  may be skipped because no candidate ever landed in their basin.
-    # ----------------------------------------------------------------------
+
     def _add_corner_if_available(keyword: str):
-        # Find, for every role, the first strategy containing the keyword.
-        indices = []
-        global_offset = 0
+        # For every role, collect *all* strategies that contain the keyword.
         key_lower = keyword.lower()
+        role_candidates: List[List[int]] = []  # global indices per role
+
+        global_offset = 0
         for role_strats in game.strategy_names_per_role:
-            # find first strategy in this role that contains the keyword
-            local_idx = next((j for j, st in enumerate(role_strats) if key_lower in st.lower()), None)
-            if local_idx is None:
-                return  # keyword not present for this role → corner invalid
-            indices.append(global_offset + local_idx)
+            matches = [global_offset + j
+                       for j, st in enumerate(role_strats)
+                       if key_lower in st.lower()]
+            if not matches:
+                return  # keyword absent in this role – no corner possible
+            role_candidates.append(matches)
             global_offset += len(role_strats)
-        # Build mixture: 1 on chosen indices, 0 elsewhere, role-normalised
-        mix = torch.zeros(game.num_strategies, device=game.game.device)
-        for gi in indices:
-            mix[gi] = 1.0
-        reg = full_game.regret(mix) if full_game is not None else game.regret(mix)
-        if reg <= regret_threshold:
-            distinct = all(torch.norm(mix - m, p=1).item() > dist_threshold for m,_ in confirmed_eq)
-            if distinct:
-             
-                import numpy as _np
-                stored_reg = float(reg) if _np.isfinite(reg) else 1e9
-                confirmed_eq.append((mix, stored_reg))
+
+        import itertools, numpy as _np
+        for combo in itertools.product(*role_candidates):
+            mix = torch.zeros(game.num_strategies, device=game.game.device)
+            for gi in combo:
+                mix[gi] = 1.0  # pure on chosen strategy per role
+
+            reg_val = full_game.regret(mix) if full_game is not None else game.regret(mix)
+
+            if reg_val <= regret_threshold:
+                # keep if distinct from existing equilibria
+                distinct = all(torch.norm(mix - m, p=1).item() > dist_threshold for m, _ in confirmed_eq)
+                if distinct:
+                    stored_reg = float(reg_val) if _np.isfinite(reg_val) else 1e9
+                    confirmed_eq.append((mix, stored_reg))
 
     try:
         _add_corner_if_available("_100_0")   
@@ -1318,8 +1318,8 @@ async def quiesce(
         if not any(torch.allclose(mix, m, atol=1e-12) for m, _ in confirmed_eq):
             confirmed_eq.append((mix, 0.0))
 
-    _force_keep_corner("_100_0")  # CDA corner
-    _force_keep_corner("_0_100")  # MELO corner
+   # _force_keep_corner("_100_0")  # CDA corner
+    #_force_keep_corner("_0_100")  # MELO corner
     
     confirmed_eq.sort(key=lambda x: x[1])
     

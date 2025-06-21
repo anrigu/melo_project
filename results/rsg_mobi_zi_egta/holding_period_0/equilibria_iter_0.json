@@ -1,0 +1,113 @@
+[
+  {
+    "id": 0,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.5,
+        "ZI_100_0_shade250_500": 0.5
+      }
+    }
+  },
+  {
+    "id": 1,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.8888888955116272,
+        "ZI_100_0_shade250_500": 0.1111111119389534
+      }
+    }
+  },
+  {
+    "id": 2,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.1111111119389534,
+        "ZI_100_0_shade250_500": 0.8888888955116272
+      }
+    }
+  },
+  {
+    "id": 3,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.8235293626785278,
+        "ZI_100_0_shade250_500": 0.1764705926179886
+      }
+    }
+  },
+  {
+    "id": 4,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.75,
+        "ZI_100_0_shade250_500": 0.25
+      }
+    }
+  },
+  {
+    "id": 5,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.1764705926179886,
+        "ZI_100_0_shade250_500": 0.8235293626785278
+      }
+    }
+  },
+  {
+    "id": 6,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 0.25,
+        "ZI_100_0_shade250_500": 0.75
+      }
+    }
+  },
+  {
+    "id": 7,
+    "regret": 0.0,
+    "is_role_symmetric": true,
+    "mixture_by_role": {
+      "MOBI": {
+        "MOBI_0_100_shade0_0": 1.0
+      },
+      "ZI": {
+        "ZI_0_100_shade250_500": 1.0
+      }
+    }
+  }
+]

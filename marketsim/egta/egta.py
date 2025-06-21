@@ -165,30 +165,32 @@ class EGTA:
             # ------------------------------------------------------------------
             if isinstance(item, Observation):
                 obs = item
-                legacy_row = None            # we'll build it below
+                legacy_row = None 
             elif isinstance(item, list) and item and len(item[0]) == 4:
-                # list[(pid,role,strat,payoff)…]  →  Observation
+               
                 profile_key = tuple(sorted((r, s) for _pid, r, s, _ in item))
                 payoffs = np.asarray([p for *_xyz, p in item], dtype=float)
                 obs = Observation(profile_key, payoffs)
-                legacy_row = item            # we can reuse it as-is
-            else:  # dict {"profile":…, "payoffs":…}
+                legacy_row = item          
+            else:  
                 profile_key, payoff_vec = item["profile"], item["payoffs"]
                 obs = Observation(tuple(profile_key), np.asarray(payoff_vec, dtype=float))
                 legacy_row = None            # will build below
 
             # ------------------------------------------------------------------
-            # 2. Store Observation for variance / hypothesis tests using a
-            #    *canonical* key: one entry per (role,strategy) irrespective
-            #    of player multiplicity or ordering.  This ensures keys match
-            #    the compact profiles built inside test_candidate.
+            # 2. Store Observation under *two* canonical keys:
+            #    a) full key that preserves player multiplicities (preferred)
+            #    b) compact key without multiplicities (legacy – keeps
+            #       compatibility with existing lookup logic in test_candidate)
             # ------------------------------------------------------------------
-            canon_key = tuple(sorted(set(obs.profile_key)))
-            self._obs_by_profile.setdefault(canon_key, []).append(obs)
+            full_key    = tuple(sorted(obs.profile_key))           
+            compact_key = tuple(sorted(set(obs.profile_key)))  
 
-            # ------------------------------------------------------------------
-            # 3. Ensure self.payoff_data gets a *legacy* row
-            # ------------------------------------------------------------------
+            self._obs_by_profile.setdefault(full_key,   []).append(obs)
+            if compact_key != full_key:
+                self._obs_by_profile.setdefault(compact_key, []).append(obs)
+
+         
             if legacy_row is None:
                 legacy_row = []
                 for idx, (role, strat) in enumerate(obs.profile_key):
@@ -220,11 +222,9 @@ class EGTA:
         import marketsim.egta.solvers.equilibria as eq_mod
         from marketsim.egta.solvers.equilibria import quiesce
 
-        # set up logging
         if verbose:
             logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
-        # allow nested event loops so we can call await quiesce()
         nest_asyncio.apply()
 
         total_profiles = 0
@@ -249,7 +249,6 @@ class EGTA:
         for it in range(max_iterations):
             logger.info(f"=== Iteration {it+1}/{max_iterations} ===")
 
-            # (1) simulate new profiles
             while True:
                 batch = self.scheduler.get_next_batch(self.game)
                 if not batch:
@@ -371,7 +370,7 @@ class EGTA:
      
         try:
             if self.game is not None:
-                logger.info("Running final strict QUIESCE pass (1 iteration, ε=1e-6)…")
+                logger.info("Running final strict QUIESCE pass (1, ε=1e-4)…")
                 strict_eqs = quiesce_sync(
                     game=self.game,
                     full_game=true_game,
@@ -402,16 +401,18 @@ class EGTA:
             f"found {len(self.equilibria)} equilibria"
         )
 
-        # ------------------------------------------------------------------
-        # Persist raw observations so the user can reload without rerunning
-        # expensive simulations.  One file per run in the output directory.
-        # ------------------------------------------------------------------
+       
         try:
             obs_out = os.path.join(self.output_dir, "observations.json")
-            to_dump = []
-            for prof_key, obs_list in self._obs_by_profile.items():
-                pretty_key = [[role, strat] for role, strat in prof_key]
+            seen_obs: set = set()
+            to_dump   : list = []
+            for obs_list in self._obs_by_profile.values():
                 for ob in obs_list:
+                    if id(ob) in seen_obs:
+                        continue  # already written via another key
+                    seen_obs.add(id(ob))
+
+                    pretty_key = [[role, strat] for role, strat in ob.profile_key]
                     to_dump.append({
                         "profile": pretty_key,
                         "payoffs": ob.payoffs.tolist(),
@@ -425,10 +426,15 @@ class EGTA:
 
         try:
             obs_snap = os.path.join(self.output_dir, f"observations_iter_{it}.json")
-            to_dump = []
-            for prof_key, obs_list in self._obs_by_profile.items():
-                pretty_key = [[role, strat] for role, strat in prof_key]
+            seen_obs = set()
+            to_dump  = []
+            for obs_list in self._obs_by_profile.values():
                 for ob in obs_list:
+                    if id(ob) in seen_obs:
+                        continue
+                    seen_obs.add(id(ob))
+
+                    pretty_key = [[role, strat] for role, strat in ob.profile_key]
                     to_dump.append({
                         "profile": pretty_key,
                         "payoffs": ob.payoffs.tolist(),

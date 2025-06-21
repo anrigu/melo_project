@@ -11,8 +11,18 @@ from marketsim.simulator.melo_simulator import MELOSimulatorSampledArrival
 from marketsim.agent.zero_intelligence_agent import ZIAgent
 from marketsim.agent.melo_agent import MeloAgent
 from marketsim.fourheap.constants import BUY, SELL
-import concurrent.futures as cf  # ↳ for parallel repetitions
+import concurrent.futures as cf 
 import torch
+import math
+# Ensure tensors are passed via file-system backed files instead of POSIX shared
+# memory segments which leak file descriptors on macOS when lots of small
+# tensors are sent between processes.
+try:
+    torch.multiprocessing.set_sharing_strategy("file_system")
+except (ImportError, AttributeError):
+    # Older PyTorch versions (<1.8) or exotic builds may not expose the API;
+    # in those cases we proceed with default settings.
+    pass
 import time
 from marketsim.egta.egta import Observation      # path you placed the patch in
 ProfileKey = Tuple[Tuple[str, str], ...]  
@@ -31,10 +41,37 @@ def _run_melo_single_rep(args):
     # local seeding
     random.seed(rep_seed)
     np.random.seed(rep_seed & 0xFFFF_FFFF)
+    print("")
 
     sim = MELOSimulatorSampledArrival(**sim_kwargs)
     sim.run()
-    values = sim.end_sim()[0]          # payoff dict keyed by agent id
+   
+    results_tuple = sim.end_sim()
+    raw_values = results_tuple[0]      # payoff dict keyed by agent id ⇒ number/torch.Tensor
+    midpoints  = results_tuple[4]      # list[float] collected each tick
+
+    # --- compute simple midpoint statistics for this repetition ---
+    import numpy as _np
+    if midpoints:
+        arr = _np.asarray(midpoints, dtype=float)
+        if _np.isfinite(arr).any():
+            mid_mean = float(_np.nanmean(arr))
+        else:
+            mid_mean = float('nan')
+    else:
+        mid_mean = float('nan')
+
+    values: Dict[Union[int,str], float] = {}
+    for agent_id, payoff in raw_values.items():
+        if isinstance(payoff, torch.Tensor):
+            values[agent_id] = float(payoff.item())
+        else:
+            values[agent_id] = float(payoff)
+
+    # store midpoint information under a non-numeric key so it is ignored by
+    # payoff aggregation but still available to the caller
+    values["__mid_mean"] = mid_mean
+
     return values
 
 
@@ -58,9 +95,11 @@ class MeloSimulator(Simulator):
                 pv_var: float = 5e6,
                 shade: Optional[List[float]] = None,
                 eta: float = 0.5,
+                lam_melo: float = 1e-3,
                 lam_r: Optional[float] = None,
                 holding_period: int = 10,
-                lam_melo: float = 1e-3,
+                lam_melo_mobi: float = 1e-3,
+                lam_melo_zi: float = 6e-3,
                 # Background agents (non-strategic)
                 num_background_zi: int = 0,
                 num_background_hbl: int = 0,
@@ -90,7 +129,8 @@ class MeloSimulator(Simulator):
             eta: Eta parameter
             lam_r: Arrival rate for regular traders
             holding_period: Holding period
-            lam_melo: Arrival rate for MELO traders
+            lam_melo_mobi: Arrival rate for MOBI traders
+            lam_melo_zi: Arrival rate for ZI traders
             num_background_zi: Number of non-strategic ZI agents
             num_background_hbl: Number of non-strategic HBL agents
             reps: Number of simulation repetitions
@@ -111,15 +151,19 @@ class MeloSimulator(Simulator):
         self.shock_var = shock_var
         self.q_max = q_max
         self.pv_var = pv_var
+        # Global fallback shade – used by background agents and strategies
+        # that *do not* specify their own "_shade…" suffix.
+        self.lam_melo = lam_melo
         self.shade = shade or [10, 30]
         self.eta = eta
         self.lam_r = lam_r or lam
         self.holding_period = holding_period
-        self.lam_melo = lam_melo
+        self.lam_melo_mobi = lam_melo_mobi
+        self.lam_melo_zi = lam_melo_zi
         self.num_background_zi = num_background_zi
         self.num_background_hbl = num_background_hbl
         self.reps = reps
-        self.order_quantity = 5  # Fixed order quantity for MOBI traders
+        self.order_quantity = 10  # Fixed order quantity for MOBI traders
         self.force_symmetric = force_symmetric
         self.parallel = parallel
         self.log_profile_details = log_profile_details
@@ -130,24 +174,13 @@ class MeloSimulator(Simulator):
         
         # Define strategies for each role
         if mobi_strategies is None:
-            self.mobi_strategies = [
-                "MOBI_100_0",   # 100% CDA, 0% MELO
-                "MOBI_75_25",   # 75% CDA, 25% MELO
-                "MOBI_50_50",   # 50% CDA, 50% MELO
-                "MOBI_25_75",   # 25% CDA, 75% MELO
-                "MOBI_0_100",   # 0% CDA, 100% MELO
-            ]
+            raise ValueError("No MOBI (large-lot) strategies provided – please supply a non-empty list to `mobi_strategies`.")
         else:
             self.mobi_strategies = mobi_strategies
             
         if zi_strategies is None:
-            self.zi_strategies = [
-                "ZI_100_0",     # 100% CDA, 0% MELO
-                "ZI_75_25",     # 75% CDA, 25% MELO
-                "ZI_50_50",     # 50% CDA, 50% MELO
-                "ZI_25_75",     # 25% CDA, 75% MELO
-                "ZI_0_100",     # 0% CDA, 100% MELO
-            ]
+            raise ValueError("No ZI (small-lot) strategies provided – please supply a non-empty list to `zi_strategies`.")
+
         else:
             self.zi_strategies = zi_strategies
         
@@ -156,31 +189,87 @@ class MeloSimulator(Simulator):
         # Define strategy parameters for both roles
         self.strategy_params = {}
         
-        # MOBI strategy parameters
-        for i, strategy in enumerate(self.mobi_strategies):
+        import re  # ── new: regex helper for shade suffix
+
+        def _extract_shade(name: str, default: List[int]) -> List[int]:
+            """Return [low,high] from "…_shadeLOW_HIGH" suffix, else *default*."""
+            
+            try:
+                low_high = name.split("_shade", 1)[1]
+                low, high = map(int, low_high.split("_", 1))
+                return [low, high]
+            except Exception:
+                raise Exception("Can't get shade from strategy!")
+
+        # MOBI strategy parameters  (now including per-strategy shade)
+        for strategy in self.mobi_strategies:
+            shade_pair = _extract_shade(strategy, self.shade)
+
             if "100_0" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 1.0, "melo_proportion": 0.0}
-            elif "75_25" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.75, "melo_proportion": 0.25}
-            elif "50_50" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.5, "melo_proportion": 0.5}
-            elif "25_75" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.25, "melo_proportion": 0.75}
+                self.strategy_params[strategy] = {
+                    "cda_proportion": 1.0,
+                    "melo_proportion": 0.0,
+                    "shade": shade_pair,
+                }
             elif "0_100" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.0, "melo_proportion": 1.0}
-        
-        # ZI strategy parameters (same allocation logic)
-        for i, strategy in enumerate(self.zi_strategies):
+                self.strategy_params[strategy] = {
+                    "cda_proportion": 0.0,
+                    "melo_proportion": 1.0,
+                    "shade": shade_pair,
+                }
+            #elif "75_25" in strategy:
+                #self.strategy_params[strategy] = {
+                   # "cda_proportion": 0.75,
+                   # "melo_proportion": 0.25,
+                   # "shade": shade_pair,
+                #}
+            #elif "50_50" in strategy:
+             #  self.strategy_params[strategy] = {
+                #   "cda_proportion": 0.5,
+                  #  "melo_proportion": 0.5,
+                 #   "shade": shade_pair,
+               # }
+           # elif "25_75" in strategy:
+            #   self.strategy_params[strategy] = {
+                 #   "cda_proportion": 0.25,
+                 #   "melo_proportion": 0.75,
+                 #   "shade": shade_pair,
+              #  }
+
+        # ZI strategy parameters (same allocation logic, incl. shade)
+        for strategy in self.zi_strategies:
+            shade_pair = _extract_shade(strategy, self.shade)
+
             if "100_0" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 1.0, "melo_proportion": 0.0}
-            elif "75_25" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.75, "melo_proportion": 0.25}
-            elif "50_50" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.5, "melo_proportion": 0.5}
-            elif "25_75" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.25, "melo_proportion": 0.75}
+                self.strategy_params[strategy] = {
+                    "cda_proportion": 1.0,
+                    "melo_proportion": 0.0,
+                    "shade": shade_pair,
+                }
             elif "0_100" in strategy:
-                self.strategy_params[strategy] = {"cda_proportion": 0.0, "melo_proportion": 1.0}
+                self.strategy_params[strategy] = {
+                    "cda_proportion": 0.0,
+                    "melo_proportion": 1.0,
+                    "shade": shade_pair,
+                }
+           # elif "75_25" in strategy:
+               # self.strategy_params[strategy] = {
+                #    "cda_proportion": 0.75,
+                 #   "melo_proportion": 0.25,
+                #   "shade": shade_pair,
+               # }
+            #elif "50_50" in strategy:
+            #    self.strategy_params[strategy] = {
+             #       "cda_proportion": 0.5,
+              #      "melo_proportion": 0.5,
+              #      "shade": shade_pair,
+              #  }
+            #elif "25_75" in strategy:
+             #   self.strategy_params[strategy] = {
+              #      "cda_proportion": 0.25,
+             #       "melo_proportion": 0.75,
+             #      "shade": shade_pair,
+             #   }
         
         # In symmetric mode, remove role symmetric capabilities
         if self.force_symmetric:
@@ -262,6 +351,7 @@ class MeloSimulator(Simulator):
             num_strategic=self.get_num_players(),
             num_assets=self.num_assets,
             lam=self.lam,
+            lam_melo=self.lam_melo,
             mean=self.mean,
             r=self.r,
             shock_var=self.shock_var,
@@ -271,7 +361,8 @@ class MeloSimulator(Simulator):
             eta=self.eta,
             lam_r=self.lam_r,
             holding_period=self.holding_period,
-            lam_melo=self.lam_melo,
+            lam_melo_mobi=self.lam_melo_mobi,
+            lam_melo_zi=self.lam_melo_zi,
             role_strategy_counts=role_strategy_counts,
             strategy_params=self.strategy_params,
             role_names=self.role_names,
@@ -303,11 +394,21 @@ class MeloSimulator(Simulator):
                             disable=not self.log_profile_details):
                 values_per_rep.append(out)
 
+        # ------------------------------------------------------------------
+        # Aggregate per-player payoffs AND collect midpoint summaries
+        # ------------------------------------------------------------------
         aggregated_payoffs: List[float] = []
+        mid_means: List[float] = []
+
         player_idx = 0
         for role_name, strat in profile:
             payoffs = []
             for values in values_per_rep:
+                # pop midpoint statistic once per repetition (harmless to do many times)
+                mm = values.get("__mid_mean")
+                if mm is not None and not math.isnan(mm):
+                    mid_means.append(mm)
+
                 agent_id = num_background + player_idx
                 if agent_id in values:
                     val = values[agent_id]
@@ -317,20 +418,32 @@ class MeloSimulator(Simulator):
             aggregated_payoffs.append(sum(payoffs) / len(payoffs) if payoffs else 0.0)
             player_idx += 1
 
+        # Midpoint statistics across all repetitions
+        if mid_means:
+            mp_mean = float(np.nanmean(mid_means))
+            mp_std  = float(np.nanstd(mid_means))
+        else:
+            mp_mean = float('nan')
+            mp_std  = float('nan')
+
         # --------------------------------------------------------------
         # 4)  Build and return the Observation
         # --------------------------------------------------------------
         wall_clock = time.time() - start_ts
         prof_key: ProfileKey = tuple(sorted((r, s) for r, s in profile))
 
+        aux_data = {
+            "runtime": wall_clock,
+            "seed": seeds[0] if seeds else 0,
+            "n_raw": len(values_per_rep),
+            "mid_mean": mp_mean,
+            "mid_std":  mp_std,
+        }
+
         obs = Observation(
             profile_key=prof_key,
             payoffs=np.asarray(aggregated_payoffs, dtype=float),
-            aux={
-                "runtime": wall_clock,
-                "seed": seeds[0] if seeds else 0,
-                "n_raw": len(values_per_rep),  # effective number of repetitions
-            },
+            aux=aux_data,
         )
         return obs
     

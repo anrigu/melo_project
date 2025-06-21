@@ -12,6 +12,7 @@ import torch
 import math
 from collections import defaultdict, Counter
 from tqdm.auto import tqdm
+from typing import Dict
 
 
 def sample_arrivals(p, num_samples):
@@ -49,7 +50,9 @@ class MELOSimulatorSampledArrival:
                  hbl_agent: bool = False,
                  lam_r: float = None,
                  holding_period = 50,
-                 lam_melo = 0.1,
+                 lam_melo = 0.1,                # legacy fallback (kept for API)
+                 lam_melo_mobi = 1e-3, 
+                 lam_melo_zi = 6e-3,
                  profile_order = None,
                  ):
 
@@ -64,6 +67,8 @@ class MELOSimulatorSampledArrival:
         self.lam = lam
         self.lam_r = lam_r
         self.lam_melo = lam_melo
+        self.lam_melo_mobi = lam_melo_mobi
+        self.lam_melo_zi = lam_melo_zi
         self.time = 0
         self.hbl_agent = hbl_agent
         self.holding_period = holding_period
@@ -96,10 +101,15 @@ class MELOSimulatorSampledArrival:
         self.timesteps_melo_trade = []
         self.timesteps_hbl_orders = []
         self.num_orders = 0
+        
+        # Debug print removed – it spammed the console each repetition
 
         #TODO: DATA TO DELETE LATER
         self.melo_orders = []
         self.fundamental_estimates = []
+
+        # Track mid-quote p_mid = (best_bid + best_ask)/2 over time.  NaN if either side empty.
+        self.midpoints = []
 
         fundamental = LazyGaussianMeanReverting(mean=mean, final_time=sim_time, r=r, shock_var=shock_var)
         self.market = Market(fundamental=fundamental, time_steps=sim_time)
@@ -112,8 +122,22 @@ class MELOSimulatorSampledArrival:
 
         self.fundamentals = []
 
-        
+        # ------------------------------------------------------------------
+        # Prepare per-role arrival streams BEFORE strategic agent creation
+        # ------------------------------------------------------------------
 
+        # Per-role arrival intensities for strategic agents.
+        self.lam_melo_mobi = lam_melo_mobi if lam_melo_mobi is not None else lam_melo
+        self.lam_melo_zi   = lam_melo_zi   if lam_melo_zi   is not None else lam_melo
+
+        # Separate arrival streams & indices (torch tensors → numpy later)
+        self.arrival_times_mobi = sample_arrivals(self.lam_melo_mobi, self.arrivals_sampled)
+        self.arrival_times_zi   = sample_arrivals(self.lam_melo_zi,   self.arrivals_sampled)
+        self.arrival_index_mobi = 0
+        self.arrival_index_zi   = 0
+
+        # Role mapping for fast lookup in step()
+        self.agent_roles: Dict[int, str] = {}
 
         # print("R", r, "SHOCK", shock_var)
 
@@ -178,6 +202,7 @@ class MELOSimulatorSampledArrival:
         if profile_order is not None:
             for role_name, strategy_name in profile_order:
                 params = self.strategy_params[strategy_name]
+                agent_shade = params.get("shade", shade)
 
                 if role_name == "MOBI":
                     self.agents[strategic_agent_id] = (
@@ -187,6 +212,7 @@ class MELOSimulatorSampledArrival:
                             meloMarket=self.meloMarket,
                             q_max=q_max,
                             pv_var=pv_var,
+                            shade=agent_shade,
                             cda_proportion=params["cda_proportion"],
                             melo_proportion=params["melo_proportion"],
                         ))
@@ -196,7 +222,7 @@ class MELOSimulatorSampledArrival:
                             agent_id=strategic_agent_id,
                             market=self.market,
                             q_max=q_max,
-                            shade=shade,
+                            shade=agent_shade,
                             pv_var=pv_var,
                             eta=eta,
                             cda_proportion=params["cda_proportion"],
@@ -210,13 +236,22 @@ class MELOSimulatorSampledArrival:
         elif self.role_strategy_counts and self.role_names:
             # Role-based strategic agent creation
             for role_name in self.role_names:
-                role_strategies = self.role_strategy_counts[role_name]
+                role_strategies = self.role_strategy_counts.get(role_name, {})
                 for strategy_name, count in role_strategies.items():
                     for _ in range(count):
-                        self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
-                        self.arrival_index_melo += 1
+                        # Schedule first arrival based on role-specific λ
+                        if role_name == "MOBI":
+                            next_tick = self.arrival_times_mobi[self.arrival_index_mobi].item()
+                            self.arrival_index_mobi += 1
+                        else:  # ZI
+                            next_tick = self.arrival_times_zi[self.arrival_index_zi].item()
+                            self.arrival_index_zi += 1
+
+                        self.arrivals_melo[next_tick].append(strategic_agent_id)
+
                         params = self.strategy_params[strategy_name]
-                        
+                        agent_shade = params.get("shade", shade)
+
                         # Create appropriate agent type based on role
                         if role_name == "MOBI":
                             self.agents[strategic_agent_id] = (
@@ -226,21 +261,26 @@ class MELOSimulatorSampledArrival:
                                     meloMarket=self.meloMarket,
                                     q_max=q_max,
                                     pv_var=pv_var,
+                                    shade=agent_shade,
                                     cda_proportion=params["cda_proportion"],
                                     melo_proportion=params["melo_proportion"],
                                 ))
-                        elif role_name == "ZI":
+                        else:  # ZI
                             self.agents[strategic_agent_id] = (
                                 ZIAgent(
                                     agent_id=strategic_agent_id,
                                     market=self.market,
                                     q_max=q_max,
-                                    shade=shade,
+                                    shade=agent_shade,
                                     pv_var=pv_var,
                                     eta=eta,
                                     cda_proportion=params["cda_proportion"],
                                     melo_proportion=params["melo_proportion"],
                                 ))
+
+                        # Record mapping
+                        self.agent_roles[strategic_agent_id] = role_name
+
                         strategic_agent_id += 1
                         
         elif not self.strategies:
@@ -253,10 +293,11 @@ class MELOSimulatorSampledArrival:
                 self.agents[strategic_agent_id] = (
                     MeloAgent(
                         agent_id=strategic_agent_id,
-                        #Not important which market
+                    
                         market=self.market,
                         q_max=q_max,
                         pv_var=pv_var,
+                        shade=shade,
                         cda_proportion=cda_proportion,
                         melo_proportion=melo_proportion
                     ))
@@ -269,6 +310,7 @@ class MELOSimulatorSampledArrival:
                     self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
                     self.arrival_index_melo += 1
                     params = self.strategy_params[strategy]
+                    agent_shade = params.get("shade", shade)
 
                     self.agents[strategic_agent_id] = (
                         MeloAgent(
@@ -278,10 +320,14 @@ class MELOSimulatorSampledArrival:
                             meloMarket=self.meloMarket,
                             q_max=q_max,
                             pv_var=pv_var,
+                            shade=agent_shade,
                             cda_proportion=params["cda_proportion"],
                             melo_proportion=params["melo_proportion"],
                         ))
                     strategic_agent_id += 1            
+
+        # Ensure arrivals_melo dict exists (used earlier)
+        self.arrivals_melo = defaultdict(list)
 
     def step(self):
         agents = self.arrivals[self.time]
@@ -350,11 +396,22 @@ class MELOSimulatorSampledArrival:
                         orders = agent.take_action(side, marketSelection)
                         self.market.add_orders(orders)
                             
-                    if self.arrival_index_melo == self.arrivals_sampled:
-                        self.arrival_times_melo = sample_arrivals(self.lam_melo, self.arrivals_sampled)
-                        self.arrival_index_melo = 0
-                    self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item() + 1 + self.time].append(agent_id)
-                    self.arrival_index_melo += 1
+                    # Determine which arrival stream applies for *next* wake-up
+                    role_name = self.agent_roles.get(agent_id, "MOBI")
+                    if role_name == "MOBI":
+                        if self.arrival_index_mobi == self.arrivals_sampled:
+                            self.arrival_times_mobi = sample_arrivals(self.lam_melo_mobi, self.arrivals_sampled)
+                            self.arrival_index_mobi = 0
+                        next_time = self.arrival_times_mobi[self.arrival_index_mobi].item() + 1 + self.time
+                        self.arrivals_melo[next_time].append(agent_id)
+                        self.arrival_index_mobi += 1
+                    else:  # ZI
+                        if self.arrival_index_zi == self.arrivals_sampled:
+                            self.arrival_times_zi = sample_arrivals(self.lam_melo_zi, self.arrivals_sampled)
+                            self.arrival_index_zi = 0
+                        next_time = self.arrival_times_zi[self.arrival_index_zi].item() + 1 + self.time
+                        self.arrivals_melo[next_time].append(agent_id)
+                        self.arrival_index_zi += 1
 
                 # Process new MELO market orders
                 order_placement = self.meloMarket.step(self.order_tracker, self.market.order_book.midprice)
@@ -427,7 +484,7 @@ class MELOSimulatorSampledArrival:
         activation_queue = len(self.meloMarket.order_book.buy_activation_queue) + len(self.meloMarket.order_book.sell_activation_queue)
         active_queue = len(self.meloMarket.order_book.buy_active_queue) + len(self.meloMarket.order_book.sell_active_queue)
         elig_queue = self.meloMarket.order_book.buy_eligibility_queue.count() + self.meloMarket.order_book.sell_eligibility_queue.count()
-        return values, positions, self.best_buys, self.best_asks, self.timesteps_melo_trade, self.timesteps_hbl_orders, self.meloMarket.order_book.buy_cancelled, self.meloMarket.order_book.sell_cancelled, self.meloMarket.order_book.removed_eligibility, self.meloMarket.order_book.removed_activation, self.meloMarket.order_book.removed_active, self.melo_orders, self.fundamental_estimates, self.num_orders, elig_queue, activation_queue, active_queue # Return both CDA and MELO profits
+        return values, positions, self.best_buys, self.best_asks, self.midpoints, self.timesteps_melo_trade, self.timesteps_hbl_orders, self.meloMarket.order_book.buy_cancelled, self.meloMarket.order_book.sell_cancelled, self.meloMarket.order_book.removed_eligibility, self.meloMarket.order_book.removed_activation, self.meloMarket.order_book.removed_active, self.melo_orders, self.fundamental_estimates, self.num_orders, elig_queue, activation_queue, active_queue  # Return both CDA and MELO profits including midpoints
 
     def run(self):
         for t in range(self.sim_time):
@@ -450,6 +507,19 @@ class MELOSimulatorSampledArrival:
             self.best_buys.append(self.market.order_book.get_best_bid())
             self.best_asks.append(self.market.order_book.get_best_ask())
             self.fundamental_estimates.append(self.agents[0].estimate_fundamental())
+
+            # Record mid-quote for this timestep if both sides non-empty, else NaN.
+            try:
+                bid = self.best_buys[-1]
+                ask = self.best_asks[-1]
+                if (not math.isnan(bid)) and (not math.isnan(ask)):
+                    self.midpoints.append( (bid + ask) / 2.0 )
+                else:
+                    self.midpoints.append(float('nan'))
+            except Exception:
+                # Fallback in rare edge cases where lists not yet populated
+                self.midpoints.append(float('nan'))
+
             self.time += 1
         self.step()
 
