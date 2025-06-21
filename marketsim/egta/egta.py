@@ -336,7 +336,7 @@ class EGTA:
                     sub: Dict[str, set] = {}
                     for role, strat in prof:
                         sub.setdefault(role, set()).add(strat)
-                    self.scheduler.requested_subgames.append(sub)
+                    self.scheduler.add_subgame(sub)
 
             # --------------------------------------------------------------
             # Exit only when (i) every strategy has been observed *and*

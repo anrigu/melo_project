@@ -1,5 +1,5 @@
 {
-  "analysis_timestamp": "20250621_145453",
+  "analysis_timestamp": "20250621_160850",
   "holding_periods_analyzed": [
     0
   ],
@@ -9,10 +9,10 @@
       "holding_period": 0,
       "best_welfare": 0.0,
       "best_regret": 0.0,
-      "equilibrium_type": "Partially Mixed",
-      "num_equilibria": 7,
-      "results_dir": "results/rsg_mobi_zi_egta/holding_period_0/comprehensive_rsg_results_20250621_145453",
-      "equilibrium_description": "MOBI: MOBI_0_100_shade0_0 | ZI: Mixed(ZI_0_100_shade0_500(0.33), ZI_100_0_shade0_500(0.33), ZI_100_0_shade250_500(0.33))"
+      "equilibrium_type": "Pure",
+      "num_equilibria": 17,
+      "results_dir": "results/rsg_mobi_zi_egta/holding_period_0/comprehensive_rsg_results_20250621_160850",
+      "equilibrium_description": "MOBI: MOBI_100_0_shade250_500 | ZI: ZI_0_100_shade0_500"
     }
   ]
 }

@@ -164,7 +164,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     
         sim_time = 10000  
         num_iterations = 1
-        batch_size = 300
+        batch_size = 80
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -179,8 +179,9 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             #"MOBI_100_0_shade100_500",
             "MOBI_0_100_shade0_0",  #MOBIs never shade in the MELO 
             "MOBI_100_0_shade250_500",
+            "MOBI_100_0_shade0_250",
             "MOBI_100_0_shade0_500",
-            "MOBI_100_0_shade0_200"
+            "MOBI_100_0_shade0_1000"
 
         ]
 
@@ -193,6 +194,9 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             "ZI_100_0_shade250_500",
             "ZI_0_100_shade0_500",
             "ZI_100_0_shade0_500",
+            "ZI_100_0_shade0_1000",
+            "ZI_0_100_shade0_1000",
+
         ]
         
         simulator = MeloSimulator(
@@ -216,7 +220,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             reps=10,
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
-            log_profile_details=True,
+            log_profile_details=False,
             parallel=False
             #force_symmetric=True
         )
@@ -247,18 +251,24 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             strategy_names_per_role=strategy_names_per_role,
             subgame_size=len(simulator.get_strategies())
         )
-        scheduler.max_profiles_per_subgame = 5000000 
-
+        scheduler.max_profiles_per_subgame = 80 
+        # Emit at most one profile per sub-game in each scheduler batch to
+        # guarantee diverse coverage in the very first iteration.
+        scheduler.profiles_per_subgame = 8
 
         
+
+        # Instantiate EGTA *after* warm-up so the observations are loaded first
         egta = EGTA(
             simulator=simulator,
             scheduler=scheduler,
             device=device,
             output_dir=f"results/rsg_mobi_zi_egta/holding_period_{holding_period}",
-            max_profiles=100000000000,
-            seed=42
+            max_profiles=500,
+            seed=42,
         )
+
+        
         egta.always_complete_deviations = False
         
         print("Running Role Symmetric EGTA...")

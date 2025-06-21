@@ -12,6 +12,7 @@ from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
 from functools import lru_cache
 import numpy as np
+import heapq
 
 
 
@@ -104,7 +105,19 @@ class DPRScheduler(Scheduler):
             self.scaling_factor_per_role = {}
 
         self.scheduled_profiles: Set[Tuple] = set()
-        self.requested_subgames: List[Dict] = []
+        # Min-heap of pending sub-games keyed by size.  Each item is a tuple
+        #   (|support|, tie_break, sub_dict)
+        self.requested_subgames: List[Tuple[int, float, Dict]] = []
+        # Track the canonical key of sub-games already queued so we avoid
+        # duplicates.
+        self._queued_keys: Set[frozenset] = set()
+        
+        # Maximum number of profiles to emit from *one* sub-game in a single
+        # call to get_next_batch.  Keeping this small prevents the first
+        # scheduler batch from being dominated by the very first sub-game in
+        # the queue, which can otherwise lead to poor initial coverage of the
+        # strategy space.  The default of 5 can be tuned by callers.
+        self.profiles_per_subgame: int = 5
         
         self._initialize_with_uniform_subgame()
     
@@ -130,11 +143,11 @@ class DPRScheduler(Scheduler):
                 if max_strats_for_role > 0:
                     chosen_strategies = set(self.rand.sample(role_strategies, max_strats_for_role))
                     initial_subgame[role_name] = chosen_strategies
-            self.requested_subgames.append(initial_subgame)
+            self.add_subgame(initial_subgame)
         else:
             # Symmetric game: choose strategies uniformly at random
             initial_strategies = set(self.rand.sample(self.strategies, self.subgame_size))
-            self.requested_subgames.append({"Player": initial_strategies})
+            self.add_subgame({"Player": initial_strategies})
     
     def _generate_profiles_for_subgame(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
         """
@@ -495,15 +508,43 @@ class DPRScheduler(Scheduler):
 
         # 1) Drain previously requested subgames up to batch_size
         while self.requested_subgames and needed > 0:
-            sub = self.requested_subgames.pop(0)
-            for prof in self._generate_profiles_for_subgame(sub):
+            size_, _tie, sub = heapq.heappop(self.requested_subgames)
+            # remove canonical key so that if we re-queue later it is allowed
+            self._queued_keys.discard(self._canonical_key(sub))
+            emitted_from_sub = 0
+            prof_list = self._generate_profiles_for_subgame(sub)
+            # Randomise order so early slices are diverse.
+            self.rand.shuffle(prof_list)
+
+            # ---------- prepend pure profiles for coverage -----------------
+            pure_profiles = []
+            default_by_role = {r: next(iter(ss)) for r, ss in sub.items() if ss}
+
+            for role_name, strat_set in sub.items():
+                for strat in strat_set:
+                    prof = []
+                    for r_idx, r in enumerate(self.role_names):
+                        choose = strat if r == role_name else default_by_role.get(r)
+                        if choose is None:
+                            choose = next(iter(self.strategy_names_per_role[r_idx]))
+                        n_players = int(self.num_players_per_role[r_idx])
+                        prof.extend([(r, choose)] * n_players)
+                    pure_profiles.append(prof)
+
+            # put pure profiles first
+            prof_list = pure_profiles + prof_list
+
+            for prof in prof_list:
                 tpl = tuple(sorted(prof))
-                if tpl not in self.scheduled_profiles:
-                    self.scheduled_profiles.add(tpl)
-                    batch.append(prof)
-                    needed -= 1
-                    if needed == 0:
-                        break
+                if tpl in self.scheduled_profiles:
+                    continue
+
+                self.scheduled_profiles.add(tpl)
+                batch.append(prof)
+                emitted_from_sub += 1
+                needed -= 1
+                if needed == 0:
+                    break
 
         # 2) If still need more, generate from new candidate subgames
         if game is not None and needed > 0:
@@ -629,7 +670,24 @@ class DPRScheduler(Scheduler):
 
         return missing
 
-        
+    # ------------------------------------------------------------------
+    # Sub-game queue helpers (priority by size ‑> breadth-first search)
+    # ------------------------------------------------------------------
+    def _canonical_key(self, sub: Dict[str, Set[str]]) -> frozenset:
+        """Return immutable key identifying the sub-game support."""
+        return frozenset((role, strat) for role, ss in sub.items() for strat in ss)
+
+    def add_subgame(self, sub: Dict[str, Set[str]]):
+        """Push *sub* onto the priority queue if not already present."""
+        key = self._canonical_key(sub)
+        if key in self._queued_keys:
+            return  # already queued
+        size = len(key)
+        # random tie-break so heap pop of equal sizes is randomised
+        heapq.heappush(self.requested_subgames, (size, self.rand.random(), sub))
+        self._queued_keys.add(key)
+
+
 @lru_cache(maxsize=256)
 def _cached_distribute_players(k: int, n: int) -> Tuple[Tuple[int, ...], ...]:
     """

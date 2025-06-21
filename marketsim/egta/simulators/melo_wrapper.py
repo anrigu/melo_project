@@ -26,6 +26,7 @@ except (ImportError, AttributeError):
 import time
 from marketsim.egta.egta import Observation      # path you placed the patch in
 ProfileKey = Tuple[Tuple[str, str], ...]  
+import os
 
 
 
@@ -110,7 +111,8 @@ class MeloSimulator(Simulator):
                 # Mode control
                 force_symmetric: bool = False,
                 parallel: bool = False,
-                log_profile_details: bool = False):
+                log_profile_details: bool = False,
+                num_workers: Optional[int] = None):
         """
         Initialize the MELO simulator interface for role symmetric games.
         
@@ -139,6 +141,7 @@ class MeloSimulator(Simulator):
             force_symmetric: If True, forces symmetric game behavior (disables role symmetric mode)
             parallel: If True, use multiprocessing for parallel repetitions
             log_profile_details: If True, print profile summary after simulation
+            num_workers: Number of worker threads for parallel execution
         """
         self.num_strategic_mobi = num_strategic_mobi
         self.num_strategic_zi = num_strategic_zi
@@ -167,6 +170,7 @@ class MeloSimulator(Simulator):
         self.force_symmetric = force_symmetric
         self.parallel = parallel
         self.log_profile_details = log_profile_details
+        self.num_workers = num_workers or 1
         
         # Define role names and player counts
         self.role_names = ["MOBI", "ZI"]
@@ -375,7 +379,9 @@ class MeloSimulator(Simulator):
         if self.parallel and self.reps > 1:
             import multiprocessing as mp
             ctx  = mp.get_context("spawn")
-            with cf.ProcessPoolExecutor(mp_context=ctx) as pool:
+            n_workers = self._effective_workers()
+            with cf.ProcessPoolExecutor(mp_context=ctx,
+                                        max_workers=n_workers) as pool:
                 values_per_rep = list(
                     tqdm(pool.map(_run_melo_single_rep, iter_args),
                         total=self.reps,
@@ -502,3 +508,16 @@ class MeloSimulator(Simulator):
             "profile_avg": profile_avg,
         }
         self.profile_summaries.append(summary_dict) 
+
+    # ------------------------------------------------------------------
+    # Helper: determine worker count respecting SLURM allocation limits
+    # ------------------------------------------------------------------
+    def _effective_workers(self) -> int:
+        """Return worker count obeying Slurm cpu limit and self.reps."""
+        slurm_cores = os.environ.get("SLURM_CPUS_ON_NODE") \
+            or os.environ.get("SLURM_CPUS_PER_TASK")
+        if slurm_cores is not None:
+            available = int(slurm_cores)
+        else:
+            available = os.cpu_count() or 1
+        return max(1, min(available, self.num_workers, self.reps)) 

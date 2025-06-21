@@ -1134,8 +1134,11 @@ async def quiesce(
                     import numpy as _np
                     stored_reg = float(reg) if _np.isfinite(reg) else 1e9
                     confirmed_eq.append((candidate.mixture.clone(), stored_reg))
-            else:
-                new_unconfirmed.append(candidate)
+
+                    # Record support as maximal to prevent cycling
+                    _update_maximals(maximal_subgames, candidate.support)
+                else:
+                    new_unconfirmed.append(candidate)
                 
         unconfirmed_candidates = new_unconfirmed
         
@@ -1187,12 +1190,12 @@ async def quiesce(
                     all_prof = egta_ref.scheduler._generate_profiles_for_subgame(sub_full)
                     missing_prof = [p for p in all_prof if not egta_ref.game.has_profile(p)]
                     if missing_prof:
-                        egta_ref.scheduler.requested_subgames.append(sub_full)
+                        egta_ref.scheduler.add_subgame(sub_full)
                         if verbose:
                             print(f"  ↺ {len(missing_prof)} missing profiles → scheduled; postponing solver")
-                        continue  # postpone solver until data complete
+                        continue  
                 except Exception:
-                    pass  # fall through if any error
+                    pass  
 
             # ----------------------------------------------------------
             # Create restricted game based on the restriction list.
@@ -1579,7 +1582,7 @@ async def test_candidate(
                         sub[role_name] = in_support
                     # add the deviating strategy
                     sub.setdefault(role, set()).add(strat)
-                    egta_ref.scheduler.requested_subgames.append(sub)
+                    egta_ref.scheduler.add_subgame(sub)
                 except Exception:
                     pass
             if verbose:
@@ -1658,3 +1661,13 @@ def trim_mixture_support(mix: torch.Tensor, game: Game, thresh: float = 1e-8) ->
     trimmed = mix.clone()
     trimmed[trimmed < thresh] = 0.0
     return role_aware_normalize(trimmed, game) 
+
+def _update_maximals(max_set: Set[frozenset], new_sup: Set[int]):
+    new_fs = frozenset(new_sup)
+    # skip if subset of existing maximal
+    if any(new_fs.issubset(ms) for ms in max_set):
+        return
+    # remove any existing maximals that are subset of the new one
+    to_remove = {ms for ms in max_set if ms.issubset(new_fs)}
+    max_set.difference_update(to_remove)
+    max_set.add(new_fs) 
