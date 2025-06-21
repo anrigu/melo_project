@@ -3,26 +3,26 @@
     "profile": [
       [
         "MOBI",
-        "MELO"
+        "CDA"
       ],
       [
         "MOBI",
-        "MELO"
+        "CDA"
       ],
       [
         "ZI",
-        "MELO"
+        "CDA"
       ],
       [
         "ZI",
-        "MELO"
+        "CDA"
       ]
     ],
     "payoffs": [
-      1.0,
-      1.0,
-      1.0,
-      1.0
+      2.0,
+      2.0,
+      2.0,
+      2.0
     ],
     "aux": {}
   }

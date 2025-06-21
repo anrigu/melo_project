@@ -5,10 +5,10 @@
     "is_role_symmetric": true,
     "mixture_by_role": {
       "MOBI": {
-        "MELO": 1.0
+        "CDA": 1.0
       },
       "ZI": {
-        "MELO": 1.0
+        "CDA": 1.0
       }
     }
   }

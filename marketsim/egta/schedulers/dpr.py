@@ -381,7 +381,7 @@ class DPRScheduler(Scheduler):
         return scaled
 
     
-    def _select_deviating_strategies(self, game: Game, mixture: np.ndarray, num_deviations: int = 2) -> Dict[str, Set[str]]:
+    def _select_deviating_strategies(self, game: Game, mixture: np.ndarray, num_deviations: int = 16) -> Dict[str, Set[str]]:
         """
         Select strategies with highest deviation payoff for each role.
         
@@ -393,24 +393,45 @@ class DPRScheduler(Scheduler):
         Returns:
             Dictionary mapping role names to sets of deviating strategies
         """
-        device = game.game.device if hasattr(game.game, 'device') else 'cpu'
-        mixture_tensor = torch.tensor(mixture, dtype=torch.float32, device=device)
-        
-        payoffs = game.deviation_payoffs(mixture_tensor)
+        # ---------------------------------------------------------------
+        # Use the *full* game (if available) when computing deviation
+        # payoffs, so strategies outside the current restriction can still
+        # be considered as best responses.
+        # ---------------------------------------------------------------
+        full_core = getattr(game.game, "full_game_reference", None)
+        if full_core is not None:
+            # Wrap in a lightweight facade to access deviation_payoffs etc.
+            from marketsim.egta.core.game import Game as _GameWrap
+            target_game = _GameWrap(full_core, game.metadata) if not isinstance(full_core, _GameWrap.__bases__) else game  # avoid double wrap
+        else:
+            target_game = game
+
+        device = target_game.game.device if hasattr(target_game.game, 'device') else 'cpu'
+
+        if len(mixture) < target_game.num_strategies:
+            mix_full = np.zeros(target_game.num_strategies, dtype=np.float32)
+            mix_full[: len(mixture)] = mixture
+        else:
+            mix_full = mixture
+
+        mixture_tensor = torch.tensor(mix_full, dtype=torch.float32, device=device)
+
+        payoffs = target_game.deviation_payoffs(mixture_tensor)
         scaled_payoffs = self.scale_payoffs(payoffs)
         
         deviating_strategies = {}
         
-        if game.is_role_symmetric:
+        if target_game.is_role_symmetric:
             # Select best deviations per role
             global_strategy_idx = 0
-            for role_idx, (role_name, role_strategies) in enumerate(zip(game.role_names, game.strategy_names_per_role)):
+            for role_idx, (role_name, role_strategies) in enumerate(zip(target_game.role_names, target_game.strategy_names_per_role)):
                 #role_payoffs = scaled_payoffs[global_strategy_idx:global_strategy_idx + len(role_strategies)]
                 role_payoffs = torch.nan_to_num(
                     scaled_payoffs[global_strategy_idx:
                                 global_strategy_idx + len(role_strategies)],
                     nan=np.inf,  # treat "missing" as best-possible payoff
                 )
+                
                 # Get top strategies for this role
                 sorted_indices = np.argsort(-role_payoffs.cpu().numpy())
                 num_to_select = min(num_deviations, len(role_strategies))
@@ -427,7 +448,7 @@ class DPRScheduler(Scheduler):
             # Symmetric game
             sorted_indices = np.argsort(-scaled_payoffs.cpu().numpy())
             deviating_indices = sorted_indices[:num_deviations]
-            deviating_strategies["Player"] = {game.strategy_names[i] for i in deviating_indices}
+            deviating_strategies["Player"] = {target_game.strategy_names[i] for i in deviating_indices}
         
         return deviating_strategies
     

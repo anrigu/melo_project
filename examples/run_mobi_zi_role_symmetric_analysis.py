@@ -163,8 +163,8 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         print(f"{'='*60}")
     
         sim_time = 10000  
-        num_iterations = 10
-        batch_size = 10
+        num_iterations = 1
+        batch_size = 300
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -235,6 +235,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
                 params = simulator.strategy_params[strategy]
                 print(f"  {strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
         
+        print(simulator.get_strategies())
         scheduler = DPRScheduler(
             strategies=simulator.get_strategies(), 
             num_players=simulator.get_num_players(),

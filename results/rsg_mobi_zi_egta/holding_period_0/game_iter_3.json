@@ -8,7 +8,7 @@
   "is_role_symmetric": true,
   "strategy_names": [
     "MOBI_0_100_shade0_0",
-    "ZI_0_100_shade250_500",
+    "ZI_0_100_shade0_500",
     "ZI_100_0_shade0_500",
     "ZI_100_0_shade250_500"
   ],
@@ -27,7 +27,7 @@
       "MOBI_0_100_shade0_0"
     ],
     [
-      "ZI_0_100_shade250_500",
+      "ZI_0_100_shade0_500",
       "ZI_100_0_shade0_500",
       "ZI_100_0_shade250_500"
     ]
