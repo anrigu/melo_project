@@ -167,11 +167,18 @@ class DPRScheduler(Scheduler):
                 continue
 
             strategies = list(subgame[role_name])
-            # n_r = number of players to keep for this role in the *reduced* game
-            n_r = int(min(
-                self.num_players_per_role[role_idx].item(),
-                self.reduction_size_per_role.get(role_name, self.num_players_per_role[role_idx].item())
-            ))
+            # Robustly convert player counts (can be torch scalar or plain int) to Python int
+            full_N_r = self.num_players_per_role[role_idx]
+            if hasattr(full_N_r, "item"):
+                full_N_r = int(full_N_r.item())
+            else:
+                full_N_r = int(full_N_r)
+
+            red_n_r = self.reduction_size_per_role.get(role_name, full_N_r)
+            # Ensure the reduced count is also an int
+            red_n_r = int(red_n_r.item()) if hasattr(red_n_r, "item") else int(red_n_r)
+
+            n_r = min(full_N_r, red_n_r)
 
             k = len(strategies)
             if n_r == 0 or k == 0:
@@ -198,8 +205,38 @@ class DPRScheduler(Scheduler):
         for combo in itertools.product(*[opts[2] for opts in role_profile_options]):
             full_profile: List[Tuple[str, str]] = []
             for (role_name, strategies, _), distro in zip(role_profile_options, combo):
-                for strat, cnt in distro.items():
+                # Lookup full and reduced player counts for this role (computed earlier)
+                role_idx = self.role_names.index(role_name)
+                full_N_r = self.num_players_per_role[role_idx]
+                if hasattr(full_N_r, "item"):
+                    full_N_r = int(full_N_r.item())
+                else:
+                    full_N_r = int(full_N_r)
+
+                red_n_r = self.reduction_size_per_role.get(role_name, full_N_r)
+                red_n_r = int(red_n_r.item()) if hasattr(red_n_r, "item") else int(red_n_r)
+
+                # Integer scaling factor (may be 1 if no reduction)
+                scale = max(1, full_N_r // red_n_r)
+                # First allocate scaled counts
+                tmp_counts = {s: cnt * scale for s, cnt in distro.items()}
+                # Handle any residual players due to floor division
+                allocated = sum(tmp_counts.values())
+                residual = full_N_r - allocated
+                if residual > 0:
+                    # Assign residual players to strategies with highest count first
+                    sorted_strats = sorted(tmp_counts.items(), key=lambda x: -x[1])
+                    idx = 0
+                    while residual > 0 and sorted_strats:
+                        strat_name, _ = sorted_strats[idx % len(sorted_strats)]
+                        tmp_counts[strat_name] += 1
+                        residual -= 1
+                        idx += 1
+
+                # Add to full profile list
+                for strat, cnt in tmp_counts.items():
                     full_profile.extend([(role_name, strat)] * cnt)
+
             if full_profile:
                 profiles.append(full_profile)
 
@@ -213,96 +250,6 @@ class DPRScheduler(Scheduler):
         return profiles
  
 
-    def _n_players_for_role(self, role_name: str, role_idx: int) -> int:
-        """
-        Centralised lookup of the *current* player-count a reduced game
-        should use for this role.  Falls back gracefully.
-        """
-       
-        if hasattr(self, "reduction_size_per_role") and self.reduction_size_per_role:
-            return int(self.reduction_size_per_role.get(
-                role_name, self.num_players_per_role[role_idx]))
-
-        
-        if hasattr(self, "reduction_size") and self.reduction_size:
-            return int(min(self.num_players_per_role[role_idx],
-                           self.reduction_size))
-
-       
-        return int(self.num_players_per_role[role_idx])
-
-    
-    def _generate_role_symmetric_profiles(self, subgame: Dict[str, Set[str]]) -> List[List[Tuple[str, str]]]:
-        """Generate role symmetric profiles for a subgame."""
-        profiles = []
-        
-        # Generate all combinations of strategy assignments per role
-        role_profile_options = []
-        
-        for role_idx, role_name in enumerate(self.role_names):
-            if role_name not in subgame or not subgame[role_name]:
-                continue
-                
-           
-            role_name = self.role_names[role_idx]
-            role_strategies = list(subgame[role_name])
-
-            num_players_in_role = int(self.num_players_per_role[role_idx])
-
-
-
-            
-            if num_players_in_role == 0:
-                continue
-            
-            # Generate all ways to distribute players among strategies in this role
-            role_distributions = self._distribute_players_in_role(role_strategies, num_players_in_role)
-            role_profile_options.append(role_distributions)
-        
-        if not role_profile_options:
-            return []
-        
-        # Generate cartesian product of role distributions (one distribution per role)
-        for role_distribution_combination in itertools.product(*role_profile_options):
-            profile = []
-            for role_idx, distribution in enumerate(role_distribution_combination):
-                role_name = self.role_names[role_idx]
-                for strategy, count in distribution.items():
-                    for _ in range(count):
-                        profile.append((role_name, strategy))
-            
-            if profile:  # Only add non-empty profiles
-                profiles.append(profile)
-        
-        return profiles
-    
-    def _distribute_players_in_role(self, strategies: List[str], num_players: int) -> List[Dict[str, int]]:
-        """Generate all ways to distribute players among strategies in a role."""
-        if len(strategies) == 1:
-            return [{strategies[0]: num_players}]
-        
-        distributions = []
-        
-        def generate_distributions(strategies_left, players_left, current_dist):
-            if len(strategies_left) == 1:
-                # Assign all remaining players to the last strategy
-                final_dist = current_dist.copy()
-                final_dist[strategies_left[0]] = players_left
-                distributions.append(final_dist)
-                return
-            
-            strategy = strategies_left[0]
-            remaining_strategies = strategies_left[1:]
-            
-            # Try assigning 0 to all players to this strategy
-            for assigned_to_this in range(players_left + 1):
-                new_dist = current_dist.copy()
-                new_dist[strategy] = assigned_to_this
-                generate_distributions(remaining_strategies, players_left - assigned_to_this, new_dist)
-        
-        generate_distributions(strategies, num_players, {})
-        return distributions
-    
     def _generate_symmetric_profiles(self, strategies: List[str]) -> List[List[Tuple[str, str]]]:
         """Generate profiles for symmetric games (backward compatibility)."""
         profiles = []
@@ -513,70 +460,7 @@ class DPRScheduler(Scheduler):
             support_strategies["Player"] = {game.strategy_names[i] for i in support_indices}
         
         return support_strategies
-    '''
-    def get_next_batch(self, game: Optional[Game] = None) -> List[List[Tuple[str, str]]]:
-        """
-        Get the next batch of role symmetric profiles to simulate.
-        Args:
-            game: Optional game with existing data
-        Returns:
-            List of role symmetric strategy profiles
-        """
-        
-        profiles_to_simulate: List[List[Tuple[str, str]]] = []
-
-        if self.requested_subgames:
-            for sub in self.requested_subgames:
-                profiles_to_simulate.extend(self._generate_profiles_for_subgame(sub))
-            
-            self.requested_subgames.clear()
-
-        
-        if game is not None:
-            self.game = game
-
-            candidates = self._select_equilibrium_candidates(game)
-
-            new_subgames = []
-            for candidate in candidates:
-                support_strategies = self._select_support_strategies(game, candidate)
-                deviating_strategies = self._select_deviating_strategies(game, candidate)
-                
-                # Merge support and deviating strategies per role
-                new_subgame = {}
-                all_roles = set(support_strategies.keys()) | set(deviating_strategies.keys())
-                
-                for role_name in all_roles:
-                    role_strategies = set()
-                    if role_name in support_strategies:
-                        role_strategies.update(support_strategies[role_name])
-                    if role_name in deviating_strategies:
-                        role_strategies.update(deviating_strategies[role_name])
-                    
-                    # Limit to subgame size per role
-                    if len(role_strategies) > self.subgame_size:
-                        role_strategies = set(list(role_strategies)[:self.subgame_size])
-                    
-                    new_subgame[role_name] = role_strategies
-                
-                # Append *after* we've processed the old queue so we don't lose them
-                self.requested_subgames.extend(new_subgames)
-
-                for subgame in new_subgames:
-                    profiles_to_simulate.extend(self._generate_profiles_for_subgame(subgame))
-        
-        # Filter out already scheduled profiles
-        new_profiles = []
-        for profile in profiles_to_simulate:
-            sorted_profile = tuple(sorted(profile))
-            
-            if sorted_profile not in self.scheduled_profiles:
-                new_profiles.append(profile)
-                self.scheduled_profiles.add(sorted_profile)
-        
-        self.rand.shuffle(new_profiles)
-        return new_profiles[:self.batch_size]
-    '''
+    
     def get_next_batch(self, game: Optional[Game] = None) -> List[List[Tuple[str, str]]]:
         """
         Get the next batch of role symmetric profiles to simulate.
@@ -614,10 +498,13 @@ class DPRScheduler(Scheduler):
                 sub = {}
                 roles = set(support) | set(deviators)
                 for role in roles:
-                    s = set(support.get(role, [])) | set(deviators.get(role, []))
-                    # Limit to self.subgame_size 
+                    role_idx = game.role_names.index(role)
+                    legal = set(game.strategy_names_per_role[role_idx])
+                    s = (set(support.get(role, [])) | set(deviators.get(role, []))) & legal
+                    if not s:
+                        continue  # skip if nothing legal
                     if len(s) > self.subgame_size:
-                        s = set(list(s)[:self.subgame_size])
+                        s = set(list(sorted(s))[:self.subgame_size])
                     sub[role] = s
 
                 # Generate profiles for this subgame up to needed
@@ -635,6 +522,7 @@ class DPRScheduler(Scheduler):
         # Shuffle and return at most batch_size profiles
         self.rand.shuffle(batch)
         return batch
+    
     def update(self, game: Game) -> None:
         """
         Update the scheduler with new game data.
@@ -666,7 +554,7 @@ class DPRScheduler(Scheduler):
             pure = list(pure)
 
             for i, (role_i, strat_i) in enumerate(pure):
-                for other in self.strategy_names_per_role[self.role_names.index(role_i)]:
+                for other in game.strategy_names_per_role[game.role_names.index(role_i)]:
                     if other == strat_i:
                         continue
 
@@ -675,12 +563,13 @@ class DPRScheduler(Scheduler):
 
                     #expand: all but ONE player stay with original strat_i
                     dev_full = []
-                    for role_idx2, (role_name2, strat_name2) in enumerate(dev_compact):
-                        n_players = int(
-                            game.num_players_per_role[role_idx2].item()
-                        )
+                    for _idx2, (role_name2, strat_name2) in enumerate(dev_compact):
+                        # Determine player count for this role via role name, not list order.
+                        role_index_in_game = game.role_names.index(role_name2)
+                        n_players_raw2 = game.num_players_per_role[role_index_in_game]
+                        n_players = int(n_players_raw2.item() if hasattr(n_players_raw2, 'item') else n_players_raw2)
 
-                        if role_idx2 == i: 
+                        if _idx2 == i: 
                             dev_full.append((role_name2, strat_name2))
                             orig_strat = pure[i][1]
                             dev_full.extend(
@@ -693,18 +582,16 @@ class DPRScheduler(Scheduler):
                     
                     unplayed_threshold = 1e-3  
 
-                    # Map (role,strat) → global index in mixture
-                    if not hasattr(self, "_name_to_global_idx"):
-                        mapping = {}
-                        g_idx = 0
-                        for r_name, strats in zip(self.role_names, self.strategy_names_per_role):
-                            for s in strats:
-                                mapping[(r_name, s)] = g_idx
-                                g_idx += 1
-                        self._name_to_global_idx = mapping
+                    # Build name→index mapping from the *game* (safe for restricted games)
+                    mapping = {}
+                    g_idx = 0
+                    for r_name, strats in zip(game.role_names, game.strategy_names_per_role):
+                        for s in strats:
+                            mapping[(r_name, s)] = g_idx
+                            g_idx += 1
 
                     # Global index for the deviating strategy "other"
-                    other_idx = self._name_to_global_idx[(role_i, other)]
+                    other_idx = mapping[(role_i, other)]
 
                     # If mixture vector comes from a *restricted* game it may
                     # be shorter than the full strategy list. In that case the

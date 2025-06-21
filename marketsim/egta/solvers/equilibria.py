@@ -1150,28 +1150,53 @@ async def quiesce(
             new_support = support.union({strategy})
             
             # --------------------------------------------------------------
-            # Skip oversized restrictions early – defer to back-up queue
+            # COMPLETENESS CHECK – ensure every profile of this restriction
+            # has been evaluated before solving.  If not, push the sub-game
+            # back onto the scheduler queue and postpone the solver.
             # --------------------------------------------------------------
-            if len(new_support) > restricted_game_size:
-                if verbose:
-                    print("  Skipping deviation: support size exceeds restricted_game_size")
-                # no push back – it will be considered again if another gain arises
-                continue
-            
+            egta_ref = globals().get("CURRENT_EGTA", None)
+
+            # ----------------------------------------------------------
+            # Build the *restriction* list and make sure we haven't
+            # already solved it.  (This was dropped in previous edit.)
+            # ----------------------------------------------------------
             restriction = list(new_support)
             restriction_set = frozenset(restriction)
 
-            # --------------------------------------------------------------
-            # Skip if we've already solved this exact restriction
-            # --------------------------------------------------------------
             if restriction_set in explored_restrictions:
                 if verbose:
                     print("  Restriction already explored – skipping")
                 continue
             explored_restrictions.add(restriction_set)
-            
-            # Create restricted game
-            #restricted_game = game.restrict(restriction)
+
+            # ----------------------------------------------------------
+            # Completeness check – ensure every profile of this
+            # restriction has been simulated.
+            # ----------------------------------------------------------
+            if egta_ref is not None:
+                try:
+                    sub_full: Dict[str, set] = {}
+                    for gi in restriction:
+                        strat_i = game.get_strategy_name(gi)
+                        if game.is_role_symmetric:
+                            role_idx_i = int(game.role_indices[gi]) if hasattr(game, 'role_indices') else 0
+                            role_i = game.role_names[role_idx_i]
+                        else:
+                            role_i = game.role_names[0]
+                        sub_full.setdefault(role_i, set()).add(strat_i)
+                    all_prof = egta_ref.scheduler._generate_profiles_for_subgame(sub_full)
+                    missing_prof = [p for p in all_prof if not egta_ref.game.has_profile(p)]
+                    if missing_prof:
+                        egta_ref.scheduler.requested_subgames.append(sub_full)
+                        if verbose:
+                            print(f"  ↺ {len(missing_prof)} missing profiles → scheduled; postponing solver")
+                        continue  # postpone solver until data complete
+                except Exception:
+                    pass  # fall through if any error
+
+            # ----------------------------------------------------------
+            # Create restricted game based on the restriction list.
+            # ----------------------------------------------------------
             if hasattr(game.game, "restriction_indices"):
                 parent_rsg = game.game.full_game_reference
                 new_rsg = parent_rsg.restrict(restriction)
@@ -1182,50 +1207,34 @@ async def quiesce(
                 new_rsg.full_game_reference = game.game
                 restricted_game = Game(new_rsg, game.metadata)
 
-            
-            # Create initial mixture for the restricted game
+            # ----------------------------------------------------------
+            # Build an initial mixture for the restricted game.
+            # ----------------------------------------------------------
             if restricted_game.is_role_symmetric:
                 init_restricted = create_role_symmetric_mixture(restricted_game, game.game.device)
-                # Bias toward the support strategies and add the deviating strategy
-                restricted_strategy_to_full = {i: restriction[i] for i in range(len(restriction))}
-                
                 for i, full_strategy_idx in enumerate(restriction):
                     if full_strategy_idx in support:
-                        # Find which role this strategy belongs to in the restricted game
-                        global_idx = 0
-                        for role_strategies in restricted_game.strategy_names_per_role:
-                            if global_idx <= i < global_idx + len(role_strategies):
-                                # This strategy is in this role, bias the initialization
-                                init_restricted[i] = base_mixture[full_strategy_idx] * 0.8
-                                break
-                            global_idx += len(role_strategies)
-                
+                        init_restricted[i] = base_mixture[full_strategy_idx] * 0.8
                 new_idx = restriction.index(strategy)
                 init_restricted[new_idx] = 0.2
-                
-                # Renormalize each role in the restricted game
+                # renormalise per-role
                 global_idx = 0
-                for role_strategies in restricted_game.strategy_names_per_role:
-                    role_slice = slice(global_idx, global_idx + len(role_strategies))
-                    role_sum = init_restricted[role_slice].sum()
-                    if role_sum > 1e-10:
-                        init_restricted[role_slice] = init_restricted[role_slice] / role_sum
+                for role_strats in restricted_game.strategy_names_per_role:
+                    sl = slice(global_idx, global_idx + len(role_strats))
+                    rs = init_restricted[sl].sum()
+                    if rs > 1e-10:
+                        init_restricted[sl] /= rs
                     else:
-                        init_restricted[role_slice] = 1.0 / len(role_strategies)
-                    global_idx += len(role_strategies)
+                        init_restricted[sl] = 1.0 / len(role_strats)
+                    global_idx += len(role_strats)
             else:
-                # Standard symmetric game initialization
                 init_restricted = torch.zeros(len(restriction), device=game.game.device)
-                for i, s in enumerate(restriction):
-                    if s in support:
-                        idx = list(support).index(s)
-                        init_restricted[i] = base_mixture[s] * 0.8
-                
-                new_idx = restriction.index(strategy)
-                init_restricted[new_idx] = 0.2 
-                
+                for i, s_idx in enumerate(restriction):
+                    if s_idx in support:
+                        init_restricted[i] = base_mixture[s_idx] * 0.8
+                init_restricted[restriction.index(strategy)] = 0.2
                 init_restricted = init_restricted / init_restricted.sum()
-            
+
             solver_start = time.time()
             if solver == 'replicator':
                 #equilibrium = replicator_dynamics(restricted_game, init_restricted, iters=solver_iters)
@@ -1251,7 +1260,7 @@ async def quiesce(
             
             candidate = SubgameCandidate(
                 support=new_support,
-                restriction=restriction,
+                restriction=list(new_support),
                 mixture=full_mixture,
                 regret=regret_val
             )
@@ -1501,11 +1510,14 @@ async def test_candidate(
             (r,a) for (r,a), p in zip(game.all_strategy_names(), mix) if p > 1e-10
         ))
         # replace one profile member with the deviation
-        role, strat = (
-            game.get_strategy_name(s)
-            if isinstance(game.get_strategy_name(s), tuple)
-            else (game.role_names[0], game.get_strategy_name(s))
-        )
+        # Determine correct role for strategy *s*
+        if game.is_role_symmetric:
+            role_idx_s = int(game.role_indices[s].item() if torch.is_tensor(game.role_indices) else game.role_indices[s])
+            role = game.role_names[role_idx_s]
+            strat = game.get_strategy_name(s)
+        else:
+            role = game.role_names[0]
+            strat = game.get_strategy_name(s)
         prof_dev = tuple(sorted((set(prof_base) - {(role,strat)}) | {(role,strat)}))
 
         # collect one‐number‐per‐run samples (player 0's payoff)

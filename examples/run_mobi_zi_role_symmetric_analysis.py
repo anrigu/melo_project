@@ -151,8 +151,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     num_strategic_mobi = 28
     num_strategic_zi = 40
 
-    # Allow caller to specify a custom list of holding periods.  This is
-    # convenient for SLURM array jobs where each task runs one period.
+
     if holding_periods is None:
         holding_periods = [0]
     
@@ -180,8 +179,8 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             #"MOBI_100_0_shade100_500",
             "MOBI_0_100_shade0_0",  #MOBIs never shade in the MELO 
             "MOBI_100_0_shade250_500",
-           # "MOBI_100_0_shade0_500",
-            #"MOBI_100_0_shade0_200"
+            "MOBI_100_0_shade0_500",
+            "MOBI_100_0_shade0_200"
 
         ]
 
@@ -192,8 +191,8 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             #"Zi_100_0_shade100_500", 
             "ZI_0_100_shade250_500",  
             "ZI_100_0_shade250_500",
-            #"ZI_0_100_shade0_500",
-            #"ZI_100_0_shade0_500",
+            "ZI_0_100_shade0_500",
+            "ZI_100_0_shade0_500",
         ]
         
         simulator = MeloSimulator(
@@ -245,9 +244,9 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             role_names=role_names,
             num_players_per_role=num_players_per_role,
             strategy_names_per_role=strategy_names_per_role,
-            subgame_size=7
+            subgame_size=len(simulator.get_strategies())
         )
-        scheduler.max_profiles_per_subgame = 5000 
+        scheduler.max_profiles_per_subgame = 5000000 
 
 
         
@@ -275,7 +274,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
                 'dist_threshold': 1e-3,
                 'solver': 'replicator',
                 'solver_iters': 3000,
-                'restricted_game_size': 6
+                'restricted_game_size': len(simulator.get_strategies())
             }
         )
         end_time = time.time()
