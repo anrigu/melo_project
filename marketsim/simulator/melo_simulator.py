@@ -326,9 +326,6 @@ class MELOSimulatorSampledArrival:
                         ))
                     strategic_agent_id += 1            
 
-        # Ensure arrivals_melo dict exists (used earlier)
-        self.arrivals_melo = defaultdict(list)
-
     def step(self):
         agents = self.arrivals[self.time]
         melo_agents = self.arrivals_melo[self.time]

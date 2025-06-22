@@ -756,28 +756,28 @@ async def quiesce(
     unconfirmed_candidates.append(uniform_candidate)
     
 
-    if game.is_role_symmetric:
+    #if game.is_role_symmetric:
         # Build list of per-role global strategy indices
-        role_global_indices: List[List[int]] = []
-        g_idx = 0
-        for role_strats in game.strategy_names_per_role:
-            role_global_indices.append(list(range(g_idx, g_idx + len(role_strats))))
-            g_idx += len(role_strats)
+      #  role_global_indices: List[List[int]] = []
+      #  g_idx = 0
+      #  for role_strats in game.strategy_names_per_role:
+      ##      role_global_indices.append(list(range(g_idx, g_idx + len(role_strats))))
+      #      g_idx += len(role_strats)
 
-        import itertools
-        for combo in itertools.product(*role_global_indices):
+      #  import itertools
+      #  for combo in itertools.product(*role_global_indices):
             # combo has one global index per role
-            mixture = torch.zeros(game.num_strategies, device=game.game.device)
-            support = set(combo)
-            for gi in combo:
-                mixture[gi] = 1.0  # pure
-
-            candidate = SubgameCandidate(
-                support=support,
-                restriction=list(support),
-                mixture=mixture,
-            )
-            unconfirmed_candidates.append(candidate)
+      #      mixture = torch.zeros(game.num_strategies, device=game.game.device)
+      #      support = set(combo)
+      #      for gi in combo:
+     #          mixture[gi] = 1.0  # pure
+#
+     #       candidate = SubgameCandidate(
+     #           support=support,
+     #           restriction=list(support),
+    ##            mixture=mixture,
+    #        )
+    #        unconfirmed_candidates.append(candidate)
     
     # Add pure MELO and pure non-MELO starting points
     if hasattr(game, 'strategy_names') and game.strategy_names:

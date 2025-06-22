@@ -75,8 +75,6 @@ def _run_melo_single_rep(args):
 
     return values
 
-
-
 class MeloSimulator(Simulator):
     """
     Interface to the MELO simulator for EGTA with Role Symmetric Game support.
@@ -424,10 +422,16 @@ class MeloSimulator(Simulator):
             aggregated_payoffs.append(sum(payoffs) / len(payoffs) if payoffs else 0.0)
             player_idx += 1
 
-        # Midpoint statistics across all repetitions
+        # Midpoint statistics across all repetitions (robust to all-NaN cases)
         if mid_means:
-            mp_mean = float(np.nanmean(mid_means))
-            mp_std  = float(np.nanstd(mid_means))
+            arr_mid = np.asarray(mid_means, dtype=float)
+            finite_mask = np.isfinite(arr_mid)
+            if finite_mask.any():
+                mp_mean = float(np.nanmean(arr_mid[finite_mask]))
+                mp_std  = float(np.nanstd(arr_mid[finite_mask]))
+            else:
+                mp_mean = float('nan')
+                mp_std  = float('nan')
         else:
             mp_mean = float('nan')
             mp_std  = float('nan')
