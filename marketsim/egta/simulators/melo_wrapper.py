@@ -27,6 +27,16 @@ import time
 from marketsim.egta.egta import Observation      # path you placed the patch in
 ProfileKey = Tuple[Tuple[str, str], ...]  
 import os
+import sys
+import warnings
+
+# Keep progress bars visible in batch logs
+warnings.filterwarnings(
+    "ignore",
+    message="invalid value encountered in reduce",
+    category=RuntimeWarning,
+    module="numpy.core.fromnumeric",
+)
 
 
 
@@ -34,17 +44,28 @@ import os
 # Helper for parallel execution (must be top-level to be picklable)
 # ---------------------------------------------------------------------------
 
+# Base kwargs broadcast once per worker to avoid pickling overhead for every
+# single repetition.
+_BASE_KWARGS: Optional[dict] = None
 
-def _run_melo_single_rep(args):
+
+def _init_worker(base_kwargs):
+    """Pool initializer – saves *base_kwargs* in a global variable."""
+    global _BASE_KWARGS
+    _BASE_KWARGS = base_kwargs
+
+
+def _run_melo_single_rep(seed: int):
     """Run one MELO simulation repetition and return the `values` dict."""
-    rep_seed, sim_kwargs = args
+    if _BASE_KWARGS is None:
+        raise RuntimeError("Worker not initialised with base kwargs")
 
     # local seeding
-    random.seed(rep_seed)
-    np.random.seed(rep_seed & 0xFFFF_FFFF)
-    print("")
+    random.seed(seed)
+    np.random.seed(seed & 0xFFFF_FFFF)
 
-    sim = MELOSimulatorSampledArrival(**sim_kwargs)
+    # No per-repetition prints – they dominated runtime when reps is large
+    sim = MELOSimulatorSampledArrival(**_BASE_KWARGS)
     sim.run()
    
     results_tuple = sim.end_sim()
@@ -376,26 +397,46 @@ class MeloSimulator(Simulator):
 
         if self.parallel and self.reps > 1:
             import multiprocessing as mp
-            ctx  = mp.get_context("spawn")
+            # Use faster 'fork' start-method on Unix (not available on Mac="darwin" or Windows)
+            if sys.platform.startswith("linux"):
+                ctx = mp.get_context("fork")
+            else:
+                ctx = mp.get_context("spawn")
             n_workers = self._effective_workers()
-            with cf.ProcessPoolExecutor(mp_context=ctx,
-                                        max_workers=n_workers) as pool:
+            with cf.ProcessPoolExecutor(
+                    mp_context=ctx,
+                    max_workers=n_workers,
+                    initializer=_init_worker,
+                    initargs=(base_kwargs,),
+                ) as pool:
+                # Choose a chunksize so each worker receives several seeds per
+                # task submission – reduces IPC overhead.
+                chunk = 1  # smaller chunks yield smoother progress updates
+
                 values_per_rep = list(
-                    tqdm(pool.map(_run_melo_single_rep, iter_args),
+                    tqdm(
+                        pool.map(_run_melo_single_rep, seeds, chunksize=chunk),
                         total=self.reps,
-                        desc="   reps",          
+                        desc="   reps",
                         unit="rep",
-                        leave=False,            
-                        disable=not self.log_profile_details)
+                        leave=False,
+                        disable=not self.log_profile_details,
+                        file=sys.stderr,
+                        dynamic_ncols=True,
+                    )
                 )
         else:
+            # serial fall-back: reuse the same simulator instance setup
+            _init_worker(base_kwargs)
             values_per_rep = []
-            for out in tqdm(map(_run_melo_single_rep, iter_args),
+            for out in tqdm(map(_run_melo_single_rep, seeds),
                             total=self.reps,
                             desc="   reps",
                             unit="rep",
                             leave=False,
-                            disable=not self.log_profile_details):
+                            disable=not self.log_profile_details,
+                            file=sys.stderr,
+                            dynamic_ncols=True):
                 values_per_rep.append(out)
 
         # ------------------------------------------------------------------

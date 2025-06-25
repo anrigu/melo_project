@@ -164,7 +164,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     
         sim_time = 10000  
         num_iterations = 1
-        batch_size = 80
+        batch_size = 100
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -178,10 +178,10 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             #"MOBI_0_100_shade100_500",  
             #"MOBI_100_0_shade100_500",
             "MOBI_0_100_shade0_0",  #MOBIs never shade in the MELO 
-            "MOBI_100_0_shade250_500",
+            #"MOBI_100_0_shade250_500",
             "MOBI_100_0_shade0_250",
-            "MOBI_100_0_shade0_500",
-            "MOBI_100_0_shade0_1000"
+            #"MOBI_100_0_shade0_500",
+            #"MOBI_100_0_shade0_1000"
 
         ]
 
@@ -190,12 +190,12 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         zi_strategies = [
            # "ZI_0_100_shade100_500",  
             #"Zi_100_0_shade100_500", 
-            "ZI_0_100_shade250_500",  
+            #"ZI_0_100_shade250_500",  
             "ZI_100_0_shade250_500",
-            "ZI_0_100_shade0_500",
-            "ZI_100_0_shade0_500",
-            "ZI_100_0_shade0_1000",
-            "ZI_0_100_shade0_1000",
+            #"ZI_0_100_shade0_500",
+           # "ZI_100_0_shade0_500",
+            #"ZI_100_0_shade0_1000",
+            #"ZI_0_100_shade0_1000",
 
         ]
         
@@ -206,8 +206,8 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             lam=6e-3,
             lam_r=6e-3,
             lam_melo=1e-3,   
-            lam_melo_mobi = 1e-3,
-            lam_melo_zi = 6e-3,    
+            lam_melo_mobi = 1e-3, #arrival rate mobis 
+            lam_melo_zi = 6e-3, #arrival rate strategic zis
             mean=1e6,      
             r=0.001,              
             shock_var=1e6,       
@@ -221,7 +221,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
             log_profile_details=False,
-            parallel=False
+            parallel=True
             #force_symmetric=True
         )
         
@@ -244,14 +244,14 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             strategies=simulator.get_strategies(), 
             num_players=simulator.get_num_players(),
             batch_size=batch_size,
-            reduction_size_per_role={"MOBI": 4, "ZI": 4},  
+            #reduction_size_per_role={"MOBI": 2, "ZI": 2},  
             seed=42,
             role_names=role_names,
             num_players_per_role=num_players_per_role,
             strategy_names_per_role=strategy_names_per_role,
-            subgame_size=len(simulator.get_strategies())
+            subgame_size= len(simulator.get_strategies())
         )
-        scheduler.max_profiles_per_subgame = 80 
+        scheduler.max_profiles_per_subgame = 1000
         # Emit at most one profile per sub-game in each scheduler batch to
         # guarantee diverse coverage in the very first iteration.
         scheduler.profiles_per_subgame = 8
@@ -263,13 +263,13 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             simulator=simulator,
             scheduler=scheduler,
             device=device,
-            output_dir=f"results/rsg_mobi_zi_egta/holding_period_{holding_period}",
+            output_dir=f"results_test/rsg_mobi_zi_egta/holding_period_{holding_period}",
             max_profiles=500,
             seed=42,
         )
 
         
-        egta.always_complete_deviations = False
+        egta.always_complete_deviations = True
         
         print("Running Role Symmetric EGTA...")
         start_time = time.time()
@@ -281,8 +281,8 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             quiesce_kwargs={
                 'num_iters': 1,
                 'num_random_starts': 0,
-                'regret_threshold': 1e-4,
-                'dist_threshold': 1e-3,
+                'regret_threshold': 1e-3,
+                'dist_threshold': 1e-2,
                 'solver': 'replicator',
                 'solver_iters': 3000,
                 'restricted_game_size': len(simulator.get_strategies())
@@ -294,7 +294,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
      
         if egta.equilibria:
             before = len(egta.equilibria)
-            egta.equilibria = unique_equilibria(egta.equilibria, tol=.3)
+            egta.equilibria = unique_equilibria(egta.equilibria, tol=.01)
             after = len(egta.equilibria)
             if after < before:
                 print(f"Removed {before-after} numerically identical equilibria (now {after}).")
@@ -751,7 +751,7 @@ if __name__ == "__main__":
                         help="Single holding period to analyse. Overrides --holding-periods if provided.")
     parser.add_argument("--holding-periods", type=int, nargs="*", default=[0],
                         help="Space-separated list of holding periods to analyse in sequence.")
-    parser.add_argument("--output-root", type=str, default="results/rsg_mobi_zi_egta_new",
+    parser.add_argument("--output-root", type=str, default="results/new_simulator",
                         help="Root directory where results will be stored.")
     args = parser.parse_args()
 

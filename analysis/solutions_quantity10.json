@@ -1,0 +1,694 @@
+{
+  "90": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500"
+      ]
+    ]
+  },
+  "0": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "240": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "120": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "140": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "70": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "220": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500"
+      ]
+    ]
+  },
+  "180": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "1000": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "300": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "80": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "160": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "60": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "280": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "200": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "260": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_0_100_shade250_500"
+      ]
+    ]
+  },
+  "50": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.10000000149011612,
+          0.8999999761581421
+        ]
+      },
+      {
+        "type": "corner_100_0",
+        "regret": 0.0,
+        "mixture": [
+          0.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0",
+        "MOBI_100_0_shade250_500"
+      ],
+      [
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  },
+  "100": {
+    "equilibria": [
+      {
+        "type": "replicator",
+        "regret": 0.0,
+        "mixture": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.10000000149011612
+        ]
+      },
+      {
+        "type": "corner_0_100",
+        "regret": 0.0,
+        "mixture": [
+          1.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "role_names": [
+      "MOBI",
+      "ZI"
+    ],
+    "strategy_names_per_role": [
+      [
+        "MOBI_0_100_shade0_0"
+      ],
+      [
+        "ZI_0_100_shade250_500",
+        "ZI_100_0_shade250_500"
+      ]
+    ]
+  }
+}

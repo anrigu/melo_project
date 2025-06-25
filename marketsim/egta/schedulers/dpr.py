@@ -117,7 +117,7 @@ class DPRScheduler(Scheduler):
         # scheduler batch from being dominated by the very first sub-game in
         # the queue, which can otherwise lead to poor initial coverage of the
         # strategy space.  The default of 5 can be tuned by callers.
-        self.profiles_per_subgame: int = 5
+        self.profiles_per_subgame: int = 0
         
         self._initialize_with_uniform_subgame()
     
@@ -262,7 +262,7 @@ class DPRScheduler(Scheduler):
 
         return profiles
  
-
+    
     def _generate_symmetric_profiles(self, strategies: List[str]) -> List[List[Tuple[str, str]]]:
         """Generate profiles for symmetric games (backward compatibility)."""
         profiles = []
@@ -428,7 +428,7 @@ class DPRScheduler(Scheduler):
             mix_full = mixture
 
         mixture_tensor = torch.tensor(mix_full, dtype=torch.float32, device=device)
-
+        
         payoffs = target_game.deviation_payoffs(mixture_tensor)
         scaled_payoffs = self.scale_payoffs(payoffs)
         
@@ -687,7 +687,7 @@ class DPRScheduler(Scheduler):
         heapq.heappush(self.requested_subgames, (size, self.rand.random(), sub))
         self._queued_keys.add(key)
 
-
+        
 @lru_cache(maxsize=256)
 def _cached_distribute_players(k: int, n: int) -> Tuple[Tuple[int, ...], ...]:
     """

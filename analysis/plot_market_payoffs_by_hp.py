@@ -4,6 +4,8 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+import re
+import itertools
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -117,6 +119,8 @@ def collect_payoffs(
     trim_pct: float = 10.0,
     bootstrap: int = 0,
     ci: float = 95.0,
+    hp_max: int = 1000,
+    group_by: str = "market",
 ) -> Tuple[
     Dict[str, Dict[int, Dict[str, float]]],  # statistics
     Dict[str, Dict[int, Dict[str, Tuple[float, float]]]],  # CI bounds (may be None)
@@ -132,10 +136,64 @@ def collect_payoffs(
         lambda: defaultdict(lambda: defaultdict(list))
     )
 
-    for run_dir in sorted(root_dir.glob("pilot_egta_run_*")):
+    #--------------------------------------------------------------
+    # The original layout expects ``root_dir`` to contain many
+    # pilot_egta_run_* sub-dirs.  Newer experiment dumps instead
+    # have *one* pilot dir whose children are ``holding_period_*``
+    # directories.  We auto-detect which layout we are dealing with.
+    #--------------------------------------------------------------
+
+    potential_run_dirs = sorted(root_dir.glob("pilot_egta_run_*"))
+
+    # If no pilot dirs are found treat the root itself as *the* run dir.
+    if not potential_run_dirs:
+        potential_run_dirs = [root_dir]
+
+    for run_dir in potential_run_dirs:
+        hp_dirs = list(run_dir.glob("holding_period_*"))
+
+        found_any_hp_payoff = False
+        if hp_dirs:
+            for hp_dir in hp_dirs:
+                m = re.search(r"holding_period_(\d+)", hp_dir.name)
+                if m is None:
+                    continue
+                holding_period = int(m.group(1))
+
+                if hp_max is not None and holding_period > hp_max:
+                    continue
+
+                payoff_files = list(hp_dir.glob("**/raw_payoff_data.json"))
+                if not payoff_files:
+                    continue
+
+                found_any_hp_payoff = True
+
+                for pf in payoff_files:
+                    with open(pf) as f:
+                        profiles = json.load(f)
+
+                    for profile in profiles:
+                        for row in profile:
+                            role: str = row[1]
+                            strategy: str = row[2]
+                            payoff: float = row[3]
+
+                            yield_item = strategy if group_by == "strategy" else classify_market(strategy)
+                            if yield_item is None:
+                                continue
+                            data[role][holding_period][yield_item].append(payoff)
+
+            
+            continue
+
+        
         try:
             holding_period = int(run_dir.name.split("_")[-1])
         except ValueError:
+            continue
+
+        if hp_max is not None and holding_period > hp_max:
             continue
 
         payoff_files = list(run_dir.glob("**/raw_payoff_data.json"))
@@ -143,24 +201,20 @@ def collect_payoffs(
             print(f"⚠️  No raw_payoff_data.json found under {run_dir}")
             continue
 
-        payoff_path = payoff_files[0]
-        with open(payoff_path) as f:
-            profiles = json.load(f)
+        for pf in payoff_files:
+            with open(pf) as f:
+                profiles = json.load(f)
 
-        # Iterate over every (player) row in every profile
-        for profile in profiles:
-            for row in profile:
-                # Format: [player_id, role, strategy_name, payoff]
-                role: str = row[1]
-                strategy: str = row[2]
-                payoff: float = row[3]
+            for profile in profiles:
+                for row in profile:
+                    role: str = row[1]
+                    strategy: str = row[2]
+                    payoff: float = row[3]
 
-                market = classify_market(strategy)
-                if market is None:
-                    # Ignore strategies that are neither pure-CDA nor pure-MELO
-                    continue
-
-                data[role][holding_period][market].append(payoff)
+                    yield_item = strategy if group_by == "strategy" else classify_market(strategy)
+                    if yield_item is None:
+                        continue
+                    data[role][holding_period][yield_item].append(payoff)
 
     stat_data: Dict[str, Dict[int, Dict[str, float]]] = defaultdict(dict)
     ci_data: Dict[str, Dict[int, Dict[str, Tuple[float, float]]]] = defaultdict(dict)
@@ -187,45 +241,42 @@ def collect_payoffs(
 def make_bar_plot(
     role: str,
     hp_vals: List[int],
-    means_cda: List[float],
-    means_melo: List[float],
+    means_by_cat: Dict[str, List[float]],
     q_max: int,
     out_dir: Path,
-    cda_err: Optional[np.ndarray] = None,
-    melo_err: Optional[np.ndarray] = None,
 ) -> None:
-    plt.figure(figsize=(12, 5))
-    x_pos = np.arange(len(hp_vals))
-    width = 0.35
+    """Plot grouped bar chart for an arbitrary number of categories (strategies or markets)."""
 
-    plt.bar(
-        x_pos - width / 2,
-        means_cda,
-        width,
-        label="CDA (100_0)",
-        color="steelblue",
-        yerr=cda_err,
-        capsize=4,
-    )
-    plt.bar(
-        x_pos + width / 2,
-        means_melo,
-        width,
-        label="MELO (0_100)",
-        color="darkorange",
-        yerr=melo_err,
-        capsize=4,
-    )
+    n_cat = len(means_by_cat)
+    if n_cat == 0:
+        return
+
+    plt.figure(figsize=(14, 5))
+    x_pos = np.arange(len(hp_vals))
+    width = 0.8 / n_cat
+
+    colors = itertools.cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+    for i, (cat, means) in enumerate(sorted(means_by_cat.items())):
+        plt.bar(
+            x_pos - 0.4 + width / 2 + i * width,
+            means,
+            width,
+            label=cat,
+            color=next(colors),
+            capsize=3,
+        )
 
     plt.xticks(x_pos, hp_vals)
     plt.xlabel("Holding Period")
     plt.ylabel("Mean Payoff")
-    plt.title(f"{role} mean payoff per market vs holding period (q_max={q_max})")
-    plt.legend()
+    plt.title(f"{role} mean payoff")
+    plt.legend(ncol=3, fontsize="small")
     plt.tight_layout()
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    fname = out_dir / f"{role.lower()}_payoff_cda_vs_melo_q{q_max}.png"
+    suffix = "strategy" if len(means_by_cat) > 2 else "market"
+    fname = out_dir / f"{role.lower()}_payoff_by_{suffix}_q{q_max}.png"
     plt.savefig(fname)
     print(f"Saved {fname}")
 
@@ -279,10 +330,22 @@ def main():
         default=95.0,
         help="Confidence level (in percent) for bootstrap intervals.",
     )
+    parser.add_argument(
+        "--hp-max",
+        type=int,
+        default=1000,
+        help="Ignore runs with holding period above this value (None to disable).",
+    )
+    parser.add_argument(
+        "--group-by",
+        choices=["market", "strategy"],
+        default="market",
+        help="Aggregate by 'market' (CDA/MELO) or by full 'strategy' name.",
+    )
     args = parser.parse_args()
 
     stat_data, ci_data = collect_payoffs(
-        args.root_dir, args.stat, args.trim_pct, args.bootstrap, args.ci
+        args.root_dir, args.stat, args.trim_pct, args.bootstrap, args.ci, args.hp_max, args.group_by
     )
 
     for role, hp_dict in stat_data.items():
@@ -292,52 +355,16 @@ def main():
 
         # Sort by holding period
         hp_vals = sorted(hp_dict.keys())
-        means_cda = [hp_dict[hp].get("CDA", np.nan) for hp in hp_vals]
-        means_melo = [hp_dict[hp].get("MELO", np.nan) for hp in hp_vals]
 
-        if args.bootstrap > 0:
-            # Build asymmetric yerr arrays (shape 2×N)
-            cda_err = np.array(
-                [
-                    [
-                        means_cda[i] - ci_data.get(role, {}).get(hp_vals[i], {}).get("CDA", (np.nan, np.nan))[0]
-                        if "CDA" in ci_data.get(role, {}).get(hp_vals[i], {})
-                        else np.nan,
-                        ci_data.get(role, {}).get(hp_vals[i], {}).get("CDA", (np.nan, np.nan))[1]
-                        - means_cda[i]
-                        if "CDA" in ci_data.get(role, {}).get(hp_vals[i], {})
-                        else np.nan,
-                    ]
-                    for i in range(len(hp_vals))
-                ]
-            ).T  # shape (2,N)
-
-            melo_err = np.array(
-                [
-                    [
-                        means_melo[i] - ci_data.get(role, {}).get(hp_vals[i], {}).get("MELO", (np.nan, np.nan))[0]
-                        if "MELO" in ci_data.get(role, {}).get(hp_vals[i], {})
-                        else np.nan,
-                        ci_data.get(role, {}).get(hp_vals[i], {}).get("MELO", (np.nan, np.nan))[1]
-                        - means_melo[i]
-                        if "MELO" in ci_data.get(role, {}).get(hp_vals[i], {})
-                        else np.nan,
-                    ]
-                    for i in range(len(hp_vals))
-                ]
-            ).T
-        else:
-            cda_err = melo_err = None
+        categories = sorted({cat for hp in hp_vals for cat in hp_dict[hp].keys()})
+        means_by_cat = {cat: [hp_dict[hp].get(cat, np.nan) for hp in hp_vals] for cat in categories}
 
         make_bar_plot(
             role,
             hp_vals,
-            means_cda,
-            means_melo,
+            means_by_cat,
             args.q_max,
             args.out_dir,
-            cda_err,
-            melo_err,
         )
 
 

@@ -626,9 +626,7 @@ def regret(game: Game, mixture: torch.Tensor) -> torch.Tensor:
     try:
         result = game.regret(mixture)
         
-        # Handle NaN or Inf in the result
         if torch.is_tensor(result):
-            # Convert 0-d boolean tensors to Python bool to avoid ambiguity errors
             if torch.isnan(result).any().item() or torch.isinf(result).any().item():
                 print("Warning: NaN or Inf detected in regret calculation. Replacing with 1.0")
                 result = torch.nan_to_num(result, nan=1.0, posinf=1.0, neginf=0.0)
@@ -643,7 +641,7 @@ def regret(game: Game, mixture: torch.Tensor) -> torch.Tensor:
         # Return a fallback value
         if torch.is_tensor(mixture):
             return torch.tensor(0.01, device=mixture.device)
-        return 0.01
+        #return 0.01
 
 
 async def quiesce(
@@ -756,28 +754,28 @@ async def quiesce(
     unconfirmed_candidates.append(uniform_candidate)
     
 
-    #if game.is_role_symmetric:
-        # Build list of per-role global strategy indices
-      #  role_global_indices: List[List[int]] = []
-      #  g_idx = 0
-      #  for role_strats in game.strategy_names_per_role:
-      ##      role_global_indices.append(list(range(g_idx, g_idx + len(role_strats))))
-      #      g_idx += len(role_strats)
+    if game.is_role_symmetric:
+         #Build list of per-role global strategy indices
+        role_global_indices: List[List[int]] = []
+        g_idx = 0
+        for role_strats in game.strategy_names_per_role:
+            role_global_indices.append(list(range(g_idx, g_idx + len(role_strats))))
+            g_idx += len(role_strats)
 
-      #  import itertools
-      #  for combo in itertools.product(*role_global_indices):
-            # combo has one global index per role
-      #      mixture = torch.zeros(game.num_strategies, device=game.game.device)
-      #      support = set(combo)
-      #      for gi in combo:
-     #          mixture[gi] = 1.0  # pure
+        import itertools
+        for combo in itertools.product(*role_global_indices):
+             #combo has one global index per role
+            mixture = torch.zeros(game.num_strategies, device=game.game.device)
+            support = set(combo)
+            for gi in combo:
+               mixture[gi] = 1.0  # pure
 #
-     #       candidate = SubgameCandidate(
-     #           support=support,
-     #           restriction=list(support),
-    ##            mixture=mixture,
-    #        )
-    #        unconfirmed_candidates.append(candidate)
+            candidate = SubgameCandidate(
+                support=support,
+                restriction=list(support),
+                mixture=mixture,
+            )
+            unconfirmed_candidates.append(candidate)
     
     # Add pure MELO and pure non-MELO starting points
     if hasattr(game, 'strategy_names') and game.strategy_names:
@@ -943,7 +941,7 @@ async def quiesce(
     # Add other structured distributions (70/30, 60/40)
     for primary_strategy in range(game.num_strategies):
         if game.num_strategies > 1:
-            for primary_weight in [0.7, 0.6]:
+            for primary_weight in [0.9, 0.7, 0.6]:
                 if game.is_role_symmetric:
                     # Create role symmetric skewed mixture
                     skewed_mixture = create_role_symmetric_mixture(game, game.game.device)

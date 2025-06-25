@@ -52,7 +52,7 @@ class MELOSimulatorSampledArrival:
                  holding_period = 50,
                  lam_melo = 0.1,                # legacy fallback (kept for API)
                  lam_melo_mobi = 1e-3, 
-                 lam_melo_zi = 6e-3,
+                 lam_melo_zi = 6e-3, 
                  profile_order = None,
                  ):
 
@@ -228,9 +228,21 @@ class MELOSimulatorSampledArrival:
                             cda_proportion=params["cda_proportion"],
                             melo_proportion=params["melo_proportion"],
                         ))
-                # schedule first arrival for this strategic agent on MELO timeline
-                self.arrivals_melo[self.arrival_times_melo[self.arrival_index_melo].item()].append(strategic_agent_id)
-                self.arrival_index_melo += 1
+                # --------------------------------------------------------------
+                # Schedule first MELO wake-up using role-specific arrival stream
+                # --------------------------------------------------------------
+
+                if role_name == "MOBI":
+                    first_tick = self.arrival_times_mobi[self.arrival_index_mobi].item()
+                    self.arrival_index_mobi += 1
+                else:  # ZI
+                    first_tick = self.arrival_times_zi[self.arrival_index_zi].item()
+                    self.arrival_index_zi += 1
+
+                # Record mapping and enqueue first arrival
+                self.agent_roles[strategic_agent_id] = role_name
+                self.arrivals_melo[first_tick].append(strategic_agent_id)
+
                 strategic_agent_id += 1
 
         elif self.role_strategy_counts and self.role_names:
@@ -252,7 +264,10 @@ class MELOSimulatorSampledArrival:
                         params = self.strategy_params[strategy_name]
                         agent_shade = params.get("shade", shade)
 
-                        # Create appropriate agent type based on role
+                        # ------------------------------------------------------------------
+                        # Create agent *and* schedule first arrival using role-specific λ
+                        # ------------------------------------------------------------------
+
                         if role_name == "MOBI":
                             self.agents[strategic_agent_id] = (
                                 MeloAgent(
@@ -265,7 +280,8 @@ class MELOSimulatorSampledArrival:
                                     cda_proportion=params["cda_proportion"],
                                     melo_proportion=params["melo_proportion"],
                                 ))
-                        else:  # ZI
+
+                        else:  # ZI role
                             self.agents[strategic_agent_id] = (
                                 ZIAgent(
                                     agent_id=strategic_agent_id,
@@ -278,8 +294,11 @@ class MELOSimulatorSampledArrival:
                                     melo_proportion=params["melo_proportion"],
                                 ))
 
-                        # Record mapping
+                        # Record role mapping for efficient lookup during step()
                         self.agent_roles[strategic_agent_id] = role_name
+
+                        # Schedule first MELO wake-up for this strategic agent
+                        self.arrivals_melo[next_tick].append(strategic_agent_id)
 
                         strategic_agent_id += 1
                         
