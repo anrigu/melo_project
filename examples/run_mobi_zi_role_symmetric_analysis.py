@@ -144,12 +144,12 @@ else:
     device = torch.device("cpu")
     print("Using CPU for simulations")
 
-def run_role_symmetric_mobi_zi_egta(holding_periods=None):
+def run_role_symmetric_mobi_zi_egta(holding_periods=None, *, output_root="results/rsg_mobi_zi_egta", seed: int = 42):
     """
     Run EGTA with role symmetric games where both MOBI and ZI agents are strategic.
     """
-    num_strategic_mobi = 28
-    num_strategic_zi = 40
+    num_strategic_mobi = 10
+    num_strategic_zi = 15
 
 
     if holding_periods is None:
@@ -164,7 +164,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     
         sim_time = 10000  
         num_iterations = 1
-        batch_size = 100
+        batch_size = 40
         
         print(f"Running Role Symmetric EGTA with {num_strategic_mobi} strategic MOBI and {num_strategic_zi} strategic ZI agents")
         print(f"Holding period: {holding_period}")
@@ -175,39 +175,31 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         Strategy is which mechanism + shade 
         '''
         mobi_strategies = [
-            #"MOBI_0_100_shade100_500",  
-            #"MOBI_100_0_shade100_500",
-            "MOBI_0_100_shade0_0",  #MOBIs never shade in the MELO 
-            #"MOBI_100_0_shade250_500",
-            "MOBI_100_0_shade0_250",
-            #"MOBI_100_0_shade0_500",
-            #"MOBI_100_0_shade0_1000"
-
+            "MOBI_0_100_shade0_0",  #MOBI goes to M-ELO and play shade [0, 0]
+            "MOBI_100_0_shade250_500",#MOBI goes to CDA and plays shade [250, 500]
+           # "MOBI_100_0_shade0_500",
         ]
 
         
         
         zi_strategies = [
-           # "ZI_0_100_shade100_500",  
-            #"Zi_100_0_shade100_500", 
-            #"ZI_0_100_shade250_500",  
-            "ZI_100_0_shade250_500",
+            "ZI_0_100_shade250_500", #ZI goes to M-ELO and plays [250, 500]
+            "ZI_100_0_shade250_500", #ZI goes to CDA and plays [250, 500]
             #"ZI_0_100_shade0_500",
            # "ZI_100_0_shade0_500",
-            #"ZI_100_0_shade0_1000",
-            #"ZI_0_100_shade0_1000",
-
         ]
-        
+        n_workers = int(os.environ.get("SLURM_CPUS_ON_NODE", 8))
+
+
         simulator = MeloSimulator(
             num_strategic_mobi=num_strategic_mobi, 
             num_strategic_zi=num_strategic_zi,
             sim_time=sim_time,
             lam=6e-3,
             lam_r=6e-3,
-            lam_melo=1e-3,   
-            lam_melo_mobi = 1e-3, #arrival rate mobis 
-            lam_melo_zi = 6e-3, #arrival rate strategic zis
+            lam_melo=1e-3,  
+            lam_melo_mobi = 1e-3, #mobi arrival 
+            lam_melo_zi = 6e-3,    #strategic ZI arrival
             mean=1e6,      
             r=0.001,              
             shock_var=1e6,       
@@ -217,11 +209,13 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             holding_period=holding_period,       
             num_background_zi=0,  
             num_background_hbl=0, 
-            reps=10,
+            reps=10000,
             mobi_strategies=mobi_strategies,
             zi_strategies=zi_strategies,
-            log_profile_details=False,
-            parallel=True
+            log_profile_details=True,
+            num_workers=n_workers,
+            parallel=False,
+            #price_based_updates=False
             #force_symmetric=True
         )
         
@@ -237,39 +231,39 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             print(f"{role_name} strategies:")
             for strategy in strategies:
                 params = simulator.strategy_params[strategy]
-                print(f"  {strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
+                print(f"{strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
         
         print(simulator.get_strategies())
         scheduler = DPRScheduler(
             strategies=simulator.get_strategies(), 
             num_players=simulator.get_num_players(),
             batch_size=batch_size,
-            #reduction_size_per_role={"MOBI": 2, "ZI": 2},  
-            seed=42,
+            reduction_size_per_role={"MOBI": 4, "ZI": 4},  
+            seed=seed,
             role_names=role_names,
             num_players_per_role=num_players_per_role,
             strategy_names_per_role=strategy_names_per_role,
-            subgame_size= len(simulator.get_strategies())
+            subgame_size=  len(simulator.get_strategies())
+            
         )
-        scheduler.max_profiles_per_subgame = 1000
-        # Emit at most one profile per sub-game in each scheduler batch to
-        # guarantee diverse coverage in the very first iteration.
-        scheduler.profiles_per_subgame = 8
-
+        scheduler.max_profiles_per_subgame = 30
         
+        scheduler.profiles_per_subgame = 0
 
-        # Instantiate EGTA *after* warm-up so the observations are loaded first
+        egta_output_dir = os.path.join(output_root, f"holding_period_{holding_period}_2_strategy")
+        os.makedirs(egta_output_dir, exist_ok=True)
+
         egta = EGTA(
             simulator=simulator,
             scheduler=scheduler,
             device=device,
-            output_dir=f"results_test/rsg_mobi_zi_egta/holding_period_{holding_period}",
-            max_profiles=500,
-            seed=42,
-        )
+            output_dir=egta_output_dir,
+            max_profiles=600, 
+            seed=seed
+        )    
 
         
-        egta.always_complete_deviations = True
+        egta.always_complete_deviations = False 
         
         print("Running Role Symmetric EGTA...")
         start_time = time.time()
@@ -281,9 +275,9 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             quiesce_kwargs={
                 'num_iters': 1,
                 'num_random_starts': 0,
-                'regret_threshold': 1e-3,
+                'regret_threshold': 1e-2,
                 'dist_threshold': 1e-2,
-                'solver': 'replicator',
+                'solver': 'replicator', 
                 'solver_iters': 3000,
                 'restricted_game_size': len(simulator.get_strategies())
             }
@@ -293,11 +287,25 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
         
      
         if egta.equilibria:
+            # Preserve the raw list *before* any duplicate filtering so it
+            # can be written out later for full reproducibility.
+            egta.all_equilibria = egta.equilibria.copy()
+
             before = len(egta.equilibria)
             egta.equilibria = unique_equilibria(egta.equilibria, tol=.01)
             after = len(egta.equilibria)
             if after < before:
                 print(f"Removed {before-after} numerically identical equilibria (now {after}).")
+
+            def _regret_val(pair):
+                """Return regret as a plain float for sorting."""
+                mix, reg = pair
+                return reg.item() if hasattr(reg, "item") else float(reg)
+
+            egta.equilibria.sort(key=_regret_val)  # in-place sort by regret
+            print(
+                f"Top equilibrium after sort: regret={_regret_val(egta.equilibria[0]):.4g}"
+            )
         
        
 
@@ -371,7 +379,7 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             # Test the coupling: show that payoffs depend on full joint state
             if len(egta.equilibria) > 0:
                 test_mixture = egta.equilibria[0][0]
-                print(f"\n🔗 Verifying payoff coupling (payoffs depend on full joint state):")
+                print(f"\nVerifying payoff coupling (payoffs depend on full joint state):")
                 
                 # Compute payoffs for the equilibrium mixture
                 dev_payoffs = game.deviation_payoffs(test_mixture)
@@ -482,10 +490,10 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
             "simulator_params": simulator.strategy_params
         }
         
-        print(f"\n💾 Saving results for holding period {holding_period}...")
+        print(f"\n Saving results for holding period {holding_period}...")
         results_dir = save_comprehensive_rsg_results(
             egta, game, welfare_data, labels, experiment_params, 
-            output_dir=f"results/rsg_mobi_zi_egta/holding_period_{holding_period}"
+            output_dir=os.path.join(output_root, f"holding_period_{holding_period}")
         )
         
         # Determine equilibrium type for summary
@@ -524,8 +532,12 @@ def run_role_symmetric_mobi_zi_egta(holding_periods=None):
     print("ROLE SYMMETRIC CROSS-PERIOD ANALYSIS SUMMARY")
     print(f"{'='*60}")
     
-    summary_file = "results/rsg_mobi_zi_egta/cross_period_summary.json"
-    os.makedirs("results/rsg_mobi_zi_egta", exist_ok=True)
+    summary_file = "test_run/cross_period_summary.json"
+    # Write the cross-period summary inside the configured root so all outputs
+    # stay together.
+    summary_root = output_root
+    os.makedirs(summary_root, exist_ok=True)
+    summary_file = os.path.join(summary_root, "cross_period_summary.json")
     with open(summary_file, 'w') as f:
         json.dump({
             "analysis_timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
@@ -618,6 +630,23 @@ def save_comprehensive_rsg_results(egta, game, welfare_data, labels, experiment_
     with open(eq_file, 'w') as f:
         json.dump(equilibria_detailed, f, indent=2)
     print(f"Saved detailed equilibria to {eq_file}")
+
+    
+    simple_eq_path = os.path.join(results_dir, "equilibria.json")
+    with open(simple_eq_path, "w") as f:
+        json.dump(
+            [
+                {
+                    "mixture": mix.tolist(),
+                    "regret": float(reg if not hasattr(reg, "item") else reg.item()),
+                }
+                # Use the original (pre-deduplication) list if available
+                for mix, reg in getattr(egta, "all_equilibria", egta.equilibria)
+            ],
+            f,
+            indent=2,
+        )
+    print(f"Saved simple equilibria list to {simple_eq_path}")
     
     welfare_analysis = {
         "welfare_data": welfare_data,
@@ -749,10 +778,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run role-symmetric MOBI×ZI EGTA experiment(s).")
     parser.add_argument("--holding-period", type=int, default=None,
                         help="Single holding period to analyse. Overrides --holding-periods if provided.")
-    parser.add_argument("--holding-periods", type=int, nargs="*", default=[0],
+    parser.add_argument("--holding-periods", type=int, nargs="*", default=[0,10,100],
                         help="Space-separated list of holding periods to analyse in sequence.")
-    parser.add_argument("--output-root", type=str, default="results/new_simulator",
+    parser.add_argument("--output-root", type=str, default="results_1_run/rsg_mobi_zi_egta_test_large_strats",
                         help="Root directory where results will be stored.")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed passed to DPRScheduler and EGTA for reproducibility.")
     args = parser.parse_args()
 
     # Derive list of periods to run
@@ -763,7 +794,7 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_root, exist_ok=True)
 
-    game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta(periods)
+    game, eq_mixture, egta, welfare_data, labels, experiment_params = run_role_symmetric_mobi_zi_egta(periods, output_root=args.output_root, seed=args.seed)
 
   
     if len(periods) == 1 and eq_mixture is not None:

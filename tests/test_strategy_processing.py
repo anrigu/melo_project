@@ -3,9 +3,17 @@ import os, sys, pathlib
 project_root = pathlib.Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+import importlib
+
 
 import pytest
 from marketsim.egta.simulators.melo_wrapper import MeloSimulator
+from marketsim.simulator import    melo_simulator
+import inspect
+
+# Dynamically import the module (keeps test robust to package layout changes)
+msim = importlib.import_module("marketsim.simulator.melo_simulator")
+MELOSim = msim.MELOSimulatorSampledArrival
 
 @pytest.fixture
 def strategy_lists():
@@ -119,3 +127,142 @@ def test_simulator_holding_period_and_profile(strategy_lists):
     # Profile key stored in observation should equal the sorted version we expect
     expected_key = tuple(sorted(profile))
     assert obs.profile_key == expected_key 
+
+
+# ---------------------------------------------------------------------------
+# Helper: breadth-first search for an attribute in a (potentially nested) object
+# ---------------------------------------------------------------------------
+def find_attr(obj, attr_name, max_depth=4):
+    """Return list of (path, value) pairs where `attr_name` was found."""
+    seen = set()
+    queue = [([], obj, 0)]
+    hits = []
+
+    while queue:
+        path, cur, depth = queue.pop(0)
+        if id(cur) in seen or depth > max_depth:
+            continue
+        seen.add(id(cur))
+
+        if hasattr(cur, attr_name):
+            hits.append((".".join(path) or "<root>", getattr(cur, attr_name)))
+
+        # Recurse into *public* attributes & items that look like objects
+        for name, member in inspect.getmembers(cur):
+            if name.startswith("_"):
+                continue
+            # skip callables (methods/functions) and basic types
+            if callable(member) or isinstance(member, (int, float, str, bytes, bool, tuple, list, dict, set)):
+                continue
+            queue.append((path + [name], member, depth + 1))
+
+    return hits
+
+
+# ---------------------------------------------------------------------------
+# Fixture with a *distinctive* holding period so we can find it later
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def configured_sim():
+    hp = 37          # unusual value to make the trace unambiguous
+    sim = MeloSimulator(
+        num_strategic_mobi=1,
+        num_strategic_zi=1,
+        sim_time=1,
+        lam=1e-3,
+        lam_r=1e-3,
+        lam_melo=1e-4,
+        mean=1000,
+        r=0.0,
+        shock_var=1.0,
+        q_max=1,
+        pv_var=1.0,
+        shade=[10, 30],
+        holding_period=hp,
+        num_background_zi=0,
+        num_background_hbl=0,
+        reps=1,
+        mobi_strategies=["MOBI_100_0_shade0_100"],
+        zi_strategies=["ZI_100_0_shade0_100"],
+        parallel=False,
+    )
+    return sim, hp
+
+
+# ---------------------------------------------------------------------------
+# Actual test
+# ---------------------------------------------------------------------------
+def test_holding_period_reaches_engine(configured_sim):
+    sim, hp = configured_sim
+
+    # Quick sanity check at wrapper level (already covered in your earlier test)
+    assert sim.holding_period == hp
+
+    # Now walk the object graph looking for *any* attribute named 'holding_period'
+    hits = find_attr(sim, "holding_period")
+
+    assert hits, "Could not locate `holding_period` anywhere underneath MeloSimulator"
+
+    # Every occurrence we find should match the value we injected
+    mismatches = [(p, v) for p, v in hits if v != hp]
+    assert not mismatches, f"`holding_period` mismatches found: {mismatches}"
+
+    # Optional: print locations when run with -s for easier debugging
+    for p, v in hits:
+        print(f"[trace] holding_period at {p or '<root>'} = {v}")
+
+
+
+def find_attr(obj, attr_name, max_depth=3):
+    """Return list of (dotted_path, value) where `attr_name` occurs."""
+    queue = [([], obj, 0)]
+    seen, hits = set(), []
+
+    while queue:
+        path, cur, depth = queue.pop(0)
+        if id(cur) in seen or depth > max_depth:
+            continue
+        seen.add(id(cur))
+
+        if hasattr(cur, attr_name):
+            hits.append((".".join(path) or "<root>", getattr(cur, attr_name)))
+
+        for name, member in inspect.getmembers(cur):
+            if name.startswith("_") or callable(member):
+                continue
+            if isinstance(member, (int, float, str, bytes, bool, tuple, list, dict, set)):
+                continue
+            queue.append((path + [name], member, depth + 1))
+    return hits
+
+
+# ---------------------------------------------------------------------------
+# Main test (robust version that doesn't assume attribute at root)
+# ---------------------------------------------------------------------------
+def test_holding_period_propagation_melo_simulator():
+    HP = 91  # eye-catching value to trace
+
+    sim = MELOSim(
+        num_background_agents=0,
+        sim_time=1,
+        num_zi=0,
+        num_hbl=0,
+        num_strategic=0,
+        strategies=[], strategy_counts={}, strategy_params={},
+        lam=1e-3, mean=1000, r=0.0, shock_var=1.0,
+        q_max=1, pv_var=1.0, shade=[10, 30],
+        holding_period=HP,
+        lam_r=1e-3, lam_melo=1e-4,
+    )
+
+    # 1) top-level simulator keeps the value
+    assert sim.holding_period == HP
+
+    # 2) find *any* occurrence inside MeloMarket
+    hits = find_attr(sim.meloMarket, "holding_period", max_depth=2)
+    assert hits, "No attribute named 'holding_period' found in MeloMarket tree"
+    assert all(v == HP for _p, v in hits), f"Inconsistent values found: {hits}"
+
+    # Optional: show trace with  pytest -s
+    # for p, v in hits:
+    #     print(f"[trace] {p or '<root>'}.holding_period = {v}")

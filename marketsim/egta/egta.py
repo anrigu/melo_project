@@ -283,9 +283,16 @@ class EGTA:
 
                 if self.game is None:
                     logger.info("    • building initial Game from data")
-                    self.game = Game.from_payoff_data(new_rows, device=self.device)
+                    # Skip z-score normalisation so small absolute payoff differences between
+                    # holding-period experiments are preserved.
+                    self.game = Game.from_payoff_data(
+                        new_rows,
+                        device=self.device,
+                        normalize_payoffs=False,
+                    )
                 else:
                     logger.info("    • updating Game with new data")
+                    # Preserve raw payoff scale when extending the empirical game
                     self.game.update_with_new_data(new_rows)
 
                 self.scheduler.update(self.game)
@@ -603,7 +610,7 @@ class EGTA:
         if full_game.is_role_symmetric:
             # For role symmetric games, create reduced version by scaling payoffs
             # The underlying RSG should handle player reduction appropriately
-            return full_game  # RSG already handles this internally
+            return full_game  
         else:
             # For symmetric games, use the original reduction logic
             scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)

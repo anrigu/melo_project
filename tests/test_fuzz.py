@@ -4,17 +4,12 @@ These expand coverage beyond deterministic unit tests, checking that
 core invariants hold under randomly-generated games and larger sizes.
 """
 
-# ---------------------------------------------------------------------------
-# Boilerplate – ensure import path includes project root
-# ---------------------------------------------------------------------------
 import pathlib, sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# ---------------------------------------------------------------------------
-# Std / 3rd-party imports
-# ---------------------------------------------------------------------------
+
 import pytest
 import torch
 import numpy as np

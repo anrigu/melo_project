@@ -20,8 +20,7 @@ import math
 try:
     torch.multiprocessing.set_sharing_strategy("file_system")
 except (ImportError, AttributeError):
-    # Older PyTorch versions (<1.8) or exotic builds may not expose the API;
-    # in those cases we proceed with default settings.
+
     pass
 import time
 from marketsim.egta.egta import Observation      # path you placed the patch in
@@ -39,13 +38,9 @@ warnings.filterwarnings(
 )
 
 
+# Helper for parallel execution keep top level to pickle
 
-# ---------------------------------------------------------------------------
-# Helper for parallel execution (must be top-level to be picklable)
-# ---------------------------------------------------------------------------
 
-# Base kwargs broadcast once per worker to avoid pickling overhead for every
-# single repetition.
 _BASE_KWARGS: Optional[dict] = None
 
 
@@ -55,24 +50,37 @@ def _init_worker(base_kwargs):
     _BASE_KWARGS = base_kwargs
 
 
-def _run_melo_single_rep(seed: int):
-    """Run one MELO simulation repetition and return the `values` dict."""
-    if _BASE_KWARGS is None:
-        raise RuntimeError("Worker not initialised with base kwargs")
+def _run_melo_single_rep(arg):
+    """Run one MELO simulation repetition.
 
-    # local seeding
+    Accepts either:
+    1) a tuple ``(seed, sim_kwargs)`` – the modern and test-friendly path where
+       all per-simulation parameters are supplied directly, or
+    2) a bare integer ``seed`` – legacy/multiprocessing fallback where kwargs
+       are provided once via the global `_BASE_KWARGS` set by `_init_worker`.
+    """
+
+    if isinstance(arg, tuple):
+        seed, sim_kwargs = arg
+    else:
+        seed = arg
+        if _BASE_KWARGS is None:
+            raise RuntimeError("Worker not initialised with base kwargs")
+        sim_kwargs = _BASE_KWARGS
+
+    # Local seeding for determinism
     random.seed(seed)
     np.random.seed(seed & 0xFFFF_FFFF)
 
-    # No per-repetition prints – they dominated runtime when reps is large
-    sim = MELOSimulatorSampledArrival(**_BASE_KWARGS)
+    # Run one MELO repetition (suppress verbose per-rep logging)
+    sim = MELOSimulatorSampledArrival(**sim_kwargs)
     sim.run()
    
     results_tuple = sim.end_sim()
-    raw_values = results_tuple[0]      # payoff dict keyed by agent id ⇒ number/torch.Tensor
-    midpoints  = results_tuple[4]      # list[float] collected each tick
+    raw_values = results_tuple[0] # payoff dict keyed by agent id -> number/torch.Tensor
+    midpoints  = results_tuple[4]      
 
-    # --- compute simple midpoint statistics for this repetition ---
+
     import numpy as _np
     if midpoints:
         arr = _np.asarray(midpoints, dtype=float)
@@ -111,7 +119,7 @@ class MeloSimulator(Simulator):
                 mean: float = 1e6,
                 r: float = 0.05,
                 shock_var: float = 1e4,
-                q_max: int = 15,
+                q_max: int = 10,
                 pv_var: float = 5e6,
                 shade: Optional[List[float]] = None,
                 eta: float = 0.5,
@@ -123,7 +131,7 @@ class MeloSimulator(Simulator):
                 # Background agents (non-strategic)
                 num_background_zi: int = 0,
                 num_background_hbl: int = 0,
-                reps: int = 50,
+                reps: int = 10000,
                 # Role-specific strategies
                 mobi_strategies: Optional[List[str]] = None,
                 zi_strategies: Optional[List[str]] = None,
@@ -415,7 +423,7 @@ class MeloSimulator(Simulator):
 
                 values_per_rep = list(
                     tqdm(
-                        pool.map(_run_melo_single_rep, seeds, chunksize=chunk),
+                        pool.map(_run_melo_single_rep, iter_args, chunksize=chunk),
                         total=self.reps,
                         desc="   reps",
                         unit="rep",
@@ -429,7 +437,7 @@ class MeloSimulator(Simulator):
             # serial fall-back: reuse the same simulator instance setup
             _init_worker(base_kwargs)
             values_per_rep = []
-            for out in tqdm(map(_run_melo_single_rep, seeds),
+            for out in tqdm(map(_run_melo_single_rep, iter_args),
                             total=self.reps,
                             desc="   reps",
                             unit="rep",

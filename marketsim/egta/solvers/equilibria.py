@@ -130,13 +130,10 @@ def role_aware_normalize(mixture: torch.Tensor, game: Game) -> torch.Tensor:
                 role_slice = slice(global_idx, global_idx + num_role_strats)
                 role_part = normalized[role_slice]
                 
-                # Clamp to non-negative
                 role_part = torch.clamp(role_part, min=1e-10)
                 
-                # Normalise only if the role is not already (almost) pure
                 role_sum = role_part.sum()
                 if (role_sum < 1e-12) or (1.0 - 1e-12 < role_sum < 1.0 + 1e-12):
-                    # already zero mass or already sums to one – leave untouched
                     pass
                 else:
                     normalized[role_slice] = role_part / role_sum
@@ -167,11 +164,14 @@ def multi_population_replicator_step(mixture: torch.Tensor, game: Game, offset: 
     payoffs = torch.nan_to_num(game.deviation_payoffs(mixture), nan=0.0)
 
     # For the multiplicative update rule, payoffs must be positive.
-    min_payoff = torch.min(payoffs)
+    #min_payoff = torch.min(payoffs)
     #shift = -min_payoff + 1 if min_payoff < 0 else 0
-    shift = max(-min_payoff + 1e-9, 0)
-    shifted_payoffs = payoffs + shift 
-    shifted_payoffs = payoffs + shift
+    #shift = max(-min_payoff + 1e-9, 0)
+    #shifted_payoffs = payoffs + shift 
+    min_p  = payoffs.min()
+    range_p = (payoffs.max() - min_p).clamp(min=1e-12)   # avoid /0
+    shifted_payoffs = (payoffs - min_p) / range_p        # now in [0,1]
+
 
     next_mixture = mixture.clone()
     global_idx = 0
@@ -193,6 +193,8 @@ def multi_population_replicator_step(mixture: torch.Tensor, game: Game, offset: 
         
         global_idx += num_role_strats
 
+    
+    next_mixture = role_aware_normalize(next_mixture, game)
     return next_mixture, None  # No regrets to return in this version.
 
 
@@ -453,6 +455,8 @@ def replicator_dynamics(game: Game,
     prev_mixture = None
     for i in range(iters):
         new_mixture, _ = multi_population_replicator_step(mixture.squeeze(1) if is_vector else mixture, game)
+        
+
         if is_vector:
             new_mixture = new_mixture.reshape(-1, 1)
 
@@ -1159,7 +1163,7 @@ async def quiesce(
 
             # ----------------------------------------------------------
             # Build the *restriction* list and make sure we haven't
-            # already solved it.  (This was dropped in previous edit.)
+            # already solved it. 
             # ----------------------------------------------------------
             restriction = list(new_support)
             restriction_set = frozenset(restriction)
@@ -1474,9 +1478,36 @@ async def test_candidate(
     point_regret = reg_raw.item() if torch.is_tensor(reg_raw) else float(reg_raw)
     if verbose:
         print(f"[candidate] initial regret = {point_regret:.3e}")
-    if point_regret > regret_threshold:
+
+    # ------------------------------------------------------------------
+    # Convert the raw regret into a *relative* figure by dividing by a
+    # characteristic payoff scale (median absolute payoff).  This makes the
+    # fixed regret_threshold invariant to the units of the underlying game.
+    # ------------------------------------------------------------------
+    try:
+        if hasattr(game.game, "rsg_payoff_table") and game.game.rsg_payoff_table is not None:
+            pay_tbl = game.game.rsg_payoff_table
+        elif hasattr(game.game, "payoff_table") and game.game.payoff_table is not None:
+            pay_tbl = game.game.payoff_table
+        else:
+            pay_tbl = None
+
+        if pay_tbl is not None:
+            pay_scale = float(torch.nanmedian(torch.abs(pay_tbl)))
+            if pay_scale < 1e-9 or not np.isfinite(pay_scale):
+                pay_scale = 1.0
+        else:
+            pay_scale = 1.0
+    except Exception:
+        pay_scale = 1.0
+
+    scaled_regret = point_regret / pay_scale
+
+    if scaled_regret > regret_threshold:
         if verbose:
-            print(f"  ↳ {point_regret:.3e} > {regret_threshold:.3e} → reject immediately")
+            print(
+                f"  ↳ scaled regret {scaled_regret:.3e} > {regret_threshold:.3e} → reject immediately"
+            )
         return False, []
 
     # ------------------------------------------------------------

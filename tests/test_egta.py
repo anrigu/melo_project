@@ -35,7 +35,9 @@ try:
 except (RuntimeError, ValueError):
     # This may fail if it's already been set, which is fine.
     pass
-
+import asyncio
+from marketsim.egta.core.game import Game as EGTA_Game
+from marketsim.egta.solvers.equilibria import quiesce
 # ---------------------------------------------------------------------------
 # Game Factory Helpers
 # ---------------------------------------------------------------------------
@@ -96,7 +98,6 @@ def create_matching_pennies_game():
 
 def create_brinkman_game():
     """Factory for a 3x3 game with multiple equilibria."""
-    # Payoff matrix where pure R is the unique strict Nash equilibrium.
     payoff_matrix = torch.tensor([[0., 0., 0.],
                                  [0., 1., 0.],
                                  [0., 0., 3.]], dtype=torch.float32)
@@ -121,9 +122,7 @@ def create_brinkman_game():
 
     return BrinkmanMock()
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+
 
 def test_dpr_scaling():
     """Verify DPR scaling for role-symmetric games is correct."""
@@ -149,13 +148,15 @@ def test_rps_equilibrium():
     """Replicator dynamics finds the 1/3-1/3-1/3 RPS equilibrium."""
     game = create_rps_game()
     eq = replicator_dynamics(game, iters=5000)
-    assert torch.allclose(eq, torch.tensor([1/3, 1/3, 1/3]), atol=1e-2)
+    print(f"found eq {eq}")
+    assert torch.allclose(eq, torch.tensor([1/3, 1/3, 1/3]), atol=1e-3)
 
 def test_matching_pennies_equilibrium():
     """Replicator dynamics finds the 50/50 MP equilibrium."""
     game = create_matching_pennies_game()
     eq = replicator_dynamics(game, iters=5000)
-    assert torch.allclose(eq, torch.tensor([0.5, 0.5, 0.5, 0.5]), atol=1e-2)
+    print(f"found eq {eq}")
+    assert torch.allclose(eq, torch.tensor([0.5, 0.5, 0.5, 0.5]), atol=1e-3)
 
 def test_quiesce_finds_all_equilibria():
     """QUIESCE finds all 4 pure and mixed equilibria in a hard game."""
@@ -172,14 +173,14 @@ def test_quiesce_finds_all_equilibria():
         solver_iters=1000,
         verbose=False,
     )
-    print(equilibria)
+    print(f"found eq {equilibria}")
     pure_R = torch.tensor([0., 0., 1.])
 
    #if len(equilibria) == 0:
        # eq = replicator_dynamics(game, iters=5000)
        # equilibria = [(eq, 0.0)]
 
-    assert any(torch.allclose(eq_mix, pure_R, atol=1e-2) for eq_mix, _ in equilibria) 
+    assert any(torch.allclose(eq_mix, pure_R, atol=1e-3) for eq_mix, _ in equilibria) 
 
 # ---------------------------------------------------------------------------
 # Incomplete-matrix robustness test
@@ -203,7 +204,7 @@ def test_replicator_handles_nan_payoffs():
 
     game = IncompleteGame()
     result = replicator_dynamics(game, iters=200)
-    # Result should be a valid probability vector without NaNs
+
     assert torch.isfinite(result).all()
     assert abs(result.sum().item() - 1.0) < 1e-6 
 
@@ -211,7 +212,7 @@ def test_replicator_handles_nan_payoffs():
 # Role-symmetric & EGTA smoke-tests
 # ─────────────────────────────────────────────────────────────
 
-# ---------- helper: deterministic simulator ------------------
+
 class TinyRSGSimulator(Simulator):
     """
     1 MOBI vs 1 ZI, each with 2 strategies.
@@ -368,19 +369,16 @@ def test_quiesce_finds_both_equilibria():
     """QUIESCE on the tiny game should return both coordination equilibria."""
     sim = TinyRSGSimulator()
 
-    # Build payoff data with all pure profiles AND single-deviator profiles
     payoff_data = []
     for mobi in ["CDA", "MELO"]:
         for zi in ["CDA", "MELO"]:
-            # pure profile
             payoff_data.extend(sim.simulate_profiles([_build_pure_profile(mobi, zi)]))
 
-            # single-deviator in MOBI (switch strategy)
             alt_mobi = "MELO" if mobi == "CDA" else "CDA"
             prof = [("MOBI", alt_mobi), ("MOBI", mobi), ("ZI", zi), ("ZI", zi)]
             payoff_data.extend(sim.simulate_profiles([prof]))
 
-            # single-deviator in ZI (switch strategy)
+            
             alt_zi = "MELO" if zi == "CDA" else "CDA"
             prof2 = [("MOBI", mobi), ("MOBI", mobi), ("ZI", alt_zi), ("ZI", zi)]
             payoff_data.extend(sim.simulate_profiles([prof2]))
@@ -400,13 +398,13 @@ def test_quiesce_finds_both_equilibria():
         verbose=False,
     )
 
-    #print(equilibria)
+    print(equilibria)
 
    
     # Require that at least the high-payoff CDA equilibrium is present; MELO may
     # be missed depending on stochastic starts.
     target = _pure_mixture(True)  # CDA equilibrium
-    assert any(torch.allclose(eq_mix, target, atol=1e-2) for eq_mix, _ in equilibria)
+    assert any(torch.allclose(eq_mix, target, atol=1e-3) for eq_mix, _ in equilibria)
 
 # ---------- 3. unique_equilibria deduplication -----------------------------
 
@@ -581,24 +579,61 @@ def _build_large_random_game(num_roles=3, strats_per_role=5, players_per_role=3,
     return Game(rsg)
 
 
-# def test_large_rsg_quiesce_smoke():
-#     """Ensure QUIESCE returns at least one equilibrium on a moderate-size game."""
-#     game = _build_large_random_game()
-#
-#     eqs = quiesce_sync(
-#         game,
-#         full_game=game,
-#         num_iters=100,
-#         num_random_starts=10,
-#         regret_threshold=1e-3,
-#         dist_threshold=1e-3,
-#         restricted_game_size=6,
-#         solver="replicator",
-#         solver_iters=800,
-#         verbose=False,
-#     )
-#
-#     assert len(eqs) >= 1
+def test_large_rsg_quiesce_smoke():
+     """Ensure QUIESCE returns at least one equilibrium on a moderate-size game
+     and that the equilibria reported are role-normalised and unique."""
+     game = _build_large_random_game()
+
+     eqs = quiesce_sync(
+        game,
+         full_game=game,
+         num_iters=100,
+         num_random_starts=10,
+         regret_threshold=1e-3,
+         dist_threshold=1e-3,
+         restricted_game_size=6,
+         solver="replicator",
+         solver_iters=800,
+         verbose=False,
+     )
+     print(f"raw equilibria found: {len(eqs)} → {eqs}!")
+ 
+     # ------------------------------------------------------------------
+     # Post-process: deduplicate and sanity-check mixtures
+     # ------------------------------------------------------------------
+     eqs_unique = unique_equilibria_local(eqs, tol=1e-3)
+     print(f"{len(eqs_unique)} unique equilibria after deduplication")
+
+     # Each mixture should be properly role-normalised (each role sums to 1)
+     num_roles = len(game.role_names)
+     for mix, _ in eqs_unique:
+         # Global normalisation: should sum to number of roles
+         assert torch.allclose(mix.sum(), torch.tensor(float(num_roles)), atol=1e-4), (
+             "Mixture does not sum to the expected total probability mass")
+
+         # Per-role normalisation
+         start = 0
+         for strat_list in game.strategy_names_per_role:
+             end = start + len(strat_list)
+             role_slice = mix[start:end]
+             assert torch.allclose(role_slice.sum(), torch.tensor(1.0), atol=1e-4), (
+                 "Role sub-vector is not a valid probability distribution")
+             start = end
+
+         # ------------------------------------------------------------------
+         #   Validate equilibrium condition – computed regret must be small
+         # ------------------------------------------------------------------
+         dev = game.deviation_payoffs(mix, ignore_incomplete=True)
+         # All deviation payoffs must be finite (no NaNs): otherwise the profile
+         # cannot be verified as an equilibrium of the *full* game.
+         assert torch.isfinite(dev).all(), "Deviation payoff contains NaN/Inf – incomplete data for this mixture"
+
+         computed_regret = (dev.max() - (mix * dev).sum()).item()
+         print(f"eq mixture support={int((mix>1e-3).sum())}, regret={computed_regret:.2e}")
+         assert computed_regret < 1e-3, "Reported equilibrium has regret above tolerance when recomputed"
+
+     # Finally, ensure we kept at least one equilibrium
+     assert len(eqs_unique) >= 1
 
 # ---------------------------------------------------------------------------
 # Additional rigorous tests inspired by quiesce_old
@@ -625,7 +660,7 @@ def test_quiesce_finds_all_brinkman_equilibria():
         torch.tensor([0.0, 0.0, 1.0]),
     ]
     for target in expected:
-        assert any(torch.allclose(eq_mix, target, atol=1e-2) for eq_mix, _ in equilibria)
+        assert any(torch.allclose(eq_mix, target, atol=1e-3) for eq_mix, _ in equilibria)
 
 def test_equilibrium_support_size():
     """Check that the support size of equilibria matches expectations (RPS should be fully mixed)."""
@@ -635,9 +670,7 @@ def test_equilibrium_support_size():
         support = (mix > 1e-2).sum().item()
         assert support == 3  # RPS equilibrium should be fully mixed
 
-import asyncio
-from marketsim.egta.core.game import Game as EGTA_Game
-from marketsim.egta.solvers.equilibria import quiesce
+
 
 def test_quiesce_async_and_sync_consistency():
     """Test that async and sync quiesce return the same number of equilibria."""
@@ -667,7 +700,7 @@ def test_backup_restriction_trigger():
             self.num_players_per_role = torch.tensor([2])
             self.game = self
             self.device = torch.device("cpu")
-            self.num_players = 2  # Two players in the game
+            self.num_players = 2  
             self.num_actions = 3
 
 
@@ -684,9 +717,62 @@ def test_backup_restriction_trigger():
         num_iters=30,
         regret_threshold=1e-2,
         dist_threshold=1e-3,
-        restricted_game_size=2,  # Force small subgames
+        restricted_game_size=2, 
         solver="replicator",
         solver_iters=500,
-        verbose=False,
+        verbose=True,
     )
+    print(f"equilibria {equilibria}")
     assert len(equilibria) >= 1
+
+def create_param_coord_game(theta: float):
+    """
+    2-strategy coordination game with payoffs that depend on θ ∈ [0,1].
+
+                Opponent
+                 A     B
+        A   (θ , θ)  (0 , 0)
+    Ply B   (0 , 0)  (1-θ,1-θ)
+
+    • If θ < 0.5  ⇒ unique pure Nash is (B,B)      → mixture [0, 1].
+    • If θ > 0.5  ⇒ unique pure Nash is (A,A)      → mixture [1, 0].
+    • If θ = 0.5  ⇒ both pure profiles are equilibria.
+    """
+    assert 0.0 <= theta <= 1.0, "θ must be in [0,1]"
+    payoff_matrix = torch.tensor(
+        [[theta,       0.0],
+         [0.0,   1.0 - theta]],
+        dtype=torch.float32,
+    )
+
+    class CoordMock:
+        def __init__(self):
+            self.is_role_symmetric = True
+            self.role_names = ["Player"]
+            self.strategy_names_per_role = [["A", "B"]]
+            self.num_players_per_role = torch.tensor([2])
+            self.num_strategies = 2
+            self.game   = self           # API compatibility
+            self.device = torch.device("cpu")
+
+        def deviation_payoffs(self, mixture):
+            return payoff_matrix @ mixture
+
+        def regret(self, mixture):
+            pay = self.deviation_payoffs(mixture)
+            return (torch.max(pay) - (mixture @ pay)).item()
+
+    return CoordMock()
+
+def test_parameterised_coordination_game():
+    """Equilibrium should switch from (B,B) to (A,A) as θ crosses 0.5."""
+    thetas   = [0.2, 0.8]                    # below and above the cutoff
+    expected = [torch.tensor([0.0, 1.0]),    # (B,B) mixture
+                torch.tensor([1.0, 0.0])]    # (A,A) mixture
+
+    for θ, target in zip(thetas, expected):
+        game   = create_param_coord_game(θ)
+        eq_mix = replicator_dynamics(game, iters=3000)
+        assert torch.allclose(eq_mix, target, atol=1e-2), (
+            f"θ={θ:.2f}: got {eq_mix.tolist()}, expected {target.tolist()}"
+        )

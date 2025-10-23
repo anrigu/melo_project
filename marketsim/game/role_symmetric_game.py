@@ -82,7 +82,7 @@ class RoleSymmetricGame(AbstractGame):
         *,
         min_obs: int = 1,
         device: str = "cpu",
-        normalize: bool = True,
+        normalize: bool = False,
     ) -> "RoleSymmetricGame":
         """Aggregate valid observations in *repo* into RSG tables."""
 
@@ -152,7 +152,7 @@ class RoleSymmetricGame(AbstractGame):
         num_players_per_role: List[int],
         strategy_names_per_role: List[List[str]],
         device: str = "cpu",
-        normalize_payoffs: bool = True
+        normalize_payoffs: bool = False
     ) -> 'RoleSymmetricGame':
         """
         Create a RoleSymmetricGame from raw payoff data.
@@ -258,17 +258,32 @@ class RoleSymmetricGame(AbstractGame):
         # payoff table: (num_total_strategies, num_unique_configs)
         rsg_payoff_table_np = np.full((temp_rsg_for_mapping.num_strategies, num_unique_configs), np.nan, dtype=np.float32)
 
+        # Build a helper that maps global strategy index back to (role,strategy)
+        idx_to_pair = {idx: pair for pair, idx in global_strat_to_idx.items()}
+
         for i, (config_counts_tuple, data) in enumerate(processed_profiles.items()):
             rsg_config_table_np[i, :] = list(config_counts_tuple)
+            
             for s_idx in range(temp_rsg_for_mapping.num_strategies):
-                if data["payoffs"][s_idx]: # If there are payoffs for this strategy in this config
-                    avg_payoff = np.mean(data["payoffs"][s_idx])
+                pay_list = data["payoffs"][s_idx]
+                pos_vals = [v for v in pay_list if v >= 0]
+
+                
+                if pay_list:
+                    if not pos_vals:  
+                        role_name, strat_name = idx_to_pair.get(s_idx, ("?", "?"))
+                        # print("[debug] all negative payoffs – config", config_counts_tuple,
+                        #       "role", role_name, "strat", strat_name,
+                        #       "payoffs", [round(float(p),2) for p in pay_list])
+                        avg_payoff = np.mean(pay_list) 
+                    else:
+                        avg_payoff = np.mean(pos_vals) 
+
                     if normalize_payoffs:
                         rsg_payoff_table_np[s_idx, i] = (avg_payoff - payoff_mean) / payoff_std
                     else:
                         rsg_payoff_table_np[s_idx, i] = avg_payoff
-                # Else, it remains NaN, indicating no payoff data for this strategy in this config
-
+        
         rsg_config_table_tensor = torch.tensor(rsg_config_table_np, device=device, dtype=torch.float32)
         rsg_payoff_table_tensor = torch.tensor(rsg_payoff_table_np, device=device, dtype=torch.float32)
 
@@ -367,7 +382,7 @@ class RoleSymmetricGame(AbstractGame):
                 if not valid:
                     continue
 
-                log_p = 0.0
+                log_p = torch.tensor(0.0, device=self.device, dtype=torch.float64)
                 can_form = True
                 for r_idx in range(self.num_roles):
                     sl = slice(self.role_starts[r_idx], self.role_starts[r_idx] + self.num_strategies_per_role[r_idx])
@@ -500,7 +515,7 @@ class RoleSymmetricGame(AbstractGame):
                     continue
 
                 # probability of seeing this profile under mixture (Multinomial × roles)
-                log_p = 0.0; can_form = True
+                log_p = torch.tensor(0.0, device=self.device, dtype=torch.float64); can_form = True
                 for r_idx in range(self.num_roles):
                     sl = slice(self.role_starts[r_idx], self.role_starts[r_idx] + self.num_strategies_per_role[r_idx])
                     counts_role = torch.round(profile_others[sl]).to(torch.float32)
@@ -956,12 +971,23 @@ class RoleSymmetricGame(AbstractGame):
         for i, config_counts_tuple in enumerate(unique_configs_list):
             payoff_lists_for_config = all_aggregated_raw_payoffs[config_counts_tuple]
             for s_idx in range(self.num_strategies):
-                if payoff_lists_for_config[s_idx]: # If there are payoffs for this strategy in this config
-                    avg_raw_payoff = np.mean(payoff_lists_for_config[s_idx])
-                    if normalize_payoffs: # Apply the newly calculated global normalization
+                # Keep all finite payoffs (including negative ones) when computing the mean.
+                valid_vals = [v for v in payoff_lists_for_config[s_idx] if not np.isnan(v) and not np.isinf(v)]
+                if valid_vals:
+                    # At least one observed payoff (strategy present in profile)
+                    avg_raw_payoff = np.mean(valid_vals)
+                    if normalize_payoffs:
                         final_rsg_payoff_table_np[s_idx, i] = (avg_raw_payoff - new_offset) / new_scale
                     else:
                         final_rsg_payoff_table_np[s_idx, i] = avg_raw_payoff
+                else:
+                    # No observation for this strategy in this configuration. If the
+                    # strategy count is zero for the profile we can safely record 0.0
+                    # (consistent with deviation-preserving reduction’s expectation);
+                    # otherwise leave as NaN so that genuine missing data are still
+                    # detected.
+                    if config_counts_tuple[s_idx] == 0:
+                        final_rsg_payoff_table_np[s_idx, i] = 0.0
         
         self.rsg_config_table = torch.tensor(final_rsg_config_table_np, device=self.device, dtype=torch.float32)
         self.rsg_payoff_table = torch.tensor(final_rsg_payoff_table_np, device=self.device, dtype=torch.float32)

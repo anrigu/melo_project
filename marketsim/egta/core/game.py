@@ -33,7 +33,7 @@ class Game:
         self.game = game_instance
         self.metadata = metadata or {}
         
-        # Extract common properties
+        # Extract common 
         if isinstance(game_instance, RoleSymmetricGame):
             self.is_role_symmetric = True
             self.role_names = game_instance.role_names
@@ -91,14 +91,13 @@ class Game:
         """
         key = self._profile_to_key(profile)
 
-        # ---------- quick check via a cached set ----------
+        
         if not hasattr(self, "_profile_key_set"):
             self._profile_key_set: set = set()
-            self._rebuild_profile_key_set()          # defined below
+            self._rebuild_profile_key_set()           
         if key in self._profile_key_set:
             return True
 
-        # ---------- fall-back: rebuild & test once ----------
         self._rebuild_profile_key_set()
         return key in self._profile_key_set
 
@@ -131,7 +130,6 @@ class Game:
         self._profile_key_set = pk
     # ------------------------------------------------------------------
 
-    
     def deviation_payoffs(self, mixture):
         if not torch.is_tensor(mixture):
             mixture = torch.tensor(mixture, dtype=torch.float32,
@@ -178,7 +176,7 @@ class Game:
             # Check if entries have role information (4 elements vs 3)
             if len(first_entry) == 4:
                 # Role symmetric: (player_id, role_name, strategy_name, payoff)
-                return cls._create_role_symmetric_game(payoff_data, device, normalize_payoffs)
+                return cls._create_role_symmetric_game(payoff_data, device, normalize_payoffs) #returns rolesyummetirc game
             elif len(first_entry) == 3:
                 # Regular symmetric: (player_id, strategy_name, payoff)
                 return cls._create_symmetric_game(payoff_data, device, normalize_payoffs)
@@ -191,7 +189,7 @@ class Game:
     def _create_role_symmetric_game(cls, 
                                    payoff_data: List[List[Tuple[str, str, str, float]]], 
                                    device: str = "cpu",
-                                   normalize_payoffs: bool = True) -> 'Game':
+                                   normalize_payoffs: bool = False) -> 'Game':
         """Create a role symmetric game from payoff data."""
         # Extract role and strategy information
         all_roles = set()

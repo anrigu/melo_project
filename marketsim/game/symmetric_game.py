@@ -341,7 +341,6 @@ class SymmetricGame(AbstractGame):
         
         print(tabulate(rows, headers=headers, tablefmt="pipe"))
 
-
     #TODO: check this
     def compute_statisitcs_and_covariant(self):
         '''
@@ -352,7 +351,6 @@ class SymmetricGame(AbstractGame):
         return mean_payoff, cov_payoff
     
    
-
     def update_with_new_data(self, raw_data):
         """
         Update the game with new data, potentially including new strategies.

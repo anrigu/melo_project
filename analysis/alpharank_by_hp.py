@@ -101,7 +101,8 @@ def rsg_to_alpharank_tables(rsg: RoleSymmetricGame) -> List[np.ndarray]:
             tables[r_idx][pure_profile] = payoffs_per_role[r_idx]
 
     # Alpha-Rank expects *no* NaNs – replace any missing values with 0.
-    tables = [np.nan_to_num(t, nan=0.0).astype(np.float64) for t in tables]
+    #tables = [np.nan_to_num(t, nan=0.0).astype(np.float64) for t in tables]
+    tables = [np.nan_to_num(t, nan=np.nanmean(t)) for t in tables]
     return tables
 
 
@@ -236,31 +237,123 @@ def main() -> None:
     parser.add_argument("--sweep", action="store_true", help="If set, run alpharank.sweep_pi_vs_alpha and show plot instead of fixed alpha computation.")
     parser.add_argument("--network", action="store_true", help="Draw Alpha-Rank Markov-chain network graph (disabled when --sweep).")
     parser.add_argument("--top-profiles", type=int, default=8, help="How many top profiles to display in the network plot legend.")
+    parser.add_argument("--scale", type=float, default=None,
+                        help="Divide all payoffs by this constant before passing to AlphaRank (helps prevent overflow). If omitted, a heuristic  max(|payoff|)/20  is used when overflow is detected.")
+    parser.add_argument("--pooled", action="store_true", help="Aggregate all pilot runs per holding period and run AlphaRank once for each HP.")
+    parser.add_argument("--use-plot-seeds", action="store_true",
+                        help="Ignore root_dir and instead pool all data from the SEED_ROOTS used in plot_bootstrap_compare.py (symmetric_3 … symmetric_7). Must be used with --pooled.")
     args = parser.parse_args()
 
-    if not args.root_dir.exists():
+    if not args.use_plot_seeds and not args.root_dir.exists():
         parser.error(f"{args.root_dir} does not exist.")
 
-    # -------------------------------------------------------------
-    # Accept two layouts:
-    # 1. *root_dir* contains many pilot_egta_run_* sub-dirs (original)
-    # 2. *root_dir* itself IS a pilot_egta_run_* directory that contains
-    #    holding_period_* children (newer dumps)
-    # -------------------------------------------------------------
-    run_dirs = sorted([p for p in args.root_dir.glob("pilot_egta_run_*") if p.is_dir()])
+    if not args.pooled:
+        # -------- native per-run behaviour --------
+        run_dirs = sorted([p for p in args.root_dir.glob("pilot_egta_run_*") if p.is_dir()])
 
-    if not run_dirs:
-        # Fallback: treat the root itself as *the* run dir if it matches the naming convention
-        if args.root_dir.name.startswith("pilot_egta_run_") and args.root_dir.is_dir():
-            run_dirs = [args.root_dir]
+        if not run_dirs:
+            # Fallback: treat the root itself as *the* run dir if it matches the naming
+            if args.root_dir.name.startswith("pilot_egta_run_") and args.root_dir.is_dir():
+                run_dirs = [args.root_dir]
+            else:
+                parser.error("No pilot_egta_run_* directories found under the given root, and the root is not itself a pilot run directory.")
+
+        for run in run_dirs:
+            try:
+                process_run(run, args)
+            except Exception as exc:  # pragma: no cover
+                print(f"[ERROR] Failed to process {run}: {exc}")
+    else:
+        # -------- pooled-by-HP mode --------
+        import re
+        hp_pattern = re.compile(r"holding_period_(\d+)")
+
+        # Determine search roots
+        if args.use_plot_seeds:
+            from importlib import import_module
+            seeds_mod = import_module("analysis.plot_bootstrap_compare")
+            search_roots = [Path(r) for r in getattr(seeds_mod, "SEED_ROOTS")]
+            print("Using SEED_ROOTS from plot_bootstrap_compare.py →", ", ".join(str(p) for p in search_roots))
         else:
-            parser.error("No pilot_egta_run_* directories found under the given root, and the root is not itself a pilot run directory.")
+            search_roots = [args.root_dir]
 
-    for run in run_dirs:
-        try:
-            process_run(run, args)
-        except Exception as exc:  # pragma: no cover
-            print(f"[ERROR] Failed to process {run}: {exc}")
+        # map hp -> list of raw_payoff_data.json paths
+        hp_to_files: dict[int, list[Path]] = {}
+        for root in search_roots:
+            for pf in root.rglob("raw_payoff_data.json"):
+                m = hp_pattern.search(str(pf))
+                if not m:
+                    continue
+                hp = int(m.group(1))
+                hp_to_files.setdefault(hp, []).append(pf)
+
+        if not hp_to_files:
+            parser.error("No raw_payoff_data.json files found under the search roots when pooling.")
+
+        for hp in sorted(hp_to_files):
+            print(f"\n=== POOLED HP {hp}  ( {len(hp_to_files[hp])} files ) ===")
+            all_profiles = []
+            for fpath in hp_to_files[hp]:
+                all_profiles.extend(load_raw_payoff_data(fpath))
+
+            # infer metadata from first profile
+            role_names = ["MOBI", "ZI"]
+            num_players_per_role = []
+            strategy_names_per_role: dict[str, list[str]] = {"MOBI": [], "ZI": []}
+
+            first_prof = all_profiles[0]
+            for row in first_prof:
+                _, role, strat, _ = row
+                if strat not in strategy_names_per_role[role]:
+                    strategy_names_per_role[role].append(strat)
+            for role in role_names:
+                strategy_names_per_role[role].sort()
+                num_players_per_role.append(sum(1 for r in first_prof if r[1] == role))
+
+            rsg = RoleSymmetricGame.from_payoff_data_rsg(
+                payoff_data=all_profiles,
+                role_names=role_names,
+                num_players_per_role=num_players_per_role,
+                strategy_names_per_role=[strategy_names_per_role[r] for r in role_names],
+                device="cpu",
+                normalize_payoffs=False,
+            )
+
+            tables = rsg_to_alpharank_tables(rsg)
+
+            # Optional scaling to avoid overflow in exp(alpha * Δu)
+            if args.scale is not None:
+                tables = [t / float(args.scale) for t in tables]
+            else:
+                max_abs = max(float(np.max(np.abs(t))) for t in tables)
+                if args.alpha * max_abs > 50:  # heuristic overflow threshold
+                    sf = max_abs / 20.0  # keep alpha*Δu ≲ 20
+                    tables = [t / sf for t in tables]
+                    print(f"[INFO] Auto-scaled payoffs by {sf:.2e} to avoid overflow (max|payoff|={max_abs:.2e}).")
+
+            if args.sweep:
+                pi = alpharank.sweep_pi_vs_alpha(tables, visualize=True)
+            else:
+                rhos, rho_m, pi, *_ = alpharank.compute(tables, alpha=args.alpha)
+
+            print_alpharank_results(rsg, pi)
+
+            if args.network and not args.sweep:
+                from open_spiel.python.egt import utils  # local import
+                try:
+                    payoffs_are_hpt = utils.check_payoffs_are_hpt(tables)
+                    strat_labels = utils.get_strat_profile_labels(tables, payoffs_are_hpt)
+                    plotter = alpharank_visualizer.NetworkPlot(
+                        tables,
+                        rhos,
+                        rho_m,
+                        pi,
+                        strat_labels,
+                        num_top_profiles=args.top_profiles,
+                    )
+                    plotter.compute_and_draw_network()
+                except Exception as e:
+                    print(f"[WARN] Network plot failed: {e}")
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ class MELOSimulatorSampledArrival:
                  hbl_agent: bool = False,
                  lam_r: float = None,
                  holding_period = 50,
-                 lam_melo = 0.1,                # legacy fallback (kept for API)
+                 lam_melo = 0.1,               
                  lam_melo_mobi = 1e-3, 
                  lam_melo_zi = 6e-3, 
                  profile_order = None,
@@ -259,14 +259,11 @@ class MELOSimulatorSampledArrival:
                             next_tick = self.arrival_times_zi[self.arrival_index_zi].item()
                             self.arrival_index_zi += 1
 
-                        self.arrivals_melo[next_tick].append(strategic_agent_id)
+                        #self.arrivals_melo[next_tick].append(strategic_agent_id)
 
                         params = self.strategy_params[strategy_name]
                         agent_shade = params.get("shade", shade)
 
-                        # ------------------------------------------------------------------
-                        # Create agent *and* schedule first arrival using role-specific λ
-                        # ------------------------------------------------------------------
 
                         if role_name == "MOBI":
                             self.agents[strategic_agent_id] = (
@@ -322,7 +319,6 @@ class MELOSimulatorSampledArrival:
                     ))
                 strategic_agent_id += 1
         else:
-            # Legacy: Strategy-based agent creation (for backward compatibility)
             for strategy in self.strategies:
                 count = strategy_counts[strategy]
                 for _ in range(count):
@@ -412,7 +408,7 @@ class MELOSimulatorSampledArrival:
                         orders = agent.take_action(side, marketSelection)
                         self.market.add_orders(orders)
                             
-                    # Determine which arrival stream applies for *next* wake-up
+                    #Determine which arrival stream applies for *next* wake-up
                     role_name = self.agent_roles.get(agent_id, "MOBI")
                     if role_name == "MOBI":
                         if self.arrival_index_mobi == self.arrivals_sampled:
