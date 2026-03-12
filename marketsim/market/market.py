@@ -58,5 +58,5 @@ class Market:
         self.order_book = FourHeap()
         self.matched_orders = []
         self.event_queue = EventQueue()
-        if self.fundamental:
+        if fundamental is not None:
             self.fundamental = fundamental

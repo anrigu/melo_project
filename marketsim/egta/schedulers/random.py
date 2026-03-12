@@ -36,7 +36,6 @@ class RandomScheduler(Scheduler):
         self.rand = random.Random(seed)
         
         # Track profiles we've seen and scheduled
-        # gabe is dumb 
         self.scheduled_profiles: Set[Tuple[str, ...]] = set()
     
     def _sample_random_profile(self) -> List[str]:

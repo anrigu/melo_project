@@ -37,6 +37,7 @@ SEED_ROOTS = [
     # "gapfill_profiles_tester",
     # New extra source:
     "melo_profile_runs_28_rest_ZIs",
+    #"melo_profile_28_50k"
 ]
 
 CANONICAL_ORDER = [

@@ -62,13 +62,13 @@ from marketsim.egta.simulators.melo_wrapper import MeloSimulator
 
 SEED_ROOTS = [
     "result_two_role_still_role_symmetric_3",
-    "result_two_role_still_role_symmetric_3_20k",
+   # "result_two_role_still_role_symmetric_3_20k",
     "result_two_role_still_role_symmetric_4",
-    "result_two_role_still_role_symmetric_4_20k",
+   # "result_two_role_still_role_symmetric_4_20k",
     "result_two_role_still_role_symmetric_5",
-    "result_two_role_still_role_symmetric_5_20k",
+   # "result_two_role_still_role_symmetric_5_20k",
     "result_two_role_still_role_symmetric_6",
-    "result_two_role_still_role_symmetric_6_20k", 
+   # "result_two_role_still_role_symmetric_6_20k", 
     "result_two_role_still_role_symmetric_7",
    # "result_two_role_still_role_symmetric_7_20k",
     # "result_two_role_still_role__1_hbl_symmetric_3",
@@ -1065,14 +1065,11 @@ def find_pooled_equilibrium_dpr(hp: int, *, n_red: int = 4, print_only: bool = F
         seg = slice(int(start), int(start + n))
         base_mix_game[seg] /= base_mix_game[seg].sum()
 
-    # --- deterministic RD check (legacy) ------------------------------
     print(f"test with rd that {base_mix} is an eq: regret = {ga_regret.mixture_regret(ga_red, base_mix_game)}")
 
-    # --- RSNE check via mixture_regret (deviation–payoff based) ---------
     reg_base = ga_regret.mixture_regret(ga_red, base_mix_game)
     print("canonical mix", base_mix.tolist(), "→ regret =", reg_base)
 
-     # --- exact support-enumeration equilibrium search ------------------
     try:
          eq_arr = ga_nash.mixed_nash(
              ga_red,

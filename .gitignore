@@ -10,3 +10,8 @@
 .DS_Store
 .venv/
 .vscode
+*.json
+*.pyc
+*.jpg
+*.pyc
+*.png
