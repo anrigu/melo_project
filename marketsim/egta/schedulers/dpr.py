@@ -316,7 +316,7 @@ class DPRScheduler(Scheduler):
         
         candidates = []
         
-        for subgame in self.requested_subgames:
+        for _size, _tie, subgame in self.requested_subgames:
             if game.is_role_symmetric:
                 # Create mixture for role symmetric game
                 mixture = np.zeros(game.num_strategies)

@@ -151,7 +151,7 @@ class HBLAgent(Agent):
                 for matched_order in self.market.matched_orders:
                     if order.order_id == matched_order.order.order_id:
                         if matched_order.order.order_type == BUY and matched_order.price <= p:
-                            TBL += order.quantity
+                            TBL += matched_order.order.quantity
                         break
             return AL + TBL == 0
         else:
@@ -163,7 +163,7 @@ class HBLAgent(Agent):
                 for matched_order in self.market.matched_orders:
                     if order.order_id == matched_order.order.order_id:
                         if matched_order.order.order_type == SELL and matched_order.price >= p:
-                            TAG += order.quantity
+                            TAG += matched_order.order.quantity
                         break
             return BG + TAG == 0
 
@@ -190,7 +190,7 @@ class HBLAgent(Agent):
                 for matched_order in self.market.matched_orders:
                     if order.order_id == matched_order.order.order_id:
                         if matched_order.order.order_type == BUY and matched_order.price - p <= 0:
-                            TBL += order.quantity
+                            TBL += matched_order.order.quantity
                         found_matched = True
                         break
                 if not found_matched:
@@ -240,7 +240,7 @@ class HBLAgent(Agent):
                 for matched_order in self.market.matched_orders:
                     if order.order_id == matched_order.order.order_id:
                         if matched_order.order.order_type == SELL and matched_order.price - p >= 0:
-                            TAG += order.quantity
+                            TAG += matched_order.order.quantity
                         found_matched = True
                         break
                 if not found_matched:
