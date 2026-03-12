@@ -14,9 +14,7 @@ from marketsim.fourheap.constants import BUY, SELL
 import concurrent.futures as cf 
 import torch
 import math
-# Ensure tensors are passed via file-system backed files instead of POSIX shared
-# memory segments which leak file descriptors on macOS when lots of small
-# tensors are sent between processes.
+
 try:
     torch.multiprocessing.set_sharing_strategy("file_system")
 except (ImportError, AttributeError):
@@ -78,6 +76,7 @@ def _run_melo_single_rep(arg):
    
     results_tuple = sim.end_sim()
     raw_values = results_tuple[0] # payoff dict keyed by agent id -> number/torch.Tensor
+  
     midpoints  = results_tuple[4]      
 
 
@@ -102,7 +101,7 @@ def _run_melo_single_rep(arg):
     # payoff aggregation but still available to the caller
     values["__mid_mean"] = mid_mean
 
-    return values
+    return values 
 
 class MeloSimulator(Simulator):
     """
@@ -184,7 +183,7 @@ class MeloSimulator(Simulator):
         # Global fallback shade – used by background agents and strategies
         # that *do not* specify their own "_shade…" suffix.
         self.lam_melo = lam_melo
-        self.shade = shade or [10, 30]
+        self.shade = shade or [250, 500]
         self.eta = eta
         self.lam_r = lam_r or lam
         self.holding_period = holding_period
@@ -193,7 +192,7 @@ class MeloSimulator(Simulator):
         self.num_background_zi = num_background_zi
         self.num_background_hbl = num_background_hbl
         self.reps = reps
-        self.order_quantity = 10  # Fixed order quantity for MOBI traders
+        self.order_quantity = 5  # Fixed order quantity for MOBI traders
         self.force_symmetric = force_symmetric
         self.parallel = parallel
         self.log_profile_details = log_profile_details
@@ -248,24 +247,7 @@ class MeloSimulator(Simulator):
                     "melo_proportion": 1.0,
                     "shade": shade_pair,
                 }
-            #elif "75_25" in strategy:
-                #self.strategy_params[strategy] = {
-                   # "cda_proportion": 0.75,
-                   # "melo_proportion": 0.25,
-                   # "shade": shade_pair,
-                #}
-            #elif "50_50" in strategy:
-             #  self.strategy_params[strategy] = {
-                #   "cda_proportion": 0.5,
-                  #  "melo_proportion": 0.5,
-                 #   "shade": shade_pair,
-               # }
-           # elif "25_75" in strategy:
-            #   self.strategy_params[strategy] = {
-                 #   "cda_proportion": 0.25,
-                 #   "melo_proportion": 0.75,
-                 #   "shade": shade_pair,
-              #  }
+            
 
         # ZI strategy parameters (same allocation logic, incl. shade)
         for strategy in self.zi_strategies:
@@ -283,24 +265,7 @@ class MeloSimulator(Simulator):
                     "melo_proportion": 1.0,
                     "shade": shade_pair,
                 }
-           # elif "75_25" in strategy:
-               # self.strategy_params[strategy] = {
-                #    "cda_proportion": 0.75,
-                 #   "melo_proportion": 0.25,
-                #   "shade": shade_pair,
-               # }
-            #elif "50_50" in strategy:
-            #    self.strategy_params[strategy] = {
-             #       "cda_proportion": 0.5,
-              #      "melo_proportion": 0.5,
-              #      "shade": shade_pair,
-              #  }
-            #elif "25_75" in strategy:
-             #   self.strategy_params[strategy] = {
-              #      "cda_proportion": 0.25,
-             #       "melo_proportion": 0.75,
-             #      "shade": shade_pair,
-             #   }
+           
         
         # In symmetric mode, remove role symmetric capabilities
         if self.force_symmetric:

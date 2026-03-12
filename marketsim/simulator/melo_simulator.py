@@ -57,7 +57,7 @@ class MELOSimulatorSampledArrival:
                  ):
 
         if shade is None:
-            shade = [10, 30]
+            shade = [250, 500]
         if lam_r is None:
             lam_r = lam
 
@@ -198,7 +198,7 @@ class MELOSimulatorSampledArrival:
         # Handle strategic agents - either role-based or legacy strategy-based
         strategic_agent_id = num_zi + num_hbl
         
-        # If explicit player order is provided, respect it to guarantee ID↔profile alignment
+        # If explicit player order is provided, respect it to guarantee ID profile alignment
         if profile_order is not None:
             for role_name, strategy_name in profile_order:
                 params = self.strategy_params[strategy_name]

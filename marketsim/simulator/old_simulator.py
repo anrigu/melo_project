@@ -190,7 +190,6 @@ class MELOSimulatorSampledArrival:
                     self.agents[strategic_agent_id] = (
                         MeloAgent(
                             agent_id=strategic_agent_id,
-                            #Not important which market
                             market=self.market,
                             meloMarket=self.meloMarket,
                             q_max=q_max,
