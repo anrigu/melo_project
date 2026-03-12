@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/game/abstract_game.py
+# hypothesis_version: 6.135.7
+
+[1e-10, 1e-05, 0.001, 1.0, 100000.0]

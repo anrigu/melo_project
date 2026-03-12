@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/egta/simulators/melo_wrapper.py
+# hypothesis_version: 6.135.7
+
+[0.0, 0.001, 0.006, 0.05, 0.25, 0.5, 0.75, 1.0, 10000.0, 1000000.0, 5000000.0, 10000, 4294967295, '   reps', ', ', '0_100', '100_0', '25_75', '50_50', '75_25', 'MOBI', 'MOBI_', 'MOBI_0_100', 'MOBI_100_0', 'MOBI_25_75', 'MOBI_50_50', 'MOBI_75_25', 'Player', 'Profile summary:', 'ZI', 'ZI_0_100', 'ZI_100_0', 'ZI_25_75', 'ZI_50_50', 'ZI_75_25', 'cda_proportion', 'get_role_info', 'melo_proportion', 'n_raw', 'profile_avg', 'profile_counts', 'rep', 'role_avg', 'role_payoffs', 'runtime', 'seed', 'spawn']

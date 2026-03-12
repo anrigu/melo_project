@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/egta/solvers/equilibria.py
+# hypothesis_version: 6.135.7
+
+[-10.0, 0.0, 1e-10, 1e-09, 1e-08, 1e-06, 0.0001, 0.001, 0.01, 0.05, 0.2, 0.5, 0.6, 0.7, 0.8, 1.0, 5.0, 10.0, 1000000000000.0, 100, 1000, 5000, ', ', 'MELO', 'SIG', 'Uniform mixture', 'aux', 'fictitious_play', 'gain_descent', 'melo', 'n_raw', 'not-sig', 'replicator', 'replicator_dynamics', 'restriction_indices', 'strategy_names']

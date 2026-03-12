@@ -20,7 +20,6 @@ from marketsim.egta.egta import EGTA
 from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.schedulers.random import RandomScheduler
 from marketsim.egta.solvers.equilibria import replicator_dynamics, regret
-import math
 
 def analyze_basins_of_attraction(game, num_points=100, iters=5000):
 
@@ -179,9 +178,14 @@ def run_mobi_zi_egta():
         sim_time = 10000  # 1×10^4 timesteps as specified
         num_iterations = 10
         num_strategies = 2 
-        batch_size = int(math.factorial(num_mobi_agents + num_strategies - 1) / 
-                        (math.factorial(num_mobi_agents)  * math.factorial(num_strategies - 1)))
-        print(f"Batch size: {batch_size}")
+        
+        # Set reasonable limits instead of calculating all possible profiles
+        # DPR will intelligently sample the most important profiles
+        max_profiles = 50  # Reasonable limit for efficient exploration
+        profiles_per_iteration = 10  # Profiles to simulate per iteration
+        
+        print(f"Max profiles to simulate: {max_profiles}")
+        print(f"Profiles per iteration: {profiles_per_iteration}")
         
         print(f"Running EGTA with {num_mobi_agents} MOBI and {num_zi_agents} ZI agents")
         print(f"Holding period: {holding_period}")
@@ -189,20 +193,26 @@ def run_mobi_zi_egta():
         
         # Create simulator with paper-specified parameters
         simulator = MeloSimulator(
-            num_strategic=num_mobi_agents, 
+            num_strategic_mobi=num_mobi_agents, 
             sim_time=sim_time,
             lam=0.006,           
             mean=1000000.0,      
-            r=0.001,              # Mean-reversion parameter: 5×10^-2
-            shock_var=100,       # Fundamental shock variance: 1×10^2
-            q_max=10,            # Maximum position: 10
-            pv_var=5000000,      # Private value variance: 5×10^6
-            shade=[10, 30],      # Surplus offset bounds: [10, 30]
+            r=0.001,             
+            shock_var=100,       
+            q_max=10,            
+            pv_var=5000000,      
+            shade=[10, 30],      
             holding_period=holding_period,  
-            lam_melo=0.001,      # MOBI trader arrival rate: 1×10^-3 (once every 1000 timesteps)
-            num_zi=num_zi_agents,  
-            num_hbl=0, 
-            reps=10000           # Number of simulations per strategy profile
+            lam_melo=0.001,      
+            num_background_zi=num_zi_agents,  
+            #num_hbl=0,
+            mobi_strategies= [
+            "MOBI_100_0",  
+            #"MOBI_50_50", 
+            "MOBI_0_100"   
+            ],
+            reps=10,           
+            force_symmetric=True  
         )
         
         strategies = simulator.get_strategies()
@@ -211,11 +221,12 @@ def run_mobi_zi_egta():
         for strategy, params in simulator.strategy_params.items():
             print(f"{strategy}: CDA={params['cda_proportion']}, MELO={params['melo_proportion']}")
         
+        # Use DPRScheduler for both symmetric and role symmetric games
         scheduler = DPRScheduler(
             strategies=strategies,
             num_players=num_mobi_agents,
-            batch_size=batch_size,
-            reduction_size=4, #num_mobi - 1 / reduction_size - 1 needs to be an integer
+            batch_size=max_profiles,
+            reduction_size=4, # num_mobi - 1 / reduction_size - 1 needs to be an integer
             seed=42
         )
         
@@ -224,7 +235,7 @@ def run_mobi_zi_egta():
             scheduler=scheduler,
             device=device,
             output_dir=f"results/mobi_zi_egta/holding_period_{holding_period}",
-            max_profiles=batch_size,
+            max_profiles=max_profiles,
             seed=42
         )
         
@@ -232,7 +243,7 @@ def run_mobi_zi_egta():
         start_time = time.time()
         game = egta.run(
             max_iterations=num_iterations,
-            profiles_per_iteration=20,
+            profiles_per_iteration=profiles_per_iteration,
             save_frequency=1,
             verbose=True,
             quiesce_kwargs={
@@ -318,7 +329,7 @@ def run_mobi_zi_egta():
             print(f"Regret: {regret_val:.6f}")
             
             # Determine strategy dominance
-            cda_idx = game.strategy_names.index("MELO_100_0") if "MELO_100_0" in game.strategy_names else 0
+            cda_idx = game.strategy_names.index("MOBI_100_0") if "MOBI_100_0" in game.strategy_names else 0
             cda_probability = eq_mixture[cda_idx].item()
             
             if cda_probability > 0.99:
@@ -339,7 +350,8 @@ def run_mobi_zi_egta():
             "num_zi_agents": num_zi_agents,
             "num_iterations": num_iterations,
             "num_strategies": num_strategies,
-            "batch_size": batch_size,
+            "max_profiles": max_profiles,
+            "profiles_per_iteration": profiles_per_iteration,
             "simulator_params": simulator.strategy_params
         }
         

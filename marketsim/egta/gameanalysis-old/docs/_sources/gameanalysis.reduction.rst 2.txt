@@ -1,0 +1,21 @@
+gameanalysis.reduction package
+==============================
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gameanalysis.reduction.deviation_preserving
+   gameanalysis.reduction.hierarchical
+   gameanalysis.reduction.identity
+   gameanalysis.reduction.twins
+
+Module contents
+---------------
+
+.. automodule:: gameanalysis.reduction
+   :members:
+   :undoc-members:
+   :show-inheritance:

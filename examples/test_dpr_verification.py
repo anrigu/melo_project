@@ -13,8 +13,8 @@ def test_dpr_verification():
     """Test DPR equilibrium verification in full game"""
     
     # Setup - Use only mobi agents for a symmetric game
-    num_mobi_agents = 7  # Small for testing
-    num_zi_agents = 0    # No background agents to avoid RSG complexity
+    num_mobi_agents = 10  # Small for testing
+    num_zi_agents = 15   # No background agents to avoid RSG complexity
     
     print("Testing DPR Equilibrium Verification")
     print("=" * 50)
@@ -35,7 +35,7 @@ def test_dpr_verification():
         num_zi=num_zi_agents,
         num_hbl=0,
         reps=100,  # Few reps for testing
-        force_rsg=False  # Force symmetric game
+        #force_rsg=True  # Force symmetric game
     )
     
     strategies = simulator.get_strategies()
@@ -51,6 +51,7 @@ def test_dpr_verification():
         batch_size=10,
         reduction_size=reduction_size,
         seed=42
+        
     )
     
     print(f"Reduced game players: {reduction_size}")

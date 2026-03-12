@@ -190,7 +190,7 @@ class SymmetricGame(AbstractGame):
         log_config_probs = self.config_table @ log_mixture  # Matrix multiplication
         
         # calculate deviation payoffs for each action
-        # Shape: [num_actions, num_mixtures] (num actions is the same as num stratergies, im just stupid)
+        # Shape: [num_actions, num_mixtures]
         dev_pays = torch.zeros((self.num_actions, mixture.shape[1]), device=self.device)
         #for all the actions, compute expected payoff
         for s in range(self.num_actions):
@@ -341,7 +341,6 @@ class SymmetricGame(AbstractGame):
         
         print(tabulate(rows, headers=headers, tablefmt="pipe"))
 
-
     #TODO: check this
     def compute_statisitcs_and_covariant(self):
         '''
@@ -352,7 +351,6 @@ class SymmetricGame(AbstractGame):
         return mean_payoff, cov_payoff
     
    
-
     def update_with_new_data(self, raw_data):
         """
         Update the game with new data, potentially including new strategies.

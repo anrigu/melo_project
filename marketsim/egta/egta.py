@@ -1,17 +1,15 @@
 """
-Empirical Game-Theoretic Analysis (EGTA) framework.
+Empirical Game-Theoretic Analysis (EGTA) framework with Role Symmetric Game support.
 """
 import os
 import json
 import time
-from typing import Dict, List, Tuple, Any, Optional, Union, Set
+from typing import Dict, List, Tuple, Any, Optional, Union, Set, Sequence
 import torch
 import numpy as np
 from datetime import datetime
-import matplotlib.pyplot as plt
-from collections import defaultdict
-import re
-
+from dataclasses import dataclass
+from collections import Counter
 from marketsim.egta.core.game import Game
 from marketsim.egta.schedulers.base import Scheduler
 from marketsim.egta.schedulers.random import RandomScheduler
@@ -19,242 +17,57 @@ from marketsim.egta.schedulers.dpr import DPRScheduler
 from marketsim.egta.simulators.base import Simulator
 from marketsim.egta.solvers.equilibria import quiesce, quiesce_sync, replicator_dynamics, regret
 from marketsim.game.symmetric_game import SymmetricGame
+import math
+from marketsim.egta.stats import statistical_test, hoeffding_upper_bound
+from tqdm.auto import tqdm          
+from contextlib import redirect_stdout, redirect_stderr
+import io
+import logging
+logger = logging.getLogger(__name__)
 
 
-class PayoffAnalyzer:
+class silence_io:
+    """Context-manager that discards everything printed to stdout *and* stderr."""
+    def __enter__(self):
+        self._buf_out, self._buf_err = io.StringIO(), io.StringIO()
+        self._redir_out = redirect_stdout(self._buf_out)
+        self._redir_err = redirect_stderr(self._buf_err)
+        self._redir_out.__enter__()
+        self._redir_err.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        # close the redirections and drop the buffers
+        self._redir_out.__exit__(*exc)
+        self._redir_err.__exit__(*exc)
+
+
+
+@dataclass
+class Observation:
+    """A *single* simulator run for one pure profile.
+
+    Attributes
+    ----------
+    profile_key : Tuple[int, ...]
+        Hashable representation of the pure‑strategy profile.
+    payoffs : np.ndarray  shape = (num_players,)
+        realised utilities this round.
+    aux : Optional[Dict[str, Any]] – any extra features you might emit.
     """
-    A class to analyze and visualize payoff data for different strategy compositions.
-    """
-    
-    def __init__(self, payoff_data=None):
-        """
-        Initialize the analyzer with payoff data.
-        
-        Args:
-            payoff_data (dict): Dictionary with keys as strategy profiles and values as 
-                               lists of payoffs [strategy1_payoffs, strategy2_payoffs]
-        """
-        self.payoff_data = payoff_data or {}
-        self.processed_data = []
-    
-    def parse_strategy_key(self, key):
-        """
-        Parse strategy composition from key string.
-        
-        Args:
-            key (str): Key string like "[MELO_0_100:5, MELO_100_0:26]"
-            
-        Returns:
-            tuple: (strategy1_count, strategy2_count, strategy1_name, strategy2_name)
-        """
-        # Default strategy names    
-        strategy1_name = "Strategy 1"
-        strategy2_name = "Strategy 2"
-        
-        # Try to extract strategy names and counts
-        pattern = r'\[([^:]+):(\d+)(?:,\s*([^:]+):(\d+))?\]'
-        match = re.search(pattern, key)
-        
-        if match:
-            strategy1_name = match.group(1).replace('_', '-')
-            count1 = int(match.group(2))
-            
-            if match.group(3) and match.group(4):
-                strategy2_name = match.group(3).replace('_', '-')
-                count2 = int(match.group(4))
-            else:
-                count2 = 0
-                
-            return count1, count2, strategy1_name, strategy2_name
-        
-        return 0, 0, strategy1_name, strategy2_name
-    
-    def process_data(self, sort_by='count1'):
-        """
-        Process the raw payoff data into a format suitable for visualization.
-        
-        Args:
-            sort_by (str): How to sort the data. Options:
-                - 'count1': Sort by first strategy count (ascending)
-                - 'count2': Sort by second strategy count (ascending)
-                - 'total': Sort by total number of agents (ascending)
-                - 'ratio': Sort by ratio of count1/(count1+count2) (ascending)
-                - 'composition': Sort by composition for better visualization
-        """
-        self.processed_data = []
-        
-        for key, payoffs in self.payoff_data.items():
-            count1, count2, name1, name2 = self.parse_strategy_key(key)
-            
-            # Get payoffs for each strategy
-            payoffs1 = payoffs[0] if len(payoffs) > 0 else []
-            payoffs2 = payoffs[1] if len(payoffs) > 1 else []
-            
-            # Calculate statistics
-            mean1 = np.mean(payoffs1) if payoffs1 else np.nan
-            std_err1 = np.std(payoffs1, ddof=1) / np.sqrt(len(payoffs1)) if payoffs1 else 0
-            
-            mean2 = np.mean(payoffs2) if payoffs2 else np.nan
-            std_err2 = np.std(payoffs2, ddof=1) / np.sqrt(len(payoffs2)) if payoffs2 else 0
-            
-            total_agents = count1 + count2
-            ratio = count1 / total_agents if total_agents > 0 else 0
-            
-            self.processed_data.append({
-                'count1': count1,
-                'count2': count2,
-                'name1': name1,
-                'name2': name2,
-                'mean1': mean1,
-                'std_err1': std_err1,
-                'mean2': mean2,
-                'std_err2': std_err2,
-                'total_agents': total_agents,
-                'ratio': ratio,
-                'label': f"{name1}:{count1}, {name2}:{count2}",
-                'payoffs1': payoffs1,
-                'payoffs2': payoffs2
-            })
-        
-        # Sort based on the specified method
-        if sort_by == 'count1':
-            self.processed_data.sort(key=lambda x: x['count1'])
-        elif sort_by == 'count2':
-            self.processed_data.sort(key=lambda x: x['count2'])
-        elif sort_by == 'total':
-            self.processed_data.sort(key=lambda x: x['total_agents'])
-        elif sort_by == 'ratio':
-            self.processed_data.sort(key=lambda x: x['ratio'])
-        elif sort_by == 'composition':
-            # Sort by ratio, but handle edge cases better for visualization
-            self.processed_data.sort(key=lambda x: (x['ratio'], x['total_agents']))
-        
-        return self.processed_data
-    
-    def plot_payoffs(self, title="Average Payoffs by Strategy Composition", 
-                    figsize=(12, 6), show_error_bars=False, colors=None, sort_by='composition'):
-        """
-        Create a bar plot of average payoffs.
-        
-        Args:
-            title (str): Plot title
-            figsize (tuple): Figure size
-            show_error_bars (bool): Whether to show error bars
-            colors (list): Colors for the bars [color1, color2]
-            sort_by (str): How to sort the bars ('count1', 'count2', 'total', 'ratio', 'composition')
-        """
-        if not self.processed_data:
-            self.process_data(sort_by=sort_by)
-        
-        # Default colors
-        if colors is None:
-            colors = ["#9ace69", "#44a2f0"]
-        
-        # Prepare data for plotting
-        labels = [d['label'] for d in self.processed_data]
-        means1 = [d['mean1'] if not np.isnan(d['mean1']) else 0 for d in self.processed_data]
-        means2 = [d['mean2'] if not np.isnan(d['mean2']) else 0 for d in self.processed_data]
-        
-        if show_error_bars:
-            std_errs1 = [d['std_err1'] if not np.isnan(d['mean1']) else 0 for d in self.processed_data]
-            std_errs2 = [d['std_err2'] if not np.isnan(d['mean2']) else 0 for d in self.processed_data]
-        else:
-            std_errs1 = std_errs2 = None
-        
-        # Create plot
-        x = np.arange(len(labels))
-        width = 0.35
-        
-        fig, ax = plt.subplots(figsize=figsize)
-        
-        # Get strategy names for legend
-        strategy1_label = self.processed_data[0]['name1'] if self.processed_data else "MELO"
-        strategy2_label = self.processed_data[0]['name2'] if self.processed_data else "CDA"
-        
-        rects1 = ax.bar(x - width/2, means1, width, 
-                       label=f'{strategy1_label} Strategy',
-                       yerr=std_errs1, capsize=5, color=colors[0])
-        rects2 = ax.bar(x + width/2, means2, width,
-                       label=f'{strategy2_label} Strategy', 
-                       yerr=std_errs2, capsize=5, color=colors[1])
-        
-        # Formatting
-        ax.set_ylabel('Average Payoff', fontsize=18)
-        ax.set_title(title, fontsize=18)
-        ax.set_xlabel('Strategy Profiles', fontsize=18)
-        ax.set_xticks(x)
-        
-        # Truncate labels to show only the counts
-        truncated_labels = []
-        for label in labels:
-            # Remove the square brackets and split by comma
-            clean_label = label.strip('[]')
-            parts = clean_label.split(', ')
-            
-            # Initialize counts for both strategies
-            melo_count = '0'
-            cda_count = '0'
-            
-            # Process each part
-            for part in parts:
-                strat, count = part.split(':')
-                if 'MELO-0-100' in strat:
-                    melo_count = count
-                elif 'MELO-100-0' in strat:
-                    cda_count = count
-            
-            # Always show both strategies in the same format
-            truncated_labels.append(f"MELO:{melo_count}, CDA:{cda_count}")
-        
-        # Sort labels based on MELO count first, then CDA count
-        def sort_key(label):
-            melo, cda = label.split(', ')
-            melo_count = int(melo.split(':')[1])
-            cda_count = int(cda.split(':')[1])
-            return (melo_count, cda_count)
-        
-        truncated_labels.sort(key=sort_key)
-        
-        print(truncated_labels)
-        ax.set_xticklabels(truncated_labels, rotation=45, ha='right', fontsize=16)
-        ax.legend(fontsize=16, loc='lower right')
-        ax.tick_params(axis='y', labelsize=15)
-        
-        plt.tight_layout()
-        return fig, ax
-    
-    def get_summary_stats(self, sort_by='composition'):
-        """
-        Get summary statistics for all strategy compositions.
-        
-        Args:
-            sort_by (str): How to sort the results
-        """
-        if not self.processed_data:
-            self.process_data(sort_by=sort_by)
-        
-        summary = []
-        for data in self.processed_data:
-            summary.append({
-                'composition': data['label'],
-                'strategy1_count': data['count1'],
-                'strategy2_count': data['count2'],
-                'total_agents': data['total_agents'],
-                'ratio': data['ratio'],
-                'strategy1_mean': data['mean1'],
-                'strategy1_std_err': data['std_err1'],
-                'strategy1_n': len(data['payoffs1']),
-                'strategy2_mean': data['mean2'],
-                'strategy2_std_err': data['std_err2'],
-                'strategy2_n': len(data['payoffs2'])
-            })
-        
-        return summary
+    profile_key: Tuple[int, ...]
+    payoffs:     np.ndarray
+    aux:         Optional[Dict[str, Any]] = None
+
+# -----------------------------------------------------------------------------
+#  UTILITIES – one‑sided Hoeffding test   (no external dependencies)
+# -----------------------------------------------------------------------------
+
 
 
 class EGTA:
     """
-    Empirical Game-Theoretic Analysis framework.
+    Empirical Game-Theoretic Analysis framework with Role Symmetric Game support.
     """
     
     def __init__(self, 
@@ -270,7 +83,7 @@ class EGTA:
         Args:
             simulator: Simulator to use for evaluating profiles
             scheduler: Scheduler for determining which profiles to simulate
-                If None, uses RandomScheduler
+                If None, uses appropriate scheduler based on simulator type
             device: PyTorch device to use
             output_dir: Directory to save results
             max_profiles: Maximum number of profiles to simulate
@@ -281,14 +94,52 @@ class EGTA:
         self.output_dir = output_dir
         self.max_profiles = max_profiles
         self.seed = seed
+        self._init_storage()
         
-        # If scheduler is not provided, use RandomScheduler
+        # Detect if simulator supports role symmetric games
+        self.is_role_symmetric = hasattr(simulator, 'get_role_info')
+       
+        
+        if self.is_role_symmetric:
+            # Role symmetric game setup
+            self.role_names, self.num_players_per_role, self.strategy_names_per_role = simulator.get_role_info()
+            self.num_players = sum(self.num_players_per_role)
+            
+            # Get all strategies for scheduler initialization
+            all_strategies = []
+            for strategies in self.strategy_names_per_role:
+                all_strategies.extend(strategies)
+        else:
+            # Symmetric game setup
+            self.role_names = ["Player"]
+            self.num_players = simulator.get_num_players()
+            self.num_players_per_role = [self.num_players]
+            all_strategies = simulator.get_strategies()
+            self.strategy_names_per_role = [all_strategies]
+        
+        # If scheduler is not provided, use appropriate default
+        self.expected_strategies = set(           
+            f"{r}:{s}" if self.is_role_symmetric else s
+            for r, strats in zip(self.role_names, self.strategy_names_per_role)
+            for s in strats
+        )
+
         if scheduler is None:
-            self.scheduler = RandomScheduler(
-                strategies=simulator.get_strategies(),
-                num_players=simulator.get_num_players(),
-                seed=seed
-            )
+            if self.is_role_symmetric:
+                self.scheduler = DPRScheduler(
+                    strategies=all_strategies,
+                    num_players=self.num_players,
+                    role_names=self.role_names,
+                    num_players_per_role=self.num_players_per_role,
+                    strategy_names_per_role=self.strategy_names_per_role,
+                    seed=seed
+                )
+            else:
+                self.scheduler = RandomScheduler(
+                    strategies=all_strategies,
+                    num_players=self.num_players,
+                    seed=seed
+                ) 
         else:
             self.scheduler = scheduler
         
@@ -298,290 +149,316 @@ class EGTA:
         self.payoff_data = []
         self.simulated_profiles = set()
         self.equilibria = []
+    def _init_storage(self):
+        self._obs_by_profile: Dict[Tuple[int, ...], List[Observation]] = {}
+        self.payoff_data = []
+
+    def _record_observations(self, raw_samples: List[Any]):
+        """
+        • Keep variance data in self._obs_by_profile   (Observation objects)
+        • Keep legacy per-agent rows in self.payoff_data  (list[tuple]) so
+        Game.from_payoff_data still works unmodified.
+        """
+        for item in raw_samples:
+            # ------------------------------------------------------------------
+            # 1. Obtain / build an Observation  (needed for statistical tests)
+            # ------------------------------------------------------------------
+            if isinstance(item, Observation):
+                obs = item
+                legacy_row = None 
+            elif isinstance(item, list) and item and len(item[0]) == 4:
+               
+                profile_key = tuple(sorted((r, s) for _pid, r, s, _ in item))
+                payoffs = np.asarray([p for *_xyz, p in item], dtype=float)
+                obs = Observation(profile_key, payoffs)
+                legacy_row = item          
+            else:  
+                profile_key, payoff_vec = item["profile"], item["payoffs"]
+                obs = Observation(tuple(profile_key), np.asarray(payoff_vec, dtype=float))
+                legacy_row = None            # will build below
+
+            # ------------------------------------------------------------------
+            # 2. Store Observation under *two* canonical keys:
+            #    a) full key that preserves player multiplicities (preferred)
+            #    b) compact key without multiplicities (legacy – keeps
+            #       compatibility with existing lookup logic in test_candidate)
+            # ------------------------------------------------------------------
+            full_key    = tuple(sorted(obs.profile_key))           
+            compact_key = tuple(sorted(set(obs.profile_key)))  
+
+            self._obs_by_profile.setdefault(full_key,   []).append(obs)
+            if compact_key != full_key:
+                self._obs_by_profile.setdefault(compact_key, []).append(obs)
+
+         
+            if legacy_row is None:
+                legacy_row = []
+                for idx, (role, strat) in enumerate(obs.profile_key):
+                    payoff = float(obs.payoffs[idx])
+                    legacy_row.append((f"p{idx}", role, strat, payoff))
+            self.payoff_data.append(legacy_row)
+
+
+
+    def has_profile(self, profile: List[Tuple[str,str]]) -> bool:
+        key = tuple(sorted((r, s) for r, s in profile))
+        return key in self.game.payoff_table 
+
     
-    def run(self, 
-           max_iterations: int = 10, 
-           profiles_per_iteration: int = 10,
-           save_frequency: int = 1,
-           verbose: bool = True,
-           quiesce_kwargs: Optional[Dict] = None) -> Game:
-        """
-        Run the EGTA process.
-        
-        Args:
-            max_iterations: Maximum number of iterations
-            profiles_per_iteration: Number of profiles to simulate per iteration
-            save_frequency: How often to save results (in iterations)
-            verbose: Whether to print progress
-            quiesce_kwargs: Optional dictionary of parameters to pass to quiesce_sync
-            
-        Returns:
-            The final game
-        """
+   
+
+
+
+    def run(
+        self,
+        max_iterations: int = 10,
+        profiles_per_iteration: int = 10,     
+        save_frequency: int = 1,
+        verbose: bool = True,
+        quiesce_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> "Game":
+        import asyncio
+        import nest_asyncio
+        import marketsim.egta.solvers.equilibria as eq_mod
+        from marketsim.egta.solvers.equilibria import quiesce
+
+        if verbose:
+            logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+
+        nest_asyncio.apply()
+
         total_profiles = 0
         start_time = time.time()
-        
-        # Set default quiesce parameters if not provided
-        if quiesce_kwargs is None:
-            quiesce_kwargs = {
-                'num_iters': 100,
-                'num_random_starts': 10,
-                'regret_threshold': 1e-3,
-                'dist_threshold': 1e-2,
-                'solver': 'replicator',
-                'solver_iters': 5000
-            }
-        else:
-            # Ensure all required parameters are present
-            default_quiesce_kwargs = {
-                'num_iters': 100,
-                'num_random_starts': 60,
-                'regret_threshold': 1e-2,
-                'dist_threshold': 1e-2,
-                'solver': 'replicator',
-                'solver_iters': 5000
-            }
-            # Fill in any missing parameters with defaults
-            for key, value in default_quiesce_kwargs.items():
-                if key not in quiesce_kwargs:
-                    quiesce_kwargs[key] = value
-        
-        for iteration in range(max_iterations):
-            iteration_start = time.time()
-            
-            if verbose:
-                print(f"\nIteration {iteration+1}/{max_iterations}")
-            
-            # FIXED SECTION: Always generate profiles for the full game, not reduced game
-            if isinstance(self.scheduler, DPRScheduler):
-                original_reduction_size = self.scheduler.reduction_size
-                self.scheduler.reduction_size = self.scheduler.num_players
-                profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
-                self.scheduler.reduction_size = original_reduction_size
-            else:
-                profiles_to_simulate = self.scheduler.get_next_batch(self.game)[:profiles_per_iteration]
-            
-            if not profiles_to_simulate:
-                if verbose:
-                    print("No more profiles to simulate. Ending early.")
-                break
-            
-            # Simulate profiles
-            if verbose:
-                print(f"Simulating {len(profiles_to_simulate)} profiles...")
-            
-            simulation_start = time.time()
-            new_data = self.simulator.simulate_profiles(profiles_to_simulate)
-            simulation_time = time.time() - simulation_start
-            
-            if verbose:
-                print(f"Simulation completed in {simulation_time:.2f} seconds")
-                
-                # Print payoff data for debugging
-                print("\nPayoff data from simulation:")
-                
-                # Store data for plotting
-                payoff_vectors = {}
-                
-                for profile_data in new_data:
-                    # Extract all strategies in this profile
-                    all_strategies = [strat for _, strat, _ in profile_data]
-                    # Count occurrences of each strategy
-                    strategy_counts = {}
-                    for strat in set(all_strategies):
-                        strategy_counts[strat] = all_strategies.count(strat)
-                    
-                    
-                    # Sort strategies by MELO_0_100 first, then MELO_100_0
-                    sorted_strategies = sorted(strategy_counts.items(), 
-                                            key=lambda x: (x[0] != "MELO_0_100", x[0]))
-                    
-                    # Format as a distribution string
-                    profile_dist = ", ".join([f"{strat}:{count}" for strat, count in sorted_strategies])
-                    
-                    payoffs = [float(payoff) for _, _, payoff in profile_data]
-                    # For MELO_0_100, take the last x elements where x is the count
-                    melo_count = strategy_counts.get("MELO_0_100", 0)
-                    cda_count = strategy_counts.get("MELO_100_0", 0)
-                    
-                    if melo_count > 0 and cda_count > 0:
-                        # Both strategies present
-                        melo_payoffs = payoffs[-melo_count:]
-                        cda_payoffs = payoffs[:-melo_count]
-                    elif melo_count > 0:
-                        # Only MELO_0_100
-                        melo_payoffs = payoffs
-                        cda_payoffs = []
-                    else:
-                        # Only MELO_100_0
-                        melo_payoffs = []
-                        cda_payoffs = payoffs
-                        
-                    formatted_payoffs = [melo_payoffs, cda_payoffs]
-                    
-                    print(f'"{profile_dist}": {formatted_payoffs}')
-                    print()
-                    
-                    # Store data for plotting
-                    payoff_vectors[f"[{profile_dist}]"] = formatted_payoffs
-                
-                # Create analyzer and process data
-                analyzer = PayoffAnalyzer(payoff_vectors)
-                
-                # Generate plot
-                fig, ax = analyzer.plot_payoffs(
-                    title="Average Payoffs by Strategy Composition",
-                    show_error_bars=True,
-                    sort_by='composition'
-                )
-                
-                # Save the plot
-                print("GRAPH OUTPUT DIR", self.output_dir)
-                plot_path = os.path.join(self.output_dir, f"payoff_plot_{datetime.now().strftime('%Y%m%d_%H%M%S_eq_payoffs_2')}.png")
-                fig.savefig(plot_path)
-                plt.close()
-                
-                print(f"\nPayoff plot saved to: {plot_path}")
-                
-                # Print summary statistics
-                print("\nSummary Statistics:")
-                print("-" * 80)
-                for stat in analyzer.get_summary_stats():
-                    print(f"Composition: {stat['composition']}")
-                    print(f"  Strategy 1: Mean={stat['strategy1_mean']:.2f}, SE={stat['strategy1_std_err']:.2f}, N={stat['strategy1_n']}")
-                    print(f"  Strategy 2: Mean={stat['strategy2_mean']:.2f}, SE={stat['strategy2_std_err']:.2f}, N={stat['strategy2_n']}")
-                    print()
-            
-            self.payoff_data.extend(new_data)
-            total_profiles += len(new_data)
-            
-            if self.game is None:
-                self.game = Game.from_payoff_data( #builds full game
-                    payoff_data=self.payoff_data,
-                    device=self.device
-                )
-            else:
-                self.game.update_with_new_data(new_data)
-            
-            self.scheduler.update(self.game)
-            
-            if verbose:
-                print("Finding equilibria...")
-            
-            equilibria_start = time.time()
-            
-            # Check if we're using DPR and create reduced game if so
-            if isinstance(self.scheduler, DPRScheduler):
-                if verbose:
-                    print(f"Using DPR: Creating reduced game with {self.scheduler.reduction_size} players...")
-                reduced_game = self._create_reduced_game(self.game, self.scheduler.reduction_size)
-                
-                if verbose:
-                    print(f"Solving equilibria on reduced game (scaling factor: {self.scheduler.scaling_factor:.2f})")
-            else: #TODO remove for role symmetry
-                reduced_game = self.game
-            
-            try:
-                self.equilibria = quiesce_sync(
-                    game=reduced_game,  # Use reduced game for equilibrium finding
-                    num_iters=quiesce_kwargs['num_iters'],
-                    num_random_starts=quiesce_kwargs['num_random_starts'],
-                    regret_threshold=quiesce_kwargs['regret_threshold'],
-                    dist_threshold=quiesce_kwargs['dist_threshold'],
-                    solver=quiesce_kwargs['solver'],
-                    solver_iters=quiesce_kwargs['solver_iters'],
-                    verbose=verbose,
-                    full_game=self.game if isinstance(self.scheduler, DPRScheduler) else None  # Pass full game for DPR for eq checking
-                )
-                
-                if verbose and reduced_game.num_strategies == 2:
-                    payoff_matrix = reduced_game.get_payoff_matrix()
-                    print("\nReduced Game Payoff Matrix:")
-                    for i in range(2):
-                        print(f"  {reduced_game.strategy_names[i]}: [{payoff_matrix[i, 0].item():.4f}, {payoff_matrix[i, 1].item():.4f}]")
-                    print()
 
-                    
-            except Exception as e:
-                print(f"Error in equilibrium finding: {e}")
-                mixture = torch.ones(reduced_game.num_strategies, device=self.device) / reduced_game.num_strategies
-                eq_mixture = replicator_dynamics(reduced_game, mixture, iters=5000)
-                eq_regret = regret(reduced_game, eq_mixture)
-                
-                # Handle NaN regret
-                if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
-                    eq_regret = torch.tensor(0.01, device=self.device)
-                if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
-                    eq_regret = 0.01
-                    
-                self.equilibria = [(eq_mixture, eq_regret)]
-            
-            equilibria_time = time.time() - equilibria_start
-            
-            if verbose:
-                print(f"Found {len(self.equilibria)} equilibria in {equilibria_time:.2f} seconds")
-                
-                for i, (eq_mix, eq_regret) in enumerate(self.equilibria):
-                    if torch.is_tensor(eq_regret) and torch.isnan(eq_regret).any():
-                        continue
-                    if not torch.is_tensor(eq_regret) and (np.isnan(eq_regret) or np.isinf(eq_regret)):
-                        continue
-                        
-                    strat_str = ", ".join([
-                        f"{self.game.strategy_names[s]}: {eq_mix[s].item():.4f}" 
-                        for s in range(self.game.num_strategies)
-                        if eq_mix[s].item() > 0.01
-                    ])
-                    print(f"  Equilibrium {i+1}: regret={float(eq_regret):.6f}, {strat_str}")
-                    
-                    try:
-                        is_dpr = isinstance(self.scheduler, DPRScheduler)
-                        
-                        if is_dpr:
-                            reduced_payoffs = reduced_game.deviation_payoffs(eq_mix)
-                            reduced_exp_payoff = (eq_mix * reduced_payoffs).sum().item()
-                            
-                            scaling_factor = self.scheduler.scaling_factor
-                            full_exp_payoff = reduced_exp_payoff * scaling_factor
-                            
-                            print(f"Expected Payoff (Reduced Game): {reduced_exp_payoff:.4f}")
-                            print(f"Expected Payoff (Full Game): {full_exp_payoff:.4f}")
+        # default quiesce parameters
+        if quiesce_kwargs is None:
+            quiesce_kwargs = dict(
+                num_iters             = 1,
+                num_random_starts     = 0,
+                regret_threshold      = 1e-3,
+                dist_threshold        = 0.005,
+                restricted_game_size  = 4,
+                solver                = "replicator",
+                solver_iters          = 5_000,
+            )
+        eps = quiesce_kwargs["regret_threshold"]
+
+        # ================================================================
+        #                       MAIN EGTA LOOP
+        # ================================================================
+        for it in range(max_iterations):
+            logger.info(f"=== Iteration {it+1}/{max_iterations} ===")
+
+            while True:
+                batch = self.scheduler.get_next_batch(self.game)
+                if not batch:
+                    logger.info("No more profiles from scheduler.")
+                    break
+
+                logger.info(f"Got batch of {len(batch)} profiles → simulating…")
+                for idx, profile in enumerate(
+                    tqdm(batch, desc="  profiles", unit="profile", leave=False)
+                ):
+                    if verbose:
+                        counts = Counter(profile)
+                        if self.is_role_symmetric:
+                            parts = [f"{r}:{s}×{c}" for (r, s), c in counts.items()]
                         else:
-                            payoffs = self.game.deviation_payoffs(eq_mix)
-                            exp_payoff = (eq_mix * payoffs).sum().item()
-                            
-                            if 'payoff_mean' in self.game.metadata and 'payoff_std' in self.game.metadata:
-                                payoff_mean = self.game.metadata['payoff_mean']
-                                payoff_std = self.game.metadata['payoff_std']
-                                denorm_payoff = exp_payoff * payoff_std + payoff_mean
-                                print(f"    Expected Payoff: {denorm_payoff:.4f}")
-                            else:
-                                print(f"    Expected Payoff: {exp_payoff:.4f}")
-                    except Exception as e:
-                        print(f"    Error calculating expected payoff: {e}")
-            
-            # Save results
-            if iteration % save_frequency == 0 or iteration == max_iterations - 1:
-                self._save_results(iteration)
-            
-            iteration_time = time.time() - iteration_start
-            if verbose:
-                print(f"Iteration completed in {iteration_time:.2f} seconds")
-                print(f"Total profiles: {total_profiles}/{self.max_profiles}")
-            
-            # Check if we've reached the maximum number of profiles
-            if total_profiles >= self.max_profiles:
+                            parts = [f"{s}×{c}" for s, c in counts.items()]
+                        logger.info(f"    • ({idx+1}/{len(batch)}) [{', '.join(parts)}]")
+
+                t0 = time.time()
                 if verbose:
-                    print(f"Reached maximum number of profiles ({self.max_profiles}). Stopping.")
+                    raw = self.simulator.simulate_profiles(batch)
+                else:
+                    with silence_io():
+                        raw = self.simulator.simulate_profiles(batch)
+                dt = time.time() - t0
+                logger.info(f"    ✓ simulation done in {dt:.1f}s")
+
+                prev = len(self.payoff_data)
+                self._record_observations(raw)
+                new_rows = self.payoff_data[prev:]
+                logger.info(f"    • recorded {len(new_rows)} new observations")
+
+                if self.game is None:
+                    logger.info("    • building initial Game from data")
+                    # Skip z-score normalisation so small absolute payoff differences between
+                    # holding-period experiments are preserved.
+                    self.game = Game.from_payoff_data(
+                        new_rows,
+                        device=self.device,
+                        normalize_payoffs=False,
+                    )
+                else:
+                    logger.info("    • updating Game with new data")
+                    # Preserve raw payoff scale when extending the empirical game
+                    self.game.update_with_new_data(new_rows)
+
+                self.scheduler.update(self.game)
+                total_profiles += len(batch)
+                logger.info(f"Total profiles simulated so far: {total_profiles}")
+
+                if total_profiles >= self.max_profiles:
+                    logger.info(f"Reached max_profiles={self.max_profiles}, breaking out.")
+                    break
+
+            # (2) interleaved, async QUIESCE with on-demand sampling & stats tests
+            true_game = getattr(self.game, "full_game_reference", self.game)
+            logger.info("Running interleaved QUIESCE …")
+
+            # let test_candidate reach back to this EGTA instance
+            eq_mod.CURRENT_EGTA = self
+
+            confirmed_eqs = asyncio.get_event_loop().run_until_complete(
+                quiesce(
+                    game=self.game,
+                    full_game=true_game,
+                    obs_store=self._obs_by_profile,
+                    num_iters=quiesce_kwargs["num_iters"],
+                    num_random_starts=quiesce_kwargs.get("num_random_starts", 0),
+                    regret_threshold=quiesce_kwargs["regret_threshold"],
+                    dist_threshold=quiesce_kwargs["dist_threshold"],
+                    restricted_game_size=quiesce_kwargs["restricted_game_size"],
+                    solver=quiesce_kwargs["solver"],
+                    solver_iters=quiesce_kwargs["solver_iters"],
+                    verbose=verbose,
+                )
+            )
+            if confirmed_eqs:
+                self.equilibria = confirmed_eqs
+                logger.info(f"  ✓ QUIESCE confirmed {len(confirmed_eqs)} equilibria")
+            else:
+                logger.info("  • No equilibria confirmed this iteration")
+
+           
+            if getattr(self, "always_complete_deviations", False) and self.equilibria:
+                missing_profiles: List[List[Tuple[str, str]]] = []
+                for mix, _ in self.equilibria:
+                    missing_profiles.extend(
+                        self.scheduler.missing_deviations(mix.cpu().numpy(), self.game)
+                    )
+
+                for prof in missing_profiles:
+                    sub: Dict[str, set] = {}
+                    for role, strat in prof:
+                        sub.setdefault(role, set()).add(strat)
+                    self.scheduler.add_subgame(sub)
+
+            # --------------------------------------------------------------
+            # Exit only when (i) every strategy has been observed *and*
+            # (ii) there are no outstanding deviation sub-games waiting to be
+            #     simulated.  This prevents premature termination when the
+            #     statistical tests inside QUIESCE scheduled extra sampling
+            #     but the scheduler hasn't executed it yet.
+            # --------------------------------------------------------------
+            all_seen = (
+                self.expected_strategies == self.game.strategies_present_in_payoff_table()
+            )
+            pending_subs = getattr(self.scheduler, "requested_subgames", [])
+
+            if self.equilibria and all_seen and not pending_subs:
+                logger.info("All strategies observed, equilibria confirmed, and no pending deviation sub-games → exiting loop")
                 break
-        
-        total_time = time.time() - start_time
-        if verbose:
-            print(f"\nEGTA completed in {total_time:.2f} seconds")
-            print(f"Simulated {total_profiles} profiles")
-            print(f"Found {len(self.equilibria)} equilibria")
-        
+            elif self.equilibria and all_seen:
+                logger.info(
+                    f"{len(pending_subs)} deviation sub-games still pending – continuing iterations"
+                )
+
+            # snapshot
+            if it % save_frequency == 0:
+                logger.info(f"Saving intermediate results at iteration {it}")
+                self._save_results(it)
+
+            if total_profiles >= self.max_profiles:
+                logger.info("Reached profile budget → exiting loop")
+                break
+
+     
+        try:
+            if self.game is not None:
+                logger.info("Running final strict QUIESCE pass (1, ε=1e-4)…")
+                strict_eqs = quiesce_sync(
+                    game=self.game,
+                    full_game=true_game,
+                    num_iters=1,
+                    num_random_starts=0,
+                    regret_threshold=1e-4,
+                    dist_threshold=quiesce_kwargs["dist_threshold"],
+                    restricted_game_size=quiesce_kwargs["restricted_game_size"],
+                    solver=quiesce_kwargs["solver"],
+                    solver_iters=quiesce_kwargs["solver_iters"],
+                    verbose=False,
+                    obs_store=self._obs_by_profile,
+                )
+
+                # merge with existing equilibria (L1 distance check)
+                for mix, reg in strict_eqs:
+                    if all(torch.norm(mix - m, p=1).item() > quiesce_kwargs["dist_threshold"]
+                           for m, _ in self.equilibria):
+                        self.equilibria.append((mix, reg))
+        except Exception as _e:
+            logger.warning(f"Strict QUIESCE pass failed: {_e}")
+
+        # (3) final summary
+        elapsed = time.time() - start_time
+        logger.info(
+            f"EGTA completed in {elapsed:.2f}s – "
+            f"simulated {total_profiles} profiles – "
+            f"found {len(self.equilibria)} equilibria"
+        )
+
+       
+        try:
+            obs_out = os.path.join(self.output_dir, "observations.json")
+            seen_obs: set = set()
+            to_dump   : list = []
+            for obs_list in self._obs_by_profile.values():
+                for ob in obs_list:
+                    if id(ob) in seen_obs:
+                        continue  # already written via another key
+                    seen_obs.add(id(ob))
+
+                    pretty_key = [[role, strat] for role, strat in ob.profile_key]
+                    to_dump.append({
+                        "profile": pretty_key,
+                        "payoffs": ob.payoffs.tolist(),
+                        "aux": ob.aux or {},
+                    })
+            with open(obs_out, "w") as f:
+                json.dump(to_dump, f, indent=2)
+            logger.info(f"Saved {len(to_dump)} observations → {obs_out}")
+        except Exception as exc:
+            logger.warning(f"Failed to save observations: {exc}")
+
+        try:
+            obs_snap = os.path.join(self.output_dir, f"observations_iter_{it}.json")
+            seen_obs = set()
+            to_dump  = []
+            for obs_list in self._obs_by_profile.values():
+                for ob in obs_list:
+                    if id(ob) in seen_obs:
+                        continue
+                    seen_obs.add(id(ob))
+
+                    pretty_key = [[role, strat] for role, strat in ob.profile_key]
+                    to_dump.append({
+                        "profile": pretty_key,
+                        "payoffs": ob.payoffs.tolist(),
+                        "aux": ob.aux or {},
+                    })
+            with open(obs_snap, "w") as fh:
+                json.dump(to_dump, fh, indent=2)
+        except Exception as exc:
+            logger.warning(f"Failed to snapshot observations: {exc}")
+
         return self.game
+
+
+
+
+
+
     
     def _save_results(self, iteration: int):
         """
@@ -604,12 +481,29 @@ class EGTA:
             eq_dict = {
                 "id": i,
                 "regret": float(eq_regret),
-                "mixture": {
+                "is_role_symmetric": self.is_role_symmetric
+            }
+            
+            if self.is_role_symmetric:
+                # Role symmetric equilibrium format
+                eq_dict["mixture_by_role"] = {}
+                global_idx = 0
+                for role_name, role_strategies in zip(self.game.role_names, self.game.strategy_names_per_role):
+                    role_mixture = {}
+                    for strat_name in role_strategies:
+                        if eq_mix[global_idx].item() > 0.001:
+                            role_mixture[strat_name] = float(eq_mix[global_idx].item())
+                        global_idx += 1
+                    if role_mixture:
+                        eq_dict["mixture_by_role"][role_name] = role_mixture
+            else:
+                # Symmetric equilibrium format
+                eq_dict["mixture"] = {
                     name: float(eq_mix[j].item())
                     for j, name in enumerate(self.game.strategy_names)
                     if eq_mix[j].item() > 0.001
                 }
-            }
+            
             eq_data.append(eq_dict)
         
         with open(eq_path, 'w') as f:
@@ -629,20 +523,34 @@ class EGTA:
             return {}
         
         support_sizes = []
-        strategy_frequencies = {name: 0.0 for name in self.game.strategy_names}
         
-        for eq_mix, _ in self.equilibria:
-            support = sum(1 for x in eq_mix if x.item() > 0.001)
-            support_sizes.append(support)
+        if self.is_role_symmetric:
+            # Role symmetric analysis
+            role_strategy_frequencies = {}
+            for role_name in self.game.role_names:
+                role_strategy_frequencies[role_name] = {}
+                
+            for eq_mix, _ in self.equilibria:
+                global_idx = 0
+                for role_name, role_strategies in zip(self.game.role_names, self.game.strategy_names_per_role):
+                    for strat_name in role_strategies:
+                        if strat_name not in role_strategy_frequencies[role_name]:
+                            role_strategy_frequencies[role_name][strat_name] = 0.0
+                        role_strategy_frequencies[role_name][strat_name] += eq_mix[global_idx].item() / len(self.equilibria)
+                        global_idx += 1
+                
+                support = sum(1 for x in eq_mix if x.item() > 0.001)
+                support_sizes.append(support)
+        else:
+            # Symmetric game analysis
+            strategy_frequencies = {name: 0.0 for name in self.game.strategy_names}
             
-            for i, name in enumerate(self.game.strategy_names):
-                strategy_frequencies[name] += eq_mix[i].item() / len(self.equilibria)
-        
-        sorted_strategies = sorted(
-            strategy_frequencies.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
+            for eq_mix, _ in self.equilibria:
+                support = sum(1 for x in eq_mix if x.item() > 0.001)
+                support_sizes.append(support)
+                
+                for i, name in enumerate(self.game.strategy_names):
+                    strategy_frequencies[name] += eq_mix[i].item() / len(self.equilibria)
         
         results = {
             "num_equilibria": len(self.equilibria),
@@ -650,9 +558,19 @@ class EGTA:
             "avg_support_size": sum(support_sizes) / len(support_sizes),
             "min_support_size": min(support_sizes),
             "max_support_size": max(support_sizes),
-            "strategy_frequencies": strategy_frequencies,
-            "top_strategies": sorted_strategies[:3]
+            "is_role_symmetric": self.is_role_symmetric
         }
+        
+        if self.is_role_symmetric:
+            results["role_strategy_frequencies"] = role_strategy_frequencies
+        else:
+            results["strategy_frequencies"] = strategy_frequencies
+            sorted_strategies = sorted(
+                strategy_frequencies.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+            results["top_strategies"] = sorted_strategies[:3]
         
         if verbose:
             print("\nEquilibria Analysis")
@@ -660,9 +578,18 @@ class EGTA:
             print(f"Average regret: {sum(results['regrets'])/len(results['regrets']):.6f}")
             print(f"Average support size: {results['avg_support_size']:.2f}")
             print(f"Support size range: {results['min_support_size']} - {results['max_support_size']}")
-            print("\nTop strategies:")
-            for strat, freq in results['top_strategies']:
-                print(f"  {strat}: {freq:.4f}")
+            
+            if self.is_role_symmetric:
+                print("\nStrategy frequencies by role:")
+                for role_name, role_freqs in role_strategy_frequencies.items():
+                    print(f"  {role_name}:")
+                    sorted_role_strats = sorted(role_freqs.items(), key=lambda x: x[1], reverse=True)
+                    for strat, freq in sorted_role_strats[:3]:
+                        print(f"    {strat}: {freq:.4f}")
+            else:
+                print("\nTop strategies:")
+                for strat, freq in results['top_strategies']:
+                    print(f"  {strat}: {freq:.4f}")
         
         return results 
 
@@ -680,26 +607,32 @@ class EGTA:
         if not isinstance(self.scheduler, DPRScheduler):
             return full_game
             
-        scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
-        
-        reduced_sym_game = SymmetricGame(
-            num_players=reduction_size,
-            num_actions=full_game.game.num_actions,
-            config_table=full_game.game.config_table.clone(),
-            payoff_table=full_game.game.payoff_table.clone() / scaling_factor,  # Rescale payoffs
-            strategy_names=full_game.game.strategy_names,
-            device=full_game.game.device,
-            offset=full_game.game.offset,
-            scale=full_game.game.scale
-        )
-        
-        # Create metadata for the reduced game
-        metadata = {**full_game.metadata} if full_game.metadata else {}
-        metadata['dpr_reduced'] = True
-        metadata['original_players'] = full_game.num_players
-        metadata['reduced_players'] = reduction_size
-        metadata['scaling_factor'] = scaling_factor
-        
-        return Game(reduced_sym_game, metadata) 
+        if full_game.is_role_symmetric:
+            # For role symmetric games, create reduced version by scaling payoffs
+            # The underlying RSG should handle player reduction appropriately
+            return full_game  
+        else:
+            # For symmetric games, use the original reduction logic
+            scaling_factor = (full_game.num_players - 1) / (reduction_size - 1)
+            
+            reduced_sym_game = SymmetricGame(
+                num_players=reduction_size,
+                num_actions=full_game.game.num_actions,
+                config_table=full_game.game.config_table.clone(),
+                payoff_table=full_game.game.payoff_table.clone() / scaling_factor,  # Rescale payoffs
+                strategy_names=full_game.game.strategy_names,
+                device=full_game.game.device,
+                offset=full_game.game.offset,
+                scale=full_game.game.scale
+            )
+            
+            # Create metadata for the reduced game
+            metadata = {**full_game.metadata} if full_game.metadata else {}
+            metadata['dpr_reduced'] = True
+            metadata['original_players'] = full_game.num_players
+            metadata['reduced_players'] = reduction_size
+            metadata['scaling_factor'] = scaling_factor
+            
+            return Game(reduced_sym_game, metadata) 
     
   

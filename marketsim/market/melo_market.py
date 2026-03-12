@@ -8,6 +8,7 @@ from marketsim.fourheap.melo_fourheap import MELOFourHeap
 class MeloMarket(Market):
     def __init__(self, fundamental: Fundamental, time_steps, holding_period):
         super().__init__(fundamental, time_steps)
+        self.holding_period = holding_period
         self.order_book = MELOFourHeap(holding_period)
         self.orders_rec = []
 
@@ -35,8 +36,8 @@ class MeloMarket(Market):
         return return_val
         
     def reset(self, fundamental=None):
-        self.order_book = FourHeap()
+        self.order_book = MELOFourHeap(self.holding_period)
         self.matched_orders = []
         self.event_queue = EventQueue()
-        if self.fundamental:
+        if fundamental is not None:
             self.fundamental = fundamental

@@ -1,0 +1,4 @@
+# file: /Users/gabesmithline/Desktop/SRG/melo_project/marketsim/egta/egta.py
+# hypothesis_version: 6.135.7
+
+[0.0, 0.0001, 0.001, 0.005, 100, 5000, '\nEquilibria Analysis', '\nTop strategies:', '  profiles', '%Y%m%d_%H%M%S', 'Game', 'No equilibria found.', 'Player', 'aux', 'avg_support_size', 'cpu', 'dist_threshold', 'dpr_reduced', 'full_game_reference', 'get_role_info', 'id', 'is_role_symmetric', 'max_support_size', 'min_support_size', 'mixture', 'mixture_by_role', 'num_equilibria', 'num_iters', 'num_random_starts', 'observations.json', 'original_players', 'payoffs', 'profile', 'reduced_players', 'regret', 'regret_threshold', 'regrets', 'replicator', 'requested_subgames', 'restricted_game_size', 'results', 'scaling_factor', 'solver', 'solver_iters', 'strategy_frequencies', 'top_strategies', 'w']
